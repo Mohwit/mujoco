@@ -1,0 +1,493 @@
+<div class="lesson-content xp" id="lesson14">
+  <header class="lesson-header-block">
+    <p class="lesson-num-label">Lesson 14</p>
+    <h1 class="lesson-title">Mobile Bases</h1>
+    <p class="lesson-subtitle">Goal: drive a four-wheeled robot base across a floor. You will read where it is and which way it faces, command its wheels, measure how wheel speeds become motion, read a gyro and a rangefinder, and see why "look and correct" beats "plan and hope". The robot is the Capstone 2 warehouse base, cut down to its chassis and wheels.</p>
+    <p class="lesson-legend"><dfn class="term" tabindex="0" data-def="Technical words look like this. Hover or focus one to read a plain-English definition.">Dotted words</dfn> show a definition on hover. <span class="lg-math">Maths boxes</span> are optional. <span class="lg-pred">Predict boxes</span> hide the answer until you guess.</p>
+  </header>
+  <nav class="lesson-toc" aria-label="Sections in lesson 14"><a href="#l14-s-idea">Eyes closed</a><a href="#l14-s-pose">Where am I?</a><a href="#l14-s-wheels">Wheels</a><a href="#l14-s-sensors">Gyro, rangefinder</a><a href="#l14-s-loop">Open vs closed</a><a href="#l14-s-math">Maths</a><a href="#l14-s-code">The script</a><a href="#l14-s-check">Check yourself</a><a href="#l14-recap">Recap</a></nav>
+
+<section class="step" id="l14-s-idea">
+  <span class="lvl lvl-plain">Plain words</span> <span class="lvl lvl-pic">Picture</span>
+  <h2>1. Driving with your eyes closed, or open</h2>
+  <p>Imagine driving a car across an empty car park to a parking spot. First, with your eyes closed. You plan it in advance: "full speed for 5 seconds, then turn left for 3.5 seconds, then 3.3 seconds more".</p>
+  <p>Then you do it again with your eyes open. You look at the spot, steer towards it, look again, and correct. You repeat that many times a second.</p>
+  <p>The first way is called <dfn class="term" tabindex="0" data-def="Running a plan worked out in advance, without measuring what really happens. Like driving with your eyes closed.">open loop</dfn>. The second is <dfn class="term" tabindex="0" data-def="Measuring the result over and over and correcting the command each time. Like driving with your eyes open. Also called feedback control.">closed loop</dfn>. The closed loop is the circle: look, decide, act, look again.</p>
+  <p>A robot on wheels is called a <dfn class="term" tabindex="0" data-def="The part of a robot that drives it around: a chassis with wheels (or legs, or tracks). An arm can sit on top of it.">mobile base</dfn>. It moves only because its wheels push on the floor. That push is friction, the same contact friction you met in Lesson 7. If the floor changes, the push changes.</p>
+  <div class="grid3">
+    <div class="card"><span class="callout-title" style="color:var(--orange)">Open loop = a recipe</span>Every wheel speed and every duration is decided before the start. It is fast and simple. It only works if the world behaves exactly as the plan assumed.</div>
+    <div class="card"><span class="callout-title" style="color:var(--teal)">Closed loop = a conversation</span>Every 2 ms the robot reads where it is, compares that with the goal, and picks new wheel speeds. Mistakes get noticed and fixed.</div>
+    <div class="card"><span class="callout-title" style="color:var(--purple)">The goal = a waypoint</span>A <dfn class="term" tabindex="0" data-def="A point on the floor the robot should drive to, given as (x, y) in metres in the world frame. A route is a list of waypoints.">waypoint</dfn> is a spot on the floor, (x, y) in metres. Our route has two: W1 at (1.5, 0) and W2 at (1.5, 1.0).</div>
+  </div>
+  <h3>Try it: four real MuJoCo runs</h3>
+  <p>Each button replays a run recorded from real MuJoCo by your script. The robot starts at (0, 0) facing +x, and must stop on W2. "Slippery" means the floor and wheel friction drop from 1.5 to 0.3. Nothing else changes.</p>
+  <div class="card">
+    <canvas id="l14cvIdea" role="img" aria-label="Top view of the floor showing the base driving from the origin towards waypoints W1 and W2, replaying a recorded MuJoCo run"></canvas>
+    <div class="btnrow">
+      <button id="l14IdeaOpenN" type="button" class="primary">Eyes closed, normal floor</button>
+      <button id="l14IdeaOpenS" type="button">Eyes closed, slippery floor</button>
+      <button id="l14IdeaClosedN" type="button">Eyes open, normal floor</button>
+      <button id="l14IdeaClosedS" type="button">Eyes open, slippery floor</button>
+    </div>
+    <p class="caption">Top view, world frame: red arrow = +x, green arrow = +y, grid 0.5 m. Yellow circles are W1 and W2 (radius 5 cm). This picture replays poses recorded from MuJoCo every 0.2 s, played 4 times faster than real time. The eyes-closed plan was tuned on the normal floor. On the slippery floor it misses W2 by 0.904 m. Eyes open still arrives within 5 cm.</p>
+  </div>
+  <div class="card analogy"><strong>Analogy: a shopping trolley on a wet floor.</strong> Push it the way you always do, without looking, and on a wet floor it ends up somewhere else. Watch where it goes and keep nudging it, and you get to the checkout either way. It may take a bit longer.</div>
+  <p class="newwords">New words: <span class="chip">open loop</span><span class="chip">closed loop</span><span class="chip">mobile base</span><span class="chip">waypoint</span></p>
+</section>
+
+<section class="step" id="l14-s-pose">
+  <span class="lvl lvl-words">MuJoCo words</span> <span class="lvl lvl-pic">Picture</span>
+  <h2>2. Where am I, and which way am I facing? The free joint knows</h2>
+  <p>To drive with your eyes open, the robot first needs to know where it is. The chassis is attached to the world by a <dfn class="term" tabindex="0" data-def="A joint with no limits at all: 3 numbers of position plus 4 numbers of quaternion in qpos (7), and 6 velocities in qvel. The body can fly, fall and spin freely.">free joint</dfn>, as in Lesson 4. Its seven numbers in <code>qpos</code> are the robot's position and orientation.</p>
+  <p>This model is a small copy of the Capstone 2 base. It uses the same chassis box, the same four wheels and the same actuators and sensors from <code>warehouse_robot.xml</code>. The arm, the shelves and the boxes are left out. Here the robot starts at the origin facing +x.</p>
+  <div class="grid2">
+<pre><code><span class="t">&lt;body</span> <span class="a">name</span>=<span class="s">"chassis"</span> <span class="a">pos</span>=<span class="s">"0 0 0.11"</span> <span class="a">childclass</span>=<span class="s">"robot"</span><span class="t">&gt;</span>
+  <span class="t">&lt;freejoint</span> <span class="a">name</span>=<span class="s">"chassis_free"</span><span class="t">/&gt;</span>
+  <span class="t">&lt;geom</span> <span class="a">type</span>=<span class="s">"box"</span> <span class="a">size</span>=<span class="s">"0.25 0.15 0.04"</span> <span class="a">mass</span>=<span class="s">"8.0"</span><span class="t">/&gt;</span>
+  <span class="c">&lt;!-- + top plate 0.5 kg, two sites --&gt;</span>
+  <span class="t">&lt;body</span> <span class="a">name</span>=<span class="s">"wheel_FL"</span> <span class="a">pos</span>=<span class="s">"0.18 0.17 -0.05"</span>
+        <span class="a">childclass</span>=<span class="s">"wheel"</span><span class="t">&gt;</span>
+    <span class="t">&lt;joint</span> <span class="a">name</span>=<span class="s">"wheel_FL_spin"</span> <span class="a">axis</span>=<span class="s">"0 1 0"</span><span class="t">/&gt;</span>
+    <span class="t">&lt;geom</span> <span class="a">type</span>=<span class="s">"cylinder"</span> <span class="a">size</span>=<span class="s">"0.06 0.025"</span>
+          <span class="a">euler</span>=<span class="s">"1.5708 0 0"</span> <span class="a">mass</span>=<span class="s">"0.3"</span><span class="t">/&gt;</span>
+  <span class="t">&lt;/body&gt;</span>
+  <span class="c">&lt;!-- wheel_FR (0.18 -0.17), wheel_RL (-0.18 0.17),
+       wheel_RR (-0.18 -0.17): same --&gt;</span>
+<span class="t">&lt;/body&gt;</span></code></pre>
+<pre><code><span class="c"># free joint first, so it owns the first slots</span>
+d.qpos[<span class="n">0</span>:<span class="n">3</span>]   <span class="c"># x, y, z of chassis (m, world)</span>
+d.qpos[<span class="n">3</span>:<span class="n">7</span>]   <span class="c"># quaternion [w, x, y, z]</span>
+d.qpos[<span class="n">7</span>:<span class="n">11</span>]  <span class="c"># 4 wheel angles FL FR RL RR (rad)</span>
+
+d.qvel[<span class="n">0</span>:<span class="n">3</span>]   <span class="c"># chassis velocity (m/s, world)</span>
+d.qvel[<span class="n">3</span>:<span class="n">6</span>]   <span class="c"># chassis spin (rad/s, chassis frame)</span>
+d.qvel[<span class="n">6</span>:<span class="n">10</span>]  <span class="c"># 4 wheel spin speeds (rad/s)</span>
+
+<span class="c"># after settling 0.5 s on the floor:</span>
+<span class="c"># qpos[0:3] = [0. 0. 0.1098], qpos[3:7] = [1 0 0 0]</span>
+<span class="c"># nq = 11, nv = 10, mass 9.700 kg</span></code></pre>
+  </div>
+  <table>
+    <thead><tr><th>Slice</th><th>Plain meaning</th><th>Shape</th><th>Unit and frame</th></tr></thead>
+    <tbody>
+      <tr><td><code>qpos[0:3]</code></td><td>Where the chassis centre is</td><td>(3,)</td><td>m, world frame</td></tr>
+      <tr><td><code>qpos[3:7]</code></td><td>Which way the chassis points, as a <dfn class="term" tabindex="0" data-def="Four numbers [w, x, y, z] that store a 3D rotation without the gimbal problems of angles. For a turn by angle a about the z axis: [cos(a/2), 0, 0, sin(a/2)].">quaternion</dfn></td><td>(4,)</td><td>no unit, [w, x, y, z], world frame</td></tr>
+      <tr><td><code>qpos[7:11]</code></td><td>How far each wheel has rolled round</td><td>(4,)</td><td>rad, each wheel's hinge about its +y axis</td></tr>
+      <tr><td><code>qvel[3:6]</code></td><td>How fast the chassis spins</td><td>(3,)</td><td>rad/s, chassis (body) frame</td></tr>
+      <tr><td><code>qvel[6:10]</code></td><td>How fast each wheel spins</td><td>(4,)</td><td>rad/s</td></tr>
+    </tbody>
+  </table>
+  <p>On a flat floor, the one angle that matters is the <dfn class="term" tabindex="0" data-def="The heading of the robot seen from above: the angle from world +x to the robot's forward (+x) axis, about world +z. Positive = turned left (counter-clockwise from above). In rad.">yaw</dfn>: the compass heading seen from above. Yaw 0 means facing world +x. A positive yaw means turned to the left. There are two ways to get it.</p>
+  <div class="grid2">
+    <div class="card"><span class="callout-title" style="color:var(--blue)">Route 1: from the quaternion</span>With <code>q = d.qpos[3:7] = [w, x, y, z]</code>:<div class="eq">yaw = atan2(2(wz + xy), 1 - 2(y² + z²))</div>This works for any orientation, even a tilted chassis.</div>
+    <div class="card"><span class="callout-title" style="color:var(--teal)">Route 2: from xmat (easier)</span><code>d.xmat[chassis]</code> is the 3 x 3 rotation matrix. Its first column is where the robot's nose (body +x) points in the world:<div class="eq">R = d.xmat[cid].reshape(3, 3)
+yaw = atan2(R[1, 0], R[0, 0])</div>Capstone 2 uses this one.</div>
+  </div>
+  <p>Drag the slider to turn the robot by hand. The readouts follow both routes. The "script's turn" button loads the real pose after the script spins the robot for 3 s.</p>
+  <div class="card">
+    <div class="grid2">
+      <canvas id="l14cvPose" role="img" aria-label="The base seen from above, turned by the yaw angle, with its forward axis drawn as an arrow"></canvas>
+      <div>
+        <label class="slider"><span>Yaw by hand</span> <output id="l14oYaw">0.0 deg</output><input type="range" id="l14Yaw" min="-180" max="180" step="1" value="0"></label>
+        <div class="btnrow"><button id="l14YawScript" type="button" class="primary">The script's turn (1.329145 rad)</button></div>
+        <div class="readouts" style="grid-template-columns:1fr 1fr">
+          <div class="ro"><span class="lab">qpos[3] w</span><span class="val" id="l14Qw">1.0000</span></div>
+          <div class="ro"><span class="lab">qpos[6] z (x = y = 0)</span><span class="val" id="l14Qz">0.0000</span></div>
+          <div class="ro"><span class="lab">2(wz + xy)</span><span class="val" id="l14Qa">0</span></div>
+          <div class="ro"><span class="lab">1 - 2(y² + z²)</span><span class="val" id="l14Qb">1</span></div>
+          <div class="ro"><span class="lab">yaw from quaternion</span><span class="val" id="l14YawQ">0</span> <span class="unit">rad</span></div>
+          <div class="ro"><span class="lab">yaw from xmat</span><span class="val" id="l14YawM">0</span> <span class="unit">rad</span></div>
+          <div class="ro" style="grid-column:1 / -1"><span class="lab">xmat first column = body +x in world</span><span class="val" id="l14Col">[1, 0, 0]</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="caption">This picture is pure geometry, no physics. Real MuJoCo after the script's turn (3 s of left -5, right +5 rad/s, then 0.5 s stopped): quaternion [0.7872, 0, 0, 0.6167], yaw 1.329145 rad (76.154 deg) by both routes. They differ by 4.44e-16 rad, which is rounding. The chassis centre stayed at x = 0.0000, y = 0.0000: it turned on the spot.</p>
+  </div>
+  <div class="card warn"><span class="callout-title" style="color:var(--orange)">Common mistake: xmat is one step old after mj_step</span><code>mj_step</code> computes <code>xmat</code> at the <em>start</em> of the step, then moves <code>qpos</code>. So right after a step, <code>xmat</code> describes the previous pose, just like the sensors in Lesson 8. Reading yaw from <code>qpos[3:7]</code> is always current. Or call <code>mj_forward</code> before reading <code>xmat</code>.</div>
+  <p class="newwords">New words: <span class="chip">free joint</span><span class="chip">quaternion</span><span class="chip">yaw</span><span class="chip">xmat</span></p>
+</section>
+
+<section class="step" id="l14-s-wheels">
+  <span class="lvl lvl-pic">Picture</span> <span class="lvl lvl-words">MuJoCo words</span>
+  <h2>3. Wheels: cruise control on each wheel, and what two speeds do</h2>
+  <p>Each wheel has its own <dfn class="term" tabindex="0" data-def="An actuator that pushes a joint towards a target speed: force = kv x (ctrl - qvel). ctrl is the target speed in rad/s. Like cruise control.">velocity actuator</dfn>, the cruise control from Lesson 5. You write the wheel speed you want into <code>ctrl</code>, in rad/s. The motor pushes harder the further the real speed is below the target.</p>
+  <div class="grid2">
+<pre><code><span class="t">&lt;actuator&gt;</span>
+  <span class="t">&lt;velocity</span> <span class="a">name</span>=<span class="s">"drive_FL"</span> <span class="a">joint</span>=<span class="s">"wheel_FL_spin"</span>
+            <span class="a">kv</span>=<span class="s">"5"</span> <span class="a">forcerange</span>=<span class="s">"-10 10"</span><span class="t">/&gt;</span>
+  <span class="c">&lt;!-- drive_FR, drive_RL, drive_RR: same --&gt;</span>
+<span class="t">&lt;/actuator&gt;</span>
+<span class="t">&lt;default</span> <span class="a">class</span>=<span class="s">"wheel"</span><span class="t">&gt;</span>
+  <span class="t">&lt;geom</span> <span class="a">friction</span>=<span class="s">"1.5 0.005 0.001"</span> <span class="a">condim</span>=<span class="s">"6"</span><span class="t">/&gt;</span>
+  <span class="t">&lt;joint</span> <span class="a">damping</span>=<span class="s">"0.1"</span> <span class="a">armature</span>=<span class="s">"0.005"</span><span class="t">/&gt;</span>
+<span class="t">&lt;/default&gt;</span></code></pre>
+<pre><code><span class="c"># ctrl index = actuator order in the XML</span>
+<span class="c"># 0 FL, 1 FR, 2 RL, 3 RR  (left = FL, RL)</span>
+d.ctrl[:] = [left, right, left, right]  <span class="c"># rad/s</span>
+
+<span class="c"># torque on each wheel (N m):</span>
+<span class="c"># kv * (ctrl - wheel speed), clipped to +-10</span>
+d.actuator_force   <span class="c"># shape (4,)</span>
+d.qvel[<span class="n">6</span>:<span class="n">10</span>]       <span class="c"># real wheel speeds (rad/s)</span></code></pre>
+  </div>
+  <p>Only the wheels touch the floor. The chassis geoms have <code>contype="0"</code>, so they never collide (Lesson 7). The wheels use friction 1.5 against the floor. That friction is all that turns spinning wheels into a moving robot.</p>
+  <div class="predict">
+    <h3>Predict: all four wheels are told to spin at 5 rad/s. The wheel radius is 0.06 m. How fast does the robot move?</h3>
+    <textarea aria-label="Your prediction for the forward speed"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p>A rolling wheel moves its centre by one radius per radian. So the guess is r × wheel speed = 0.06 × 5 = <strong>0.300 m/s</strong>. MuJoCo measures <strong>0.2938 m/s</strong> (steady, averaged from 2 to 6 s), 2 % less.</p>
+      <p>Why less? The wheels really spin at 4.8974 rad/s, not 5. Cruise control only pushes when there is a gap: 5 × (5 - 4.8974) = 0.5132 N m, which just balances the wheel's joint damping and rolling losses. And 0.06 × 4.8974 = 0.2938 m/s: the measured speed, exactly. Driving straight, the wheels barely slip.</p>
+    </div>
+  </div>
+  <h3>Two speeds, three behaviours</h3>
+  <p>The base has no steering wheel. It steers like a tank or a wheelchair. Both sides at the same speed: straight. Right side faster: it curves left. Opposite speeds: it spins on the spot. This is called <dfn class="term" tabindex="0" data-def="Steering by giving the left and right wheels different speeds, with no steerable wheel. With four fixed wheels the front and back wheels must slide sideways (skid) during a turn.">skid-steer</dfn>, a form of <dfn class="term" tabindex="0" data-def="Steering by the difference between left and right wheel speeds.">differential drive</dfn>.</p>
+  <div class="eq">forward speed  v = r (wL + wR) / 2          (m/s)
+turn rate      w = r (wR - wL) / B          (rad/s, + = turning left)
+r = 0.06 m wheel radius     B = 0.34 m track width (left wheels at y = +0.17, right at y = -0.17)</div>
+  <div class="predict">
+    <h3>Predict: left wheels -5 rad/s, right wheels +5 rad/s. What does the robot do, and how fast does it turn?</h3>
+    <textarea aria-label="Your prediction for opposite wheel speeds"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p>It <strong>spins on the spot</strong>, turning left (counter-clockwise from above). v = 0. The formula says w = 0.06 × 10 / 0.34 = <strong>1.7647 rad/s</strong>.</p>
+      <p>MuJoCo measures only <strong>0.4460 rad/s</strong>, four times slower. The wheels also slow down to 4.5877 rad/s, and each motor works four times harder: 2.0624 N m instead of 0.5132 N m. Something is fighting the turn. Read on.</p>
+    </div>
+  </div>
+  <div class="card">
+    <div class="grid2">
+      <canvas id="l14cvSkid" role="img" aria-label="Top view of the base after 4 seconds at the chosen wheel speeds, for the geometric formula and for the calibrated formula"></canvas>
+      <div>
+        <label class="slider"><span>Left wheels <code>ctrl[0]</code>, <code>ctrl[2]</code></span> <output id="l14oL">5.0 rad/s</output><input type="range" id="l14L" min="-6" max="6" step="0.5" value="5"></label>
+        <label class="slider"><span>Right wheels <code>ctrl[1]</code>, <code>ctrl[3]</code></span> <output id="l14oR">5.0 rad/s</output><input type="range" id="l14R" min="-6" max="6" step="0.5" value="5"></label>
+        <div class="btnrow">
+          <button type="button" data-skid="5,5">5 / 5</button><button type="button" data-skid="-5,5">-5 / 5</button><button type="button" data-skid="0,5">0 / 5</button><button type="button" data-skid="2,5">2 / 5</button><button type="button" data-skid="4,6">4 / 6</button>
+        </div>
+        <div class="readouts" style="grid-template-columns:1fr 1fr">
+          <div class="ro"><span class="lab">v, formula B = 0.34</span><span class="val" id="l14Vg">0</span> <span class="unit">m/s</span></div>
+          <div class="ro"><span class="lab">w, formula B = 0.34</span><span class="val" id="l14Wg">0</span> <span class="unit">rad/s</span></div>
+          <div class="ro"><span class="lab">v, calibrated</span><span class="val" id="l14Vc">0</span> <span class="unit">m/s</span></div>
+          <div class="ro"><span class="lab">w, calibrated</span><span class="val" id="l14Wc">0</span> <span class="unit">rad/s</span></div>
+          <div class="ro frozen"><span class="lab">v, MuJoCo measured</span><span class="val" id="l14Vm">-</span> <span class="unit">m/s</span></div>
+          <div class="ro frozen"><span class="lab">w, MuJoCo measured</span><span class="val" id="l14Wm">-</span> <span class="unit">rad/s</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="caption">This picture runs the formulas, not MuJoCo. Dashed orange: the textbook formula with the real track width 0.34 m. Teal: the same formula calibrated on MuJoCo (B_eff = 1.4314 m, speed factor 0.9776). The grey boxes show what MuJoCo measured for the five preset commands.</p>
+  </div>
+  <p>Here is what MuJoCo measured, holding each command and averaging from 2 to 6 s. The wheel speeds are the real ones from <code>qvel[6:10]</code>, not the commands.</p>
+  <table>
+    <thead><tr><th>ctrl L, R (rad/s)</th><th>real wheel speed L, R (rad/s)</th><th>v measured (m/s)</th><th>r(wL + wR)/2 (m/s)</th><th>w measured (rad/s)</th><th>r(wR - wL)/0.34 (rad/s)</th><th>B_eff = r(wR - wL)/w (m)</th></tr></thead>
+    <tbody>
+      <tr><td>+5, +5</td><td>4.897, 4.897</td><td>0.2938</td><td>0.2938</td><td>0.0000</td><td>0.0000</td><td>-</td></tr>
+      <tr><td>-5, +5</td><td>-4.588, 4.588</td><td>0.0000</td><td>0.0000</td><td>0.4460</td><td>1.6192</td><td>1.234</td></tr>
+      <tr><td>-2, +2</td><td>-1.665, 1.665</td><td>-0.0001</td><td>0.0000</td><td>0.1541</td><td>0.5876</td><td>1.296</td></tr>
+      <tr><td>0, +5</td><td>0.298, 4.603</td><td>0.1459</td><td>0.1470</td><td>0.1954</td><td>0.7596</td><td>1.322</td></tr>
+      <tr><td>+2, +5</td><td>2.244, 4.616</td><td>0.2056</td><td>0.2058</td><td>0.1013</td><td>0.4185</td><td>1.404</td></tr>
+      <tr><td>+4, +6</td><td>4.185, 5.615</td><td>0.2934</td><td>0.2940</td><td>0.0554</td><td>0.2524</td><td>1.549</td></tr>
+    </tbody>
+  </table>
+  <div class="grid2">
+    <div class="card rule"><span class="callout-title" style="color:var(--teal)">The speed formula works</span>v = r(wL + wR)/2 matches MuJoCo to within 0.0011 m/s in every row. Rolling forward is easy for a wheel.</div>
+    <div class="card warn"><span class="callout-title" style="color:var(--orange)">The turn formula does not, with B = 0.34 m</span>To fit the measured turn rates, the track width has to be <strong>1.234 to 1.549 m</strong>. That is 3.63 to 4.55 times the real 0.34 m. This fitted number is the <dfn class="term" tabindex="0" data-def="The track width that makes w = r (wR - wL) / B_eff match the measured turn rate. For skid-steer it is larger than the real distance between the wheels, because the wheels scrub sideways and slip.">effective track width</dfn> B_eff. It changes with the command, so it is a calibration, not a law.</div>
+  </div>
+  <div class="card analogy"><strong>Why: the front and back wheels must skid sideways.</strong> Picture the robot spinning on the spot. The front wheels sit 0.18 m ahead of the centre, so they must move sideways, but a wheel only rolls forwards. Friction resists that sideways slide, which is called <dfn class="term" tabindex="0" data-def="A wheel sliding sideways across the floor instead of rolling. It costs energy and fights the turn.">scrub</dfn>. So the wheels <dfn class="term" tabindex="0" data-def="The wheel surface moving relative to the floor at the contact point. When wheels slip, the robot does not move the distance the wheel turns suggest.">slip</dfn>, the turn is slower than the wheels suggest, and the motors work harder. Try turning a heavy office chair whose wheels cannot swivel. It is the same fight.</div>
+  <p>The turn is not even smooth. Spinning on the spot, MuJoCo's turn rate jumps between 0.3119 and 0.4815 rad/s, about 21 times a second. The scrubbing wheels stick and slip. The 0.4460 rad/s above is the average.</p>
+  <p class="newwords">New words: <span class="chip">velocity actuator</span><span class="chip">skid-steer</span><span class="chip">differential drive</span><span class="chip">track width</span><span class="chip">effective track width</span><span class="chip">scrub</span><span class="chip">slip</span></p>
+</section>
+
+<section class="step" id="l14-s-sensors">
+  <span class="lvl lvl-words">MuJoCo words</span> <span class="lvl lvl-pic">Picture</span>
+  <h2>4. Two senses: a gyro for turning, a rangefinder for distance</h2>
+  <p>A real robot has no <code>qpos</code>. It must measure itself. The base carries the same sensors as the warehouse robot, as in Lesson 6. A <dfn class="term" tabindex="0" data-def="A sensor that measures how fast its site is spinning, about its own x, y and z axes, in rad/s. On a flat floor its z reading is the turn rate.">gyro</dfn> measures how fast it is turning. A <dfn class="term" tabindex="0" data-def="A sensor that shoots one ray along its site's +z axis and reports the distance to the first geom it hits, in m. It reports -1 if the ray hits nothing.">rangefinder</dfn> measures the distance to whatever is straight ahead, like a laser tape measure.</p>
+  <div class="grid2">
+<pre><code><span class="c">&lt;!-- inside the chassis body --&gt;</span>
+<span class="t">&lt;site</span> <span class="a">name</span>=<span class="s">"imu_site"</span> <span class="a">pos</span>=<span class="s">"0 0 0"</span><span class="t">/&gt;</span>
+<span class="t">&lt;site</span> <span class="a">name</span>=<span class="s">"rangefinder_site"</span> <span class="a">pos</span>=<span class="s">"0.26 0 0"</span>
+      <span class="a">zaxis</span>=<span class="s">"1 0 0"</span><span class="t">/&gt;</span>   <span class="c">&lt;!-- ray points forward --&gt;</span>
+<span class="t">&lt;sensor&gt;</span>
+  <span class="t">&lt;gyro</span>          <span class="a">name</span>=<span class="s">"imu_gyro"</span>  <span class="a">site</span>=<span class="s">"imu_site"</span><span class="t">/&gt;</span>
+  <span class="t">&lt;accelerometer</span> <span class="a">name</span>=<span class="s">"imu_accel"</span> <span class="a">site</span>=<span class="s">"imu_site"</span><span class="t">/&gt;</span>
+  <span class="t">&lt;rangefinder</span>   <span class="a">name</span>=<span class="s">"forward_range"</span>
+                 <span class="a">site</span>=<span class="s">"rangefinder_site"</span><span class="t">/&gt;</span>
+<span class="t">&lt;/sensor&gt;</span>
+<span class="c">&lt;!-- world: a wall, face at x = 2.95 m --&gt;</span></code></pre>
+<pre><code><span class="c"># sensordata has 3 + 3 + 1 = 7 numbers</span>
+d.sensordata[<span class="n">0</span>:<span class="n">3</span>]  <span class="c"># gyro x y z (rad/s, chassis frame)</span>
+d.sensordata[<span class="n">2</span>]    <span class="c"># gyro z = turn rate</span>
+d.sensordata[<span class="n">3</span>:<span class="n">6</span>]  <span class="c"># accelerometer (m/s^2, chassis)</span>
+d.sensordata[<span class="n">6</span>]    <span class="c"># rangefinder (m, -1 = no hit)</span>
+
+<span class="c"># the slices come from the model:</span>
+m.sensor_adr   <span class="c"># [0, 3, 6]</span>
+m.sensor_dim   <span class="c"># [3, 3, 1]</span>
+
+<span class="c"># at rest: accelerometer = [0, 0, 9.81]</span></code></pre>
+  </div>
+  <p>Does the gyro agree with the yaw you compute yourself? The script drives a gentle left curve (left 2, right 5 rad/s). Every 0.5 s it compares the gyro's z reading with the yaw change over the last step, (yaw now - yaw before) / 0.002 s.</p>
+  <table>
+    <thead><tr><th>time (s)</th><th>gyro z (rad/s, chassis frame)</th><th>yaw difference / h (rad/s)</th><th>rangefinder (m)</th><th>geometry: (2.95 - site x) / cos(yaw) (m)</th></tr></thead>
+    <tbody>
+      <tr><td>0.50</td><td>0.124798</td><td>0.124815</td><td>2.5938</td><td>2.5938</td></tr>
+      <tr><td>1.00</td><td>0.102482</td><td>0.102489</td><td>2.5045</td><td>2.5045</td></tr>
+      <tr><td>1.50</td><td>0.104091</td><td>0.104082</td><td>2.4186</td><td>2.4186</td></tr>
+      <tr><td>2.00</td><td>0.147043</td><td>0.147072</td><td>2.3423</td><td>2.3423</td></tr>
+      <tr><td>2.50</td><td>0.107483</td><td>0.107475</td><td>2.2725</td><td>2.2725</td></tr>
+      <tr><td>3.00</td><td>0.099741</td><td>0.099750</td><td>2.2067</td><td>2.2067</td></tr>
+    </tbody>
+  </table>
+  <div class="grid2">
+    <div class="card rule"><span class="callout-title" style="color:var(--teal)">Gyro: turn rate, ready-made</span>The gyro matches the yaw difference to about 3e-5 rad/s. The tiny gap is real: the gyro measures spin about the <em>chassis</em> z axis, and the chassis rocks slightly on its wheels. On a flat floor, gyro z is the turn rate. No differencing, no noise from dividing by 0.002 s.</div>
+    <div class="card rule"><span class="callout-title" style="color:var(--teal)">Rangefinder: pure geometry</span>At the start it reads <strong>2.6900 m</strong>: the wall face at 2.95 m minus the sensor at x = 0.26 m. While curving, it matches the slanted distance to 4 decimals. Facing +y, with nothing ahead, it reads <strong>-1.0</strong>.</div>
+  </div>
+  <p>Slide the robot and turn it. The ray is computed with the same geometry that matched MuJoCo in the table.</p>
+  <div class="card">
+    <div class="grid2">
+      <canvas id="l14cvRange" role="img" aria-label="Top view of the base and the wall, with the rangefinder ray drawn from the front of the chassis"></canvas>
+      <div>
+        <label class="slider"><span>Chassis x <code>qpos[0]</code></span> <output id="l14oRx">0.00 m</output><input type="range" id="l14Rx" min="0" max="2.6" step="0.05" value="0"></label>
+        <label class="slider"><span>Yaw</span> <output id="l14oRth">0 deg</output><input type="range" id="l14Rth" min="-180" max="180" step="1" value="0"></label>
+        <div class="readouts"><div class="ro"><span class="lab">sensordata[6] rangefinder</span><span class="val" id="l14Rd">2.6900</span> <span class="unit">m</span></div></div>
+        <p class="caption">The wall is 6 m long (y from -3 to 3). Turn far enough and the ray passes its end, so the reading becomes -1. From x = 0 that happens just past 45 deg.</p>
+      </div>
+    </div>
+  </div>
+  <div class="card warn"><span class="callout-title" style="color:var(--orange)">Common mistake: treating -1 as a distance</span>A rangefinder that sees nothing reports -1, not infinity. Code like <code>if range &lt; 0.5: stop()</code> would slam the brakes in an empty room. Always check <code>range &gt;= 0</code> first.</div>
+  <p class="newwords">New words: <span class="chip">gyro</span><span class="chip">rangefinder</span><span class="chip">accelerometer</span><span class="chip">IMU site</span></p>
+</section>
+
+<section class="step" id="l14-s-loop">
+  <span class="lvl lvl-pic">Picture</span> <span class="lvl lvl-words">Experiment</span>
+  <h2>5. The experiment: eyes closed vs eyes open, then change one thing</h2>
+  <p>The route: start at (0, 0) facing +x, drive to W1 = (1.5, 0), then to W2 = (1.5, 1.0). We measure the final distance from W2 after the robot stops, and the time it took.</p>
+  <h3>Eyes closed: a plan of wheel speeds and times</h3>
+  <p>The open-loop plan uses the formulas from section 3. Drive 1.5 m at 5 rad/s: 1.5 / 0.3 = 5.0 s. Turn left 90 deg at -5 / +5. Drive 1.0 m: 3.333 s. Pause 0.5 s between moves so the robot settles.</p>
+  <table>
+    <thead><tr><th>Plan made with</th><th>turn time</th><th>ends at x, y (m, world)</th><th>ends facing</th><th>miss W2 by</th><th>time</th></tr></thead>
+    <tbody>
+      <tr><td>B = 0.34 m (textbook)</td><td>0.890 s</td><td>2.3791, 0.3788</td><td>22.68 deg</td><td>1.0764 m</td><td>10.22 s</td></tr>
+      <tr><td>B_cal = 1.345 m (from the measured 0.4460 rad/s spin)</td><td>3.522 s</td><td>1.4881, 0.9826</td><td>89.14 deg</td><td><strong>0.0211 m</strong></td><td>12.86 s</td></tr>
+    </tbody>
+  </table>
+  <p>With the textbook width, the robot turns only a quarter of the way and drives off to the right. Calibrated on this floor, the plan works well: 2.1 cm. Open loop is not useless. It is <em>fragile</em>.</p>
+  <h3>Eyes open: the Capstone 2 navigator</h3>
+  <p>The closed-loop controller is the one Capstone 2 uses to cross the warehouse, with the same gains. Every step it does three small jobs:</p>
+  <div class="grid3">
+    <div class="card"><span class="callout-title" style="color:var(--blue)">1. Look</span>Read x, y and yaw from the free joint, and the turn rate from the gyro. Work out the distance to the waypoint and the <dfn class="term" tabindex="0" data-def="The angle between where the robot faces and the direction to the waypoint, wrapped to between -pi and pi. Positive = the waypoint is to the left.">heading error</dfn>.</div>
+    <div class="card"><span class="callout-title" style="color:var(--orange)">2. Steer</span>A PD rule like Lesson 8: <code>turn = 6 × heading error - 2 × gyro z</code>. The gyro term is the shock absorber: it stops the robot swinging past the right heading.</div>
+    <div class="card"><span class="callout-title" style="color:var(--purple)">3. Go</span><code>speed = 4 × distance</code>, cut to zero when the heading error passes 0.8 rad. Never drive fast while facing the wrong way. Then <code>left = speed - turn</code>, <code>right = speed + turn</code>.</div>
+  </div>
+<pre><code>heading_err = wrap(atan2(dy, dx) - yaw)               <span class="c"># rad, + = goal is to the left</span>
+yaw_rate    = d.sensordata[<span class="n">2</span>]                          <span class="c"># gyro z, rad/s</span>
+turn  = clip(<span class="n">6.0</span> * heading_err - <span class="n">2.0</span> * yaw_rate, -<span class="n">6</span>, <span class="n">6</span>)   <span class="c"># wheel rad/s</span>
+alignment = max(<span class="n">0</span>, <span class="n">1</span> - abs(heading_err) / <span class="n">0.8</span>)          <span class="c"># 1 = facing it, 0 = far off</span>
+creep = <span class="n">1.5</span> <span class="k">if</span> abs(heading_err) &lt; <span class="n">0.4</span> <span class="k">else</span> <span class="n">0.0</span>          <span class="c"># keep rolling near the goal</span>
+speed = clip(max(<span class="n">4.0</span> * dist * alignment, creep), <span class="n">0</span>, <span class="n">6</span>)
+set_wheels(d, speed - turn, speed + turn)              <span class="c"># left, right; stop when dist &lt; 0.05 m</span></code></pre>
+  <p>Result on the normal floor: it reaches W1 at 9.632 s and W2 at <strong>21.99 s</strong>, ending <strong>0.0490 m</strong> from W2. It stops as soon as it is inside the 5 cm <dfn class="term" tabindex="0" data-def="How close counts as arrived. The controller stops the wheels once the distance is below it. Capstone 2 uses 0.10 m; this lesson uses 0.05 m.">arrival radius</dfn> (Capstone 2 uses 10 cm). It is slower than the plan, because it slows down as it gets close.</p>
+  <div class="predict">
+    <h3>Predict: the floor gets slippier (friction 1.5 to 0.3). Will the open-loop plan, tuned on the normal floor, still arrive? Will the closed loop?</h3>
+    <textarea aria-label="Your prediction for the slippery floor"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p><strong>Open loop misses by 0.904 m.</strong> It ends at (0.691, 0.596) facing 142.4 deg. Surprise: the slippery floor makes it turn <em>too far</em>, not too little. Driving straight is unchanged (0.2936 m/s). But spinning on the spot now runs at 0.7139 rad/s instead of 0.4460, because less friction fights the sideways scrub (B_eff drops to 0.813 m). The plan's 3.522 s turn overshoots by 52 deg.</p>
+      <p><strong>Closed loop arrives: 0.0485 m from W2 in 20.54 s.</strong> It never knew the floor changed. It just saw the heading and corrected it.</p>
+    </div>
+  </div>
+  <div class="card">
+    <canvas id="l14cvRuns" role="img" aria-label="Top view of the recorded open-loop and closed-loop paths for the chosen change"></canvas>
+    <div class="btnrow">
+      <button type="button" data-run="nominal" class="primary">Normal floor</button>
+      <button type="button" data-run="slippery">Slippery floor (mu 0.3)</button>
+      <button type="button" data-run="heavy">Payload +5 kg</button>
+      <button type="button" data-run="slowright">Right motors 10% slow</button>
+    </div>
+    <div class="readouts">
+      <div class="ro"><span class="lab">open loop: miss W2 by</span><span class="val" id="l14RunOE">-</span> <span class="unit">m</span></div>
+      <div class="ro"><span class="lab">open loop: time</span><span class="val" id="l14RunOT">-</span> <span class="unit">s</span></div>
+      <div class="ro"><span class="lab">closed loop: miss W2 by</span><span class="val" id="l14RunCE">-</span> <span class="unit">m</span></div>
+      <div class="ro"><span class="lab">closed loop: time</span><span class="val" id="l14RunCT">-</span> <span class="unit">s</span></div>
+    </div>
+    <p class="caption">Paths recorded from MuJoCo by 14_mobile_bases.py, one pose every 0.2 s. Each button changes exactly one thing; the plan and the gains stay the same. "Right motors 10% slow" means the right wheels get 0.9 times what the controller asks for.</p>
+  </div>
+  <table>
+    <thead><tr><th>One change</th><th>open loop: miss W2 by</th><th>open loop: ends at (m, deg)</th><th>closed loop: miss W2 by</th><th>closed loop: time</th></tr></thead>
+    <tbody>
+      <tr><td>none (friction 1.5)</td><td>0.0211 m</td><td>1.488, 0.983, 89.1</td><td>0.0490 m</td><td>21.99 s</td></tr>
+      <tr><td>slippery floor (friction 0.3)</td><td>0.9040 m</td><td>0.691, 0.596, 142.4</td><td>0.0485 m</td><td>20.54 s</td></tr>
+      <tr><td>payload +5 kg on the chassis</td><td>0.1038 m</td><td>1.600, 0.972, 82.3</td><td>0.0502 m</td><td>24.12 s</td></tr>
+      <tr><td>right motors 10% slow</td><td>0.1419 m</td><td>1.493, 0.858, 81.4</td><td>0.0482 m</td><td>24.30 s</td></tr>
+    </tbody>
+  </table>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">Rule to remember</span>Open loop is only as good as your model of the world. Every change it did not plan for turns into error: 10 to 90 cm here. Closed loop pays a little time (20.5 to 24.3 s against 12.9 s) and arrives within about 5 cm every time. The 0.0502 m run rolled 0.2 mm on after its wheels were told to stop.</div>
+  <p>The sandbox on the right lets you click any goal and add a motor fault. Its robot is a calibrated formula, not MuJoCo. It shows the recorded MuJoCo numbers next to it.</p>
+  <p class="newwords">New words: <span class="chip">heading error</span><span class="chip">arrival radius</span><span class="chip">calibration</span><span class="chip">feedback</span></p>
+</section>
+
+<section class="step" id="l14-s-math">
+  <span class="lvl lvl-math">Maths (optional)</span>
+  <h2>6. The maths, with the script's numbers</h2>
+
+  <details class="math"><summary>Step 1: yaw from the quaternion, by hand</summary><div>
+    <p>A pure turn by angle a about z has the quaternion [cos(a/2), 0, 0, sin(a/2)]. After the script's turn, MuJoCo gives q = [0.7872, 0, 0, 0.6167]. With x = y = 0 the formula shrinks:</p>
+    <div class="eq">2(wz + xy)     = 2 × 0.7872 × 0.6167 + 0      = 0.970944
+1 - 2(y² + z²) = 1 - 2 × 0.6167²                = 0.239306
+yaw = atan2(0.970944, 0.239306) = 1.329145 rad = 76.154 deg        (script: 1.329145)</div>
+    <p>Those two numbers are exactly the first column of <code>xmat</code>, [0.239306, 0.970944, 0]: the cosine and sine of the yaw. That is why the xmat route gives the same answer. For a flat floor there is a third shortcut, 2 atan2(z, w) = 1.329145 rad.</p>
+  </div></details>
+
+  <details class="math"><summary>Step 2: forward speed from wheel speed</summary><div>
+    <p>A wheel of radius r that turns by 1 rad rolls its centre forward by r metres, if it does not slip. So its speed is r × wheel speed. The chassis moves at the average of the two sides:</p>
+    <div class="eq">v = r (wL + wR) / 2 = 0.06 × (4.8974 + 4.8974) / 2 = 0.2938 m/s       (measured: 0.2938)
+with the commands instead: 0.06 × (5 + 5) / 2  = 0.3000 m/s</div>
+    <p>The velocity actuator explains the gap: torque = kv (ctrl - speed) = 5 × (5 - 4.8974) = 0.5132 N m, which the script measures as the average <code>actuator_force</code>.</p>
+  </div></details>
+
+  <details class="math"><summary>Step 3: turn rate and the effective track width</summary><div>
+    <p>If the left side moves backwards at speed r wL and the right side forwards at r wR, and they are B apart, the chassis turns at (right speed - left speed) / B:</p>
+    <div class="eq">w = r (wR - wL) / B = 0.06 × (4.5877 - (-4.5877)) / 0.34 = 1.6192 rad/s   (formula)
+measured                                                  = 0.4460 rad/s
+B_eff = r (wR - wL) / w = 0.06 × 9.1754 / 0.4460 = 1.234 m             (script: 1.234)</div>
+    <p>B_eff / B = 1.234 / 0.34 = 3.63. For the gentle 4 / 6 curve it is 1.549 / 0.34 = 4.55. A single number cannot fit every command, so the script fits one over nine commands, using the commands as wheel speeds: B_eff = 1.4314 m and a speed factor 0.9776. That is the browser's model.</p>
+  </div></details>
+
+  <details class="math"><summary>Step 4: why the textbook plan turns a quarter of the way</summary><div>
+    <p>To turn 90 deg = 1.5708 rad at -5 / +5, the plan needs T = 1.5708 / w:</p>
+    <div class="eq">textbook:   w = 0.06 × 10 / 0.34  = 1.7647 rad/s  ->  T = 0.890 s
+calibrated: w = 0.4460 rad/s (B_cal = 0.06 × 10 / 0.4460 = 1.345 m)  ->  T = 3.522 s
+real turn in 0.890 s is roughly 0.4460 × 0.890 = 0.40 rad = 23 deg       (final yaw: 22.68 deg)</div>
+  </div></details>
+
+  <details class="math"><summary>Step 5: one closed-loop decision, by hand</summary><div>
+    <p>The script prints the controller's state every 2 s. At t = 12 s the robot is turning towards W2: distance 0.9745 m, heading error 0.5471 rad, gyro z 0.2625 rad/s.</p>
+    <div class="eq">turn      = 6 × 0.5471 - 2 × 0.2625         = 3.2826 - 0.5250 = 2.7576   (script: 2.7574)
+alignment = 1 - 0.5471 / 0.8                  = 0.3161
+creep     = 0, because 0.5471 > 0.4
+speed     = 4 × 0.9745 × 0.3161               = 1.2322                  (script: 1.2324)
+left  = speed - turn = 1.2324 - 2.7574 = -1.5250   right = speed + turn = 3.9898 rad/s</div>
+    <p>The last digit differs because the printed inputs are rounded to 4 decimals. The robot is still 31 deg off, so it creeps forward while it mostly turns.</p>
+  </div></details>
+</section>
+
+<section class="step" id="l14-s-code">
+  <span class="lvl lvl-code">Code</span>
+  <h2>7. Your script, line by line</h2>
+  <p>Run it with <code>.venv/bin/python lessons/14-mobile-bases/14_mobile_bases.py</code>. It runs headless in about 4 s.</p>
+  <table>
+    <thead><tr><th style="width:44%">Code in <code>14_mobile_bases.py</code></th><th>Physical meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>mujoco.MjModel.from_xml_string(XML)</code></td><td>Build the base: chassis, four wheels, floor and a wall at x = 3 m. 9.7 kg in total.</td></tr>
+      <tr><td><code>settle(m, d)</code></td><td>Let the robot drop onto its wheels for 0.5 s, then set the clock to 0. It rests at z = 0.1098 m on 8 contacts, 2 per wheel.</td></tr>
+      <tr><td><code>yaw_from_quat(d.qpos[3:7])</code></td><td>The heading in rad from the free joint's quaternion. Always current, even right after <code>mj_step</code>.</td></tr>
+      <tr><td><code>np.arctan2(R[1, 0], R[0, 0])</code></td><td>The same heading from the first column of <code>xmat</code>: where the nose points. Call <code>mj_forward</code> first.</td></tr>
+      <tr><td><code>d.ctrl[:] = [left, right, left, right]</code></td><td>Target spin rates for FL, FR, RL, RR in rad/s. Both left wheels share one number, both right wheels the other.</td></tr>
+      <tr><td><code>d.qvel[6:10]</code>, <code>d.actuator_force</code></td><td>The real wheel speeds (rad/s) and the torque each motor applies (N m).</td></tr>
+      <tr><td><code>drive_steady(m, left, right)</code></td><td>Hold one command for 6 s and average v and w from 2 to 6 s. This is how B_eff is measured.</td></tr>
+      <tr><td><code>d.sensordata[2]</code>, <code>d.sensordata[6]</code></td><td>Gyro z (turn rate, rad/s, chassis frame) and the rangefinder distance (m, -1 = nothing).</td></tr>
+      <tr><td><code>open_loop(m, B_plan)</code></td><td>Eyes closed: a list of (left, right, seconds) worked out before the start, then played blind.</td></tr>
+      <tr><td><code>closed_loop(m)</code></td><td>Eyes open: every 2 ms read the pose and gyro, compute turn and speed, write ctrl.</td></tr>
+      <tr><td><code>m.geom_friction[g, 0] = 0.3</code></td><td>Change one thing: the sliding friction of the floor and the four wheels. This edits the <strong>model</strong>, so it is done on a fresh model before a run.</td></tr>
+    </tbody>
+  </table>
+<pre><code><span class="c"># part 1: model</span>
+nq = 11  (free joint 7 + four wheel hinges 4)
+nv = 10  (free joint 6 + four wheel hinges 4)
+total mass (kg): 9.700   (chassis 8.0 + plate 0.5 + 4 wheels x 0.3)
+sensor_adr: imu_gyro -> sensordata[0:3], forward_range -> sensordata[6]
+<span class="c"># part 2: pose after a 3 s spin at -5 / +5</span>
+  quaternion [w x y z]: [ 0.7872 -0.     -0.      0.6167]
+  yaw from quaternion  atan2(2(wz+xy), 1-2(y^2+z^2)) = 1.329145 rad = 76.154 deg
+  yaw from xmat        atan2(R[1,0], R[0,0])        = 1.329145 rad   <span class="c"># same, both routes</span>
+<span class="c"># part 3: velocity actuators, steady 2-6 s</span>
+ctrl L=+5 R=+5 rad/s -> wheel qvel[6:10] = [4.8974 4.8974 4.8972 4.8972] rad/s; mean actuator_force (N m) = [0.5131 0.5132 0.5139 0.5139]
+ctrl L=-5 R=+5 rad/s -> wheel qvel[6:10] = [-4.5877  4.5877 -4.5877  4.5877] rad/s; mean actuator_force (N m) = [-2.0624  2.0624 -2.0624  2.0624]  <span class="c"># 4x the effort: scrub</span>
+<span class="c"># part 4: skid-steer</span>
+B_eff range: 1.234 to 1.549 m, geometric B = 0.34 m -> 3.63x to 4.55x wider
+Prediction 'both wheels 5 rad/s': r*5 = 0.300 m/s, measured 0.2938 m/s
+Prediction 'left -5, right +5' with B_geom: 1.7647 rad/s, measured 0.4460 rad/s
+<span class="c"># part 5: sensors</span>
+start: rangefinder = 2.6900 m, geometric 2.95 - (x + 0.26) = 2.6900 m
+facing +y (yaw 90 deg, nothing ahead): rangefinder = -1.0  (-1 means no hit)
+<span class="c"># part 6: route (0,0) -> (1.5, 0) -> (1.5, 1.0) m</span>
+open loop, B_geom : end x=2.3791 y=0.3788 yaw=22.68 deg  error 1.0764 m  time 10.22 s  <span class="c"># textbook width</span>
+open loop, B_cal  : end x=1.4881 y=0.9826 yaw=89.14 deg  error 0.0211 m  time 12.86 s  <span class="c"># tuned on this floor</span>
+closed loop       : end x=1.5299 y=0.9612 yaw=105.49 deg  error 0.0490 m  time 21.99 s  <span class="c"># inside the 5 cm radius</span>
+<span class="c"># part 7: change one thing</span>
+slippery floor (mu 0.3)   | 0.9040              | 12.86         | 0.0485           | 20.54
+payload +5 kg             | 0.1038              | 12.86         | 0.0502           | 24.12
+right motors 10% slow     | 0.1419              | 12.86         | 0.0482           | 24.30
+<span class="c"># part 8: calibration for the browser</span>
+fit over 9 steady commands, using COMMANDED wheel speeds: B_eff = 1.431 m, speed factor k_v = 0.9776
+kinematic model, same controller, dt 0.01 s: arrival error 0.0499 m, time 21.89 s (MuJoCo: 0.0490 m, 21.99 s)</code></pre>
+  <div class="card analogy"><strong>How good is the browser's formula robot?</strong> Driving the same route with the same controller, it arrives in 21.89 s against MuJoCo's 21.99 s. That is close enough to explore with. But it cannot know about friction, mass or scrub, so it can never show the slippery-floor surprise. The page's JavaScript copy matches the Python copy of the formula to 4e-16 m (<code>14_check_browser_copy.py</code>).</div>
+</section>
+
+<section class="step" id="l14-s-check">
+  <span class="lvl lvl-plain">Check yourself</span>
+  <h2>8. Your lesson's four questions</h2>
+  <p>Answer these here, then tell me your answers in the chat so I can update your progress.</p>
+  <div class="predict">
+    <h3>Q1. After a turn, d.qpos[3:7] = [0.7872, 0, 0, 0.6167]. Which way is the robot facing, in degrees from world +x?</h3>
+    <textarea aria-label="Answer to question 1"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>76.154 deg</strong> (1.329145 rad), turned left of +x. atan2(2 × 0.7872 × 0.6167, 1 - 2 × 0.6167²) = atan2(0.970944, 0.239306). The quickest check: 2 atan2(z, w) gives the same angle for a flat floor.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q2. You command left = 0, right = 5 rad/s. The textbook formula with B = 0.34 m says the robot turns at 0.88 rad/s. Roughly what will MuJoCo show, and why?</h3>
+    <textarea aria-label="Answer to question 2"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>Much slower: MuJoCo measures <strong>0.1954 rad/s</strong>, while moving forwards at 0.1459 m/s. The front and back wheels must scrub sideways to turn, friction resists, and the wheels slip. Even with the real wheel speeds (0.298 and 4.603 rad/s) the formula needs B_eff = 1.322 m, not 0.34 m. (0.06 × 5 / 0.34 = 0.88 rad/s.)</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q3. The rangefinder reads -1. A teammate's code says "distance is negative, we must be inside the wall, reverse!" What is really going on?</h3>
+    <textarea aria-label="Answer to question 3"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>-1 means <strong>the ray hit nothing</strong>: open space ahead. The script reads exactly -1.0 when the robot faces +y, away from the only wall. Treat any value below 0 as "no reading", never as a distance.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q4. Your open-loop plan arrives within 2 cm on the lab floor. Then the robot gets a 5 kg payload. Which controller do you trust, and what will each one cost you?</h3>
+    <textarea aria-label="Answer to question 4"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>Closed loop.</strong> With +5 kg, the open-loop plan misses W2 by 0.1038 m: it under-turns to 82.3 deg. The closed loop arrives 0.0502 m away, but takes 24.12 s instead of 12.86 s. Feedback costs time and needs sensors. It buys you arrival in a world you did not model.</p></div>
+  </div>
+
+  <h3>Glossary: new words from this lesson</h3>
+  <dl class="glossary">
+    <dt>mobile base</dt><dd>The driving part of a robot: chassis plus wheels.</dd>
+    <dt>open loop / closed loop</dt><dd>Run a plan made in advance without looking / measure and correct every step (feedback).</dd>
+    <dt>waypoint</dt><dd>A goal point on the floor, (x, y) in metres, world frame.</dd>
+    <dt>free joint</dt><dd>Joint with 7 qpos numbers (position + quaternion) and 6 qvel numbers. The chassis uses one.</dd>
+    <dt>quaternion</dt><dd>Four numbers [w, x, y, z] that store a rotation. A pure yaw a is [cos(a/2), 0, 0, sin(a/2)].</dd>
+    <dt>yaw</dt><dd>The heading seen from above, from world +x, + = left. atan2(2(wz + xy), 1 - 2(y² + z²)) or atan2(xmat[1,0], xmat[0,0]).</dd>
+    <dt>xmat</dt><dd>Each body's 3 x 3 rotation matrix in the world frame. Its first column is the body's +x axis. Computed at the start of mj_step.</dd>
+    <dt>velocity actuator</dt><dd>Cruise control for a joint: torque = kv (ctrl - speed), here kv = 5, clipped to 10 N m.</dd>
+    <dt>skid-steer, differential drive</dt><dd>Steering by different left and right wheel speeds, with no steerable wheel.</dd>
+    <dt>track width, effective track width</dt><dd>Distance between left and right wheels (0.34 m) / the larger number that makes the turn formula match reality (1.234 to 1.549 m here).</dd>
+    <dt>scrub, slip</dt><dd>A wheel sliding sideways / the wheel surface moving relative to the floor.</dd>
+    <dt>gyro</dt><dd>Sensor for spin rate about the site's own axes, rad/s. Its z reading is the turn rate on a flat floor.</dd>
+    <dt>rangefinder</dt><dd>Sensor that measures the distance along the site's +z axis to the first geom, m; -1 if nothing is hit.</dd>
+    <dt>accelerometer</dt><dd>Sensor for acceleration in the site frame, m/s². At rest it reads +9.81 up: the floor holding it against gravity.</dd>
+    <dt>heading error</dt><dd>Angle from where the robot faces to where the goal is, wrapped to -pi..pi.</dd>
+    <dt>arrival radius</dt><dd>How close counts as arrived: 0.05 m here, 0.10 m in Capstone 2.</dd>
+    <dt>calibration</dt><dd>Measuring the real robot to fix a model's numbers, like B_eff = 1.4314 m.</dd>
+  </dl>
+</section>
+
+<section class="step recap" id="l14-recap">
+  <h2>Recap: the lesson in one minute</h2>
+  <div class="mental-model">
+    <p><strong>Pose.</strong> The chassis hangs on a free joint: <code>qpos[0:3]</code> is its position (m, world) and <code>qpos[3:7]</code> its quaternion [w, x, y, z]. Yaw = atan2(2(wz + xy), 1 - 2(y² + z²)), or atan2(R[1,0], R[0,0]) from <code>xmat</code> after <code>mj_forward</code>. Both gave 1.329145 rad.</p>
+    <p><strong>Wheels.</strong> Four velocity actuators (kv 5, torque limited to -10 to 10 N m). <code>ctrl</code> is the target wheel speed in rad/s, order FL, FR, RL, RR. 5 rad/s gives 4.8974 rad/s and 0.2938 m/s.</p>
+    <p><strong>Skid-steer.</strong> v = r(wL + wR)/2 holds. w = r(wR - wL)/B only holds with an effective track width B_eff of 1.234 to 1.549 m, not the real 0.34 m, because the wheels scrub sideways. -5 / +5 spins at 0.4460 rad/s, not 1.7647.</p>
+    <p><strong>Sensors.</strong> Gyro z (<code>sensordata[2]</code>, rad/s, chassis frame) is the turn rate. The rangefinder (<code>sensordata[6]</code>, m) is a ray along the site's +z, -1 when it hits nothing.</p>
+    <p><strong>Control.</strong> Open loop is fast (12.86 s) and fine when the world matches the plan (0.0211 m), but misses by 0.10 to 0.90 m when one thing changes. Closed loop (heading PD with gyro damping, speed proportional to distance, gated by heading error) arrives within about 0.05 m every time, in 20.5 to 24.3 s.</p>
+  </div>
+  <div class="checkpoint">
+    <p>Open the sandbox: click a goal behind the robot, run both loops, then push the disturbance slider to -20 % and run them again.</p>
+    <div class="btn-row">
+      <button class="btn btn-primary btn-sm" type="button" onclick="markComplete(14)">Mark lesson complete</button>
+      <button class="btn btn-sm" type="button" onclick="switchLesson(15)">Next: Learning a Policy</button>
+    </div>
+  </div>
+</section>
+</div>

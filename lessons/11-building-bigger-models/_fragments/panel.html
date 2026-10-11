@@ -1,0 +1,506 @@
+<div class="lesson-content xp" id="lesson11">
+  <header class="lesson-header-block">
+    <p class="lesson-num-label">Lesson 11</p>
+    <h1 class="lesson-title">Building Bigger Models</h1>
+    <p class="lesson-subtitle">Goal: write big models without repeating yourself. You will style many parts at once with default classes, save whole poses as keyframes, split one model over several files, and build or edit a model from Python with MjSpec. The model is the Lesson 4 two-link arm next to a small warehouse shelf.</p>
+    <p class="lesson-legend"><dfn class="term" tabindex="0" data-def="Technical words look like this. Hover or focus one to read a plain-English definition.">Dotted words</dfn> show a definition on hover. <span class="lg-math">Maths boxes</span> are optional. <span class="lg-pred">Predict boxes</span> hide the answer until you guess.</p>
+  </header>
+  <nav class="lesson-toc" aria-label="Sections in lesson 11"><a href="#l11-s-idea">Big idea</a><a href="#l11-s-classes">Default classes</a><a href="#l11-s-keys">Keyframes</a><a href="#l11-s-include">Include</a><a href="#l11-s-spec">MjSpec</a><a href="#l11-s-warehouse">Warehouse</a><a href="#l11-s-code">The script</a><a href="#l11-s-check">Check yourself</a><a href="#l11-recap">Recap</a></nav>
+
+<section class="step" id="l11-s-idea">
+  <span class="lvl lvl-plain">Plain words</span> <span class="lvl lvl-pic">Picture</span>
+  <h2>1. Write a setting once, use it everywhere</h2>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">Welcome to Part 2</span>Part 2 builds, piece by piece, every part of the warehouse robot you will put together in Capstone 2 (lesson 16). Each lesson takes one piece and teaches it on a small model first. This lesson is about writing large models without repeating yourself.</div>
+  <p>The warehouse robot file in Capstone 2 has 41 geoms. Of those, 25 are walls, shelves, a table, crates and pylons. They all need the same friction and the same collision settings.</p>
+  <p>You could type those settings 25 times. That is slow. Worse, when you change your mind, you must find and fix all 25 copies. Miss one and the simulation quietly behaves differently in one corner.</p>
+  <div class="card analogy"><strong>Analogy: a style sheet.</strong> In a word processor you do not format every heading by hand. You define a "Heading" style once, and every heading uses it. Change the style, and every heading changes. A single heading can still be made red by hand, and that one wins.</div>
+  <p>MuJoCo has the same idea. A <dfn class="term" tabindex="0" data-def="A named set of attribute values in the XML's &lt;default&gt; section. Every element that uses the class gets those values unless it writes its own.">default class</dfn> is a named style for geoms, joints and other elements. Classes can sit inside each other, so a small style can start from a bigger one.</p>
+  <div class="grid3">
+    <div class="card"><span class="callout-title" style="color:var(--teal)">Default class = the style</span>Write friction, colour and collision settings once. Every geom that uses the class gets them.</div>
+    <div class="card"><span class="callout-title" style="color:var(--orange)">Keyframe = a save point</span>Store a whole pose (and speeds, and the clock) under a name. Jump back to it with one call.</div>
+    <div class="card"><span class="callout-title" style="color:var(--purple)">Include and MjSpec = big files made small</span>Split one model over several files, or let a Python loop write the repetitive parts for you.</div>
+  </div>
+  <h3>Try it: this lesson's class tree</h3>
+  <p>Our model has five classes. Pick one. The picture shows which geoms use it, and the orange line shows the classes it starts from.</p>
+  <div class="card">
+    <canvas id="l11cvTree" role="img" aria-label="Tree of default classes: main at the top, robot, furniture and object below it, finger below robot, with the geoms that use each class"></canvas>
+    <div class="btnrow" role="group" aria-label="Pick a class">
+      <button type="button" class="l11tree" data-cls="main" aria-pressed="false">main</button>
+      <button type="button" class="l11tree" data-cls="robot" aria-pressed="false">robot</button>
+      <button type="button" class="l11tree" data-cls="finger" aria-pressed="false">finger</button>
+      <button type="button" class="l11tree" data-cls="furniture" aria-pressed="false">furniture</button>
+      <button type="button" class="l11tree" data-cls="object" aria-pressed="false">object</button>
+    </div>
+    <p class="caption" id="l11TreeSets" aria-live="polite"></p>
+    <p class="caption">Names under each box are the geoms that use that class in the compiled model. The script counts it up: 43 attribute values reach the elements through classes, but only 17 are typed, once each, inside <code>&lt;default&gt;</code>.</p>
+  </div>
+  <p class="newwords">New words: <span class="chip">default class</span><span class="chip">class tree</span><span class="chip">keyframe</span><span class="chip">include</span><span class="chip">MjSpec</span></p>
+</section>
+
+<section class="step" id="l11-s-classes">
+  <span class="lvl lvl-words">MuJoCo words</span> <span class="lvl lvl-pic">Picture</span>
+  <h2>2. Default classes: how MuJoCo picks each value</h2>
+  <p>Here is the style sheet of our model. Left: the XML. Right: the Python that reads the result for the <code>weight</code> cube at the end of the arm. We now treat that cube as the gripper pad, the only part of the arm meant to touch boxes, so it gets the <code>finger</code> class.</p>
+  <div class="grid2">
+<pre><code><span class="t">&lt;default&gt;</span>                              <span class="c">&lt;!-- main --&gt;</span>
+  <span class="t">&lt;geom</span> <span class="a">rgba</span>=<span class="s">"0.75 0.78 0.76 1"</span><span class="t">/&gt;</span>
+  <span class="t">&lt;default</span> <span class="a">class</span>=<span class="s">"robot"</span><span class="t">&gt;</span>
+    <span class="t">&lt;geom</span> <span class="a">rgba</span>=<span class="s">"0.1 0.7 0.6 1"</span>
+          <span class="a">contype</span>=<span class="s">"0"</span> <span class="a">conaffinity</span>=<span class="s">"0"</span><span class="t">/&gt;</span>
+    <span class="t">&lt;joint</span> <span class="a">axis</span>=<span class="s">"0 1 0"</span> <span class="a">damping</span>=<span class="s">"0.5"</span><span class="t">/&gt;</span>
+    <span class="t">&lt;default</span> <span class="a">class</span>=<span class="s">"finger"</span><span class="t">&gt;</span>
+      <span class="t">&lt;geom</span> <span class="a">friction</span>=<span class="s">"2 0.05 0.01"</span> <span class="a">condim</span>=<span class="s">"4"</span>
+            <span class="a">contype</span>=<span class="s">"1"</span> <span class="a">conaffinity</span>=<span class="s">"1"</span><span class="t">/&gt;</span>
+    <span class="t">&lt;/default&gt;</span>
+  <span class="t">&lt;/default&gt;</span>
+  <span class="t">&lt;default</span> <span class="a">class</span>=<span class="s">"furniture"</span><span class="t">&gt;</span>
+    <span class="t">&lt;geom</span> <span class="a">type</span>=<span class="s">"box"</span> <span class="a">friction</span>=<span class="s">"0.5 0.005 0.001"</span>
+          <span class="a">rgba</span>=<span class="s">"0.55 0.35 0.15 1"</span><span class="t">/&gt;</span>
+  <span class="t">&lt;/default&gt;</span>
+  <span class="t">&lt;default</span> <span class="a">class</span>=<span class="s">"object"</span><span class="t">&gt;</span>
+    <span class="t">&lt;geom</span> <span class="a">type</span>=<span class="s">"box"</span> <span class="a">size</span>=<span class="s">"0.05 0.05 0.05"</span>
+          <span class="a">friction</span>=<span class="s">"0.6 0.01 0.001"</span> <span class="a">rgba</span>=<span class="s">"0.6 0.45 0.25 1"</span><span class="t">/&gt;</span>
+  <span class="t">&lt;/default&gt;</span>
+<span class="t">&lt;/default&gt;</span>
+...
+<span class="t">&lt;body</span> <span class="a">name</span>=<span class="s">"upper_arm"</span> <span class="a">pos</span>=<span class="s">"0 0 1"</span> <span class="a">childclass</span>=<span class="s">"robot"</span><span class="t">&gt;</span>
+  <span class="t">&lt;joint</span> <span class="a">name</span>=<span class="s">"shoulder"</span><span class="t">/&gt;</span>
+  ...
+  <span class="t">&lt;geom</span> <span class="a">name</span>=<span class="s">"weight"</span> <span class="a">class</span>=<span class="s">"finger"</span> <span class="a">type</span>=<span class="s">"box"</span>
+        <span class="a">pos</span>=<span class="s">"0.4 0 0"</span> <span class="a">size</span>=<span class="s">"0.05 0.05 0.05"</span><span class="t">/&gt;</span></code></pre>
+<pre><code>model = mujoco.MjModel.from_xml_string(XML)
+w = model.geom(<span class="s">"weight"</span>)          <span class="c"># geom 3</span>
+w.friction  <span class="c"># [2 0.05 0.01]  class finger</span>
+w.condim    <span class="c"># [4]            class finger</span>
+w.contype   <span class="c"># [1]  finger beats robot's 0</span>
+w.rgba      <span class="c"># [0.1 0.7 0.6 1] parent class robot</span>
+
+j = model.joint(<span class="s">"shoulder"</span>)
+j.axis      <span class="c"># [0 1 0]  class robot</span>
+model.dof_damping
+<span class="c"># [0.5 0.5 0 0 0 0 0 0]  N m s/rad</span>
+<span class="c"># shoulder, elbow (robot), then the</span>
+<span class="c"># red box's 6 free-joint dofs (none)</span>
+
+<span class="c"># every geom attribute ends up in a</span>
+<span class="c"># plain array, one row per geom:</span>
+model.geom_friction   <span class="c"># (ngeom, 3) = (12, 3)</span>
+model.geom_rgba       <span class="c"># (12, 4)</span>
+model.geom_contype    <span class="c"># (12,)</span></code></pre>
+  </div>
+  <p>The compiled <code>MjModel</code> has no idea which class a value came from. It just holds numbers. Classes exist only in the XML, to save you typing. So how does the compiler choose? It searches in a fixed order and stops at the first level that sets the attribute.</p>
+  <table>
+    <thead><tr><th>Order</th><th>Level</th><th>Where it is written</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><strong>explicit</strong></td><td>On the element itself, for example <code>rgba="0.9 0.5 0.2 1"</code> on <code>forearm_geom</code></td></tr>
+      <tr><td>2</td><td><strong>its class</strong></td><td><code>class="..."</code> on the element; if absent, the nearest <dfn class="term" tabindex="0" data-def="An attribute on a body. Every element inside that body, and inside its child bodies, uses this class unless it names its own class.">childclass</dfn> on an enclosing body; if none, <code>main</code></td></tr>
+      <tr><td>3</td><td><strong>parent classes</strong></td><td>The class it sits inside, then that one's parent, up to <code>main</code></td></tr>
+      <tr><td>4</td><td><strong><dfn class="term" tabindex="0" data-def="The unnamed top-level &lt;default&gt;. Its name is &quot;main&quot;. Every class starts from it, and elements with no class use it.">main</dfn> (global)</strong></td><td>The top-level <code>&lt;default&gt;</code>, which every class starts from</td></tr>
+      <tr><td>5</td><td><strong><dfn class="term" tabindex="0" data-def="MuJoCo's own value for an attribute that nobody wrote, for example friction 1 0.005 0.0001, condim 3, contype 1, rgba 0.5 0.5 0.5 1.">built-in</dfn></strong></td><td>MuJoCo's own value: friction <code>1 0.005 0.0001</code>, condim 3, contype 1, conaffinity 1</td></tr>
+    </tbody>
+  </table>
+  <div class="predict">
+    <h3>Predict first: <code>weight</code> has <code>class="finger"</code> and sits inside a body with <code>childclass="robot"</code>. What are its friction, contype and rgba?</h3>
+    <textarea aria-label="Your prediction for the weight geom's friction, contype and rgba"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p><strong>friction = 2 0.05 0.01</strong>, from class finger. Its own <code>class="finger"</code> beats the body's childclass, so the search starts at finger.</p>
+      <p><strong>contype = 1</strong>, also from finger. Robot says 0, but finger is checked first, so robot's 0 is never reached.</p>
+      <p><strong>rgba = 0.1 0.7 0.6 1</strong> (teal), from the <em>parent class</em> robot. Finger does not write a colour, so the search carries on to robot. The compiled model agrees on all three (script section 2).</p>
+    </div>
+  </div>
+  <h3>Watch the search, one level at a time</h3>
+  <p>Pick a geom and an attribute. Press "Next level" to check one level at a time.</p>
+  <div class="card">
+    <canvas id="l11cvLadder" role="img" aria-label="The lookup ladder: explicit, class, parent classes, main, built-in, with the first level that sets the attribute highlighted"></canvas>
+    <div class="btnrow" role="group" aria-label="Pick a geom">
+      <button type="button" class="l11ladg" data-g="floor">floor</button>
+      <button type="button" class="l11ladg" data-g="upper_geom">upper_geom</button>
+      <button type="button" class="l11ladg" data-g="forearm_geom">forearm_geom</button>
+      <button type="button" class="l11ladg" data-g="weight">weight</button>
+      <button type="button" class="l11ladg" data-g="box_b">box_b</button>
+      <button type="button" class="l11ladg" data-g="red_box_geom">red_box_geom</button>
+    </div>
+    <div class="btnrow" role="group" aria-label="Pick an attribute">
+      <button type="button" class="l11lada" data-a="rgba">rgba</button>
+      <button type="button" class="l11lada" data-a="friction">friction</button>
+      <button type="button" class="l11lada" data-a="contype">contype</button>
+      <button type="button" class="l11lada" data-a="type">type</button>
+      <button id="l11LadNext" type="button" class="primary">Next level</button>
+      <button id="l11LadAll" type="button">Show all</button>
+    </div>
+    <p class="caption">Teal = the level that supplies the value. Levels below it are never looked at. Every value here matches the compiled model, checked by <code>11_check_browser.py</code>.</p>
+  </div>
+  <p>The script runs the same search for all 12 geoms and checks every answer against the compiled arrays. A few rows of its table:</p>
+  <table>
+    <thead><tr><th>geom (class used)</th><th>rgba</th><th>friction</th><th>contype</th></tr></thead>
+    <tbody>
+      <tr><td><code>floor</code> (main, no class)</td><td>0.75 0.78 0.76 1, main</td><td>1 0.005 0.0001, built-in</td><td>1, built-in</td></tr>
+      <tr><td><code>upper_geom</code> (robot, childclass)</td><td>0.1 0.7 0.6 1, class robot</td><td>1 0.005 0.0001, built-in</td><td>0, class robot</td></tr>
+      <tr><td><code>forearm_geom</code> (robot, childclass)</td><td>0.9 0.5 0.2 1, <strong>explicit</strong></td><td>1 0.005 0.0001, built-in</td><td>0, class robot</td></tr>
+      <tr><td><code>weight</code> (finger, own class)</td><td>0.1 0.7 0.6 1, parent class robot</td><td>2 0.05 0.01, class finger</td><td>1, class finger</td></tr>
+      <tr><td><code>board</code> (furniture, childclass)</td><td>0.55 0.35 0.15 1, class furniture</td><td>0.5 0.005 0.001, class furniture</td><td>1, built-in</td></tr>
+      <tr><td><code>box_b</code> (object, own class)</td><td>0.6 0.45 0.25 1, class object</td><td>0.6 0.01 0.001, class object</td><td>1, built-in</td></tr>
+      <tr><td><code>red_box_geom</code> (object, own class)</td><td>0.85 0.15 0.1 1, <strong>explicit</strong></td><td>0.6 0.01 0.001, class object</td><td>1, built-in</td></tr>
+    </tbody>
+  </table>
+  <div class="grid2">
+    <div class="card rule"><span class="callout-title" style="color:var(--teal)">Rule to remember</span>The nearest setting wins: element, then its class, then parent classes, then main, then MuJoCo's own value. A class only sets what you write in it. Everything else falls through to the level above.</div>
+    <div class="card warn"><span class="callout-title" style="color:var(--orange)">Common mistake: own class vs childclass</span>The four fixed boxes live in the shelf body, which has <code>childclass="furniture"</code>. Each box says <code>class="object"</code>, so its search starts at object and never visits furniture. Friction is 0.6, not 0.5.</div>
+  </div>
+  <p>Joints use classes too. The robot class gives both hinges <code>axis="0 1 0"</code> and <code>damping="0.5"</code> N m s/rad. So <code>&lt;joint name="shoulder"/&gt;</code> is already a complete hinge about +y. The damping is new compared with lesson 4. It slows motion but changes no position, so every pose in this lesson matches lesson 4.</p>
+  <p class="newwords">New words: <span class="chip">main</span><span class="chip">childclass</span><span class="chip">class="..."</span><span class="chip">parent class</span><span class="chip">built-in default</span><span class="chip">explicit attribute</span></p>
+</section>
+
+<section class="step" id="l11-s-keys">
+  <span class="lvl lvl-plain">Plain words</span> <span class="lvl lvl-words">MuJoCo words</span> <span class="lvl lvl-math">simple maths</span>
+  <h2>3. Keyframes: save points for the whole state</h2>
+  <p>In lesson 3, <code>mj_resetData</code> always went back to the pose written in the XML, <code>qpos0</code>. Setting a pose by hand meant typing every number again after each reset.</p>
+  <div class="card analogy"><strong>Analogy: save points in a game.</strong> Before a hard level you save. When things go wrong, you load the save and you are back at exactly that spot, with the same health and the same clock. A <dfn class="term" tabindex="0" data-def="A named, saved state in the XML's &lt;keyframe&gt; section: qpos, and optionally qvel, ctrl, act and time. Load it with mj_resetDataKeyframe.">keyframe</dfn> is a save point stored in the model.</div>
+  <div class="grid2">
+<pre><code><span class="t">&lt;keyframe&gt;</span>
+  <span class="t">&lt;key</span> <span class="a">name</span>=<span class="s">"home"</span>    <span class="a">qpos</span>=<span class="s">"-1.0 2.0   0.75 0 0.55 1 0 0 0"</span><span class="t">/&gt;</span>
+  <span class="t">&lt;key</span> <span class="a">name</span>=<span class="s">"lesson4"</span> <span class="a">qpos</span>=<span class="s">"0.5 0.8    0.75 0 0.55 1 0 0 0"</span><span class="t">/&gt;</span>
+  <span class="t">&lt;key</span> <span class="a">name</span>=<span class="s">"reach"</span>   <span class="a">qpos</span>=<span class="s">"-0.12 1.0  0.75 0 0.55 1 0 0 0"</span><span class="t">/&gt;</span>
+  <span class="t">&lt;key</span> <span class="a">name</span>=<span class="s">"swing"</span>   <span class="a">qpos</span>=<span class="s">"-1.0 2.0   0.75 0 0.55 1 0 0 0"</span>
+       <span class="a">qvel</span>=<span class="s">"3 0  0 0 0 0 0 0"</span> <span class="a">time</span>=<span class="s">"2"</span><span class="t">/&gt;</span>
+<span class="t">&lt;/keyframe&gt;</span></code></pre>
+<pre><code>model.nkey             <span class="c"># 4</span>
+model.key_qpos.shape   <span class="c"># (4, 9) = (nkey, nq)</span>
+model.key_qvel.shape   <span class="c"># (4, 8) = (nkey, nv)</span>
+k = model.key(<span class="s">"reach"</span>).id                 <span class="c"># 2</span>
+mujoco.mj_resetDataKeyframe(model, data, k)
+mujoco.mj_forward(model, data)
+data.site(<span class="s">"hand"</span>).xpos  <span class="c"># (0.7513, 0, 0.7516) m, world</span></code></pre>
+  </div>
+  <p>Each key's <code>qpos</code> lists all nq = 9 numbers in qpos order. <code>qpos[0]</code> is the shoulder and <code>qpos[1]</code> the elbow, in rad. <code>qpos[2:5]</code> is the red box's position in m (world). <code>qpos[5:9]</code> is its orientation as a quaternion [w x y z]. A free joint always needs 7 numbers, as in lesson 4.</p>
+  <h3>Try it: load each save point</h3>
+  <div class="card">
+    <div class="grid2">
+      <canvas id="l11cvKeys" role="img" aria-label="Side view of the two-link arm in the chosen keyframe, with the other keyframes shown faintly and the shelf with the red box"></canvas>
+      <div>
+        <div class="btnrow" role="group" aria-label="Pick a keyframe">
+          <button type="button" class="l11key" data-k="qpos0">mj_resetData</button>
+          <button type="button" class="l11key" data-k="home">home</button>
+          <button type="button" class="l11key" data-k="lesson4">lesson4</button>
+          <button type="button" class="l11key" data-k="reach">reach</button>
+          <button type="button" class="l11key" data-k="swing">swing</button>
+        </div>
+        <div class="readouts" style="grid-template-columns:1fr 1fr">
+          <div class="ro" id="l11kQ"><span class="lab">qpos[0], qpos[1]</span><span class="val">-</span> <span class="unit">rad</span></div>
+          <div class="ro" id="l11kX"><span class="lab">hand site_xpos x</span><span class="val">-</span> <span class="unit">m</span></div>
+          <div class="ro" id="l11kZ"><span class="lab">hand site_xpos z</span><span class="val">-</span> <span class="unit">m</span></div>
+          <div class="ro" id="l11kV"><span class="lab">qvel[0] shoulder</span><span class="val">-</span> <span class="unit">rad/s</span></div>
+          <div class="ro" id="l11kT"><span class="lab">data.time</span><span class="val">-</span> <span class="unit">s</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="caption">Teal = the loaded pose, red dot = the hand site, grey = the other saved poses. The hand position comes from the lesson 4 forward kinematics. It matches MuJoCo's <code>site_xpos</code> to better than 1e-6 m for every key (checked by <code>11_check_browser.py</code>). The hand's y is 0 in every pose.</p>
+  </div>
+  <p>The script's output, one line per save point:</p>
+<pre><code><span class="c">#                    shoulder, elbow (rad)      hand site_xpos (m, world)            clock    shoulder speed</span>
+mj_resetData        qpos[0:2]=( 0.0000,  0.0000)  hand=( 0.9000, 0.0000, 1.0000)  time=0.0 s  qvel[0]=0.0 rad/s  <span class="c"># qpos0</span>
+key 0 home          qpos[0:2]=(-1.0000,  2.0000)  hand=( 0.4863, 0.0000, 1.0841)  time=0.0 s  qvel[0]=0.0 rad/s  <span class="c"># folded up</span>
+key 1 lesson4       qpos[0:2]=( 0.5000,  0.8000)  hand=( 0.5458, 0.0000, 0.3749)  time=0.0 s  qvel[0]=0.0 rad/s  <span class="c"># lesson 4's pose</span>
+key 2 reach         qpos[0:2]=(-0.1200,  1.0000)  hand=( 0.7513, 0.0000, 0.7516)  time=0.0 s  qvel[0]=0.0 rad/s  <span class="c"># above the red box</span>
+key 3 swing         qpos[0:2]=(-1.0000,  2.0000)  hand=( 0.4863, 0.0000, 1.0841)  time=2.0 s  qvel[0]=3.0 rad/s  <span class="c"># same pose, moving</span></code></pre>
+  <div class="predict">
+    <h3>Predict: you load "swing", then call <code>mj_resetData(model, data)</code>. Where is the hand, and what are time and qvel[0]?</h3>
+    <textarea aria-label="Your prediction for mj_resetData after loading the swing keyframe"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer"><p>Back to <code>qpos0</code>: the arm straight out, hand at <strong>(0.9000, 0, 1.0000) m</strong>, time <strong>0.0 s</strong>, qvel[0] <strong>0.0 rad/s</strong>. Keyframes never change <code>qpos0</code>. They are extra save points, and only <code>mj_resetDataKeyframe</code> loads them.</p></div>
+  </div>
+  <details class="math"><summary>Step 1: check the "reach" key by hand (lesson 4 forward kinematics)</summary><div>
+    <p>The shoulder is at (0, 0, 1) m. The upper arm is 0.5 m and the forearm 0.4 m. Both hinges turn about +y, and a positive angle tips the arm down. The forearm's angle from the horizontal is q1 + q2 = -0.12 + 1.0 = 0.88 rad.</p>
+    <div class="eq">x = 0.5 cos(q1) + 0.4 cos(q1 + q2) = 0.5 cos(-0.12) + 0.4 cos(0.88) = 0.4964 + 0.2549 = 0.7513 m
+z = 1 - 0.5 sin(q1) - 0.4 sin(q1 + q2) = 1 + 0.0599 - 0.3083 = 0.7516 m</div>
+    <p>MuJoCo's <code>site_xpos</code> says (0.7513, 0, 0.7516). The red box's top is at 0.55 + 0.05 = 0.60 m, so the hand hovers 0.1516 m above it, ready to come down.</p>
+  </div></details>
+  <div class="grid2">
+    <div class="card warn"><span class="callout-title" style="color:var(--orange)">Gotcha: count to nq</span>Ten numbers in a key's qpos when nq = 9 is an error: <code>keyframe 'lesson4': invalid qpos size, expected 9, got 10</code>. Too <em>few</em> is quieter. With only <code>qpos="0.5 0.8"</code>, MuJoCo 3.15 fills the missing 7 from <code>qpos0</code> with no warning. Forget the box, and it silently goes back to its XML start.</div>
+    <div class="card rule"><span class="callout-title" style="color:var(--teal)">More than a pose</span>A key can also hold <code>qvel</code> (nv numbers), <code>time</code>, <code>ctrl</code> (nu numbers) and <code>act</code>. Our model has nu = 0 actuators, so <code>key_ctrl</code> has shape (4, 0). The warehouse keys in section 6 are poses only.</div>
+  </div>
+  <p class="newwords">New words: <span class="chip">keyframe</span><span class="chip">&lt;key&gt;</span><span class="chip">nkey</span><span class="chip">key_qpos</span><span class="chip">mj_resetDataKeyframe</span><span class="chip">qpos0</span></p>
+</section>
+
+<section class="step" id="l11-s-include">
+  <span class="lvl lvl-words">MuJoCo words</span>
+  <h2>4. &lt;include&gt;: one model, several files</h2>
+  <p>A big model is easier to read in pieces: one file for the robot, one for the room. <code>&lt;include file="..."/&gt;</code> pastes the contents of another file at that spot, before anything is compiled. It works like chapters bound into one book.</p>
+  <div class="grid2">
+<pre><code><span class="c">lessons/11-building-bigger-models/</span>
+  11_scene.xml   <span class="c"># 36 lines: options, defaults,</span>
+                 <span class="c">#   floor, keyframes, 2 includes</span>
+  11_arm.xml     <span class="c"># 13 lines: the arm body tree</span>
+  11_shelf.xml   <span class="c"># 16 lines: shelf + red box</span>
+
+<span class="c">&lt;!-- inside 11_scene.xml --&gt;</span>
+<span class="t">&lt;worldbody&gt;</span>
+  <span class="t">&lt;light</span> <span class="a">name</span>=<span class="s">"sun"</span> .../<span class="t">&gt;</span>
+  <span class="t">&lt;geom</span> <span class="a">name</span>=<span class="s">"floor"</span> <span class="a">type</span>=<span class="s">"plane"</span> <span class="a">size</span>=<span class="s">"2 2 0.05"</span><span class="t">/&gt;</span>
+  <span class="t">&lt;include</span> <span class="a">file</span>=<span class="s">"11_arm.xml"</span><span class="t">/&gt;</span>
+  <span class="t">&lt;include</span> <span class="a">file</span>=<span class="s">"11_shelf.xml"</span><span class="t">/&gt;</span>
+<span class="t">&lt;/worldbody&gt;</span></code></pre>
+<pre><code><span class="c">&lt;!-- 11_arm.xml: a &lt;mujoco&gt; wrapper whose</span>
+<span class="c">     children are pasted in place --&gt;</span>
+<span class="t">&lt;mujoco&gt;</span>
+  <span class="t">&lt;body</span> <span class="a">name</span>=<span class="s">"upper_arm"</span> <span class="a">pos</span>=<span class="s">"0 0 1"</span>
+        <span class="a">childclass</span>=<span class="s">"robot"</span><span class="t">&gt;</span>
+    ...
+  <span class="t">&lt;/body&gt;</span>
+<span class="t">&lt;/mujoco&gt;</span>
+
+<span class="c"># Python: load the main file by path</span>
+m = mujoco.MjModel.from_xml_path(
+    <span class="s">"lessons/11-building-bigger-models/11_scene.xml"</span>)</code></pre>
+  </div>
+  <p>The script loads the three files and the one-file version, then compares them:</p>
+  <table>
+    <thead><tr><th>Loaded from</th><th>nbody</th><th>njnt</th><th>ngeom</th><th>nsite</th><th>nq</th><th>nv</th><th>nkey</th></tr></thead>
+    <tbody>
+      <tr><td>one XML string</td><td>5</td><td>3</td><td>12</td><td>1</td><td>9</td><td>8</td><td>4</td></tr>
+      <tr><td>11_scene.xml + 2 includes</td><td>5</td><td>3</td><td>12</td><td>1</td><td>9</td><td>8</td><td>4</td></tr>
+    </tbody>
+  </table>
+  <p>Not just the counts: <code>geom_size</code>, <code>geom_pos</code>, <code>geom_rgba</code>, <code>geom_friction</code>, <code>geom_contype</code>, <code>body_mass</code>, <code>key_qpos</code>, <code>key_qvel</code> and <code>dof_damping</code> are all identical. Splitting a file changes how you read it, not what MuJoCo builds.</p>
+  <div class="grid2">
+    <div class="card rule"><span class="callout-title" style="color:var(--teal)">Paths</span>The script runs from the project folder, yet <code>file="11_arm.xml"</code> is found next to <code>11_scene.xml</code>. Include paths are read relative to the main model file's folder.</div>
+    <div class="card warn"><span class="callout-title" style="color:var(--orange)">Include is copy-paste, nothing more</span>You cannot include the arm twice to get two arms. MuJoCo refuses: <code>XML Error: File '11_arm.xml' already included</code>. Even if it allowed it, every name would be repeated. To place copies, use <code>attach</code> with a name prefix (next section).</div>
+  </div>
+  <p class="newwords">New words: <span class="chip">&lt;include file&gt;</span><span class="chip">from_xml_path</span></p>
+</section>
+
+<section class="step" id="l11-s-spec">
+  <span class="lvl lvl-plain">Plain words</span> <span class="lvl lvl-code">Code</span>
+  <h2>5. MjSpec: change the blueprint, then rebuild</h2>
+  <p>Lesson 1 drew the line you have heard ever since: <strong>the model is fixed, the data changes</strong>. You can set <code>data.qpos</code> all day. You cannot add a box to an <code>MjModel</code> or make one bigger and expect the mass to follow.</p>
+  <div class="card analogy"><strong>Analogy: the architect's drawing and the finished house.</strong> <code>MjModel</code> is the finished house: you can move furniture around (that is <code>MjData</code>), but not add a room. <dfn class="term" tabindex="0" data-def="MuJoCo's editable model description in Python. Build it from XML or from scratch, change bodies, geoms, defaults and keys, then call compile() to get a new MjModel.">MjSpec</dfn> is the drawing. Change the drawing, then build again with <code>compile()</code>: you get a brand-new house.</div>
+  <div class="grid2">
+<pre><code>spec = mujoco.MjSpec.from_string(XML)
+m_old = spec.compile()          <span class="c"># an MjModel</span>
+m_old.body(<span class="s">"red_box"</span>).mass      <span class="c"># [1.0] kg</span>
+
+spec.geom(<span class="s">"red_box_geom"</span>).size = [<span class="n">0.04</span>, <span class="n">0.04</span>, <span class="n">0.04</span>]
+m_new = spec.compile()          <span class="c"># a NEW MjModel</span>
+m_new.body(<span class="s">"red_box"</span>).mass      <span class="c"># [0.512] kg</span>
+m_old.body(<span class="s">"red_box"</span>).mass      <span class="c"># [1.0] kg, unchanged</span>
+d_new = mujoco.MjData(m_new)    <span class="c"># new data: time 0, qpos0</span>
+
+<span class="c"># or keep the running state across the rebuild</span>
+m2, d2 = spec.recompile(m_old, d_old)</code></pre>
+    <div>
+      <table>
+        <thead><tr><th>Step</th><th>What happened (script output)</th></tr></thead>
+        <tbody>
+          <tr><td><code>spec.compile()</code></td><td>ngeom = 12; red box 1.0000 kg, half size 0.05 m</td></tr>
+          <tr><td>edit the size, compile</td><td>new model: half size 0.04 m, mass <strong>0.5120 kg</strong></td></tr>
+          <tr><td>the old model</td><td>still 0.05 m and 1.0000 kg: a compiled model never changes</td></tr>
+          <tr><td><code>MjData(m_new)</code></td><td>time 0.000 s, qpos[0] = 0.0000 rad: a fresh start</td></tr>
+          <tr><td><code>spec.recompile(m_old, d_old)</code></td><td>the old run (swing key, 10 steps) carries over: time 2.020 s, qpos[0] = -0.9366 rad</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <details class="math"><summary>Step 1: why the mass dropped to 0.512 kg</summary><div>
+    <p>The red box has no <code>mass</code> attribute, so MuJoCo computes it from the volume and the default density of 1000 kg/m³. A half size of 0.04 m means a cube 0.08 m on each side.</p>
+    <div class="eq">before: 1000 × 0.10³ = 1000 × 0.001    = 1.000 kg
+after:  1000 × 0.08³ = 1000 × 0.000512 = 0.512 kg</div>
+    <p>The compiler recomputed the mass and inertia for you. That is what "recompile" buys: every value that depends on your edit is worked out again.</p>
+  </div></details>
+  <div class="card warn"><span class="callout-title" style="color:var(--orange)">Gotcha: editing a class after the geoms exist</span>Defaults are copied into an element when it is created. The script sets <code>spec.find_default("finger").geom.friction = [1, 0.05, 0.01]</code> after loading the XML. The existing <code>weight</code> keeps <strong>2 0.05 0.01</strong>. A geom added afterwards with that class gets <strong>1 0.05 0.01</strong>, and teal rgba from robot. To change existing geoms, edit them, or edit the XML and load it again.</div>
+  <h3>Let a loop write the repetitive part</h3>
+  <p>A warehouse has many identical shelves. With MjSpec you write one shelf in a loop and let Python repeat it. The classes are created from Python too, with <code>spec.add_default(name, parent)</code>.</p>
+<pre><code>s = mujoco.MjSpec()
+furn = s.add_default(<span class="s">"furniture"</span>, s.default)       <span class="c"># parent = main</span>
+furn.geom.type = mujoco.mjtGeom.mjGEOM_BOX
+furn.geom.friction = [<span class="n">0.5</span>, <span class="n">0.005</span>, <span class="n">0.001</span>]
+obj = s.add_default(<span class="s">"object"</span>, s.default)          <span class="c"># box, size 0.05, friction 0.6</span>
+...
+s.worldbody.add_geom(name=<span class="s">"floor"</span>, type=mujoco.mjtGeom.mjGEOM_PLANE, size=[<span class="n">5</span>, <span class="n">5</span>, <span class="n">0.05</span>])
+<span class="k">for</span> i <span class="k">in</span> range(n):                                  <span class="c"># n shelves, 0.8 m apart in y</span>
+    shelf = s.worldbody.add_body(name=f<span class="s">"shelf{i}"</span>, pos=[<span class="n">0.75</span>, <span class="n">0.8</span> * i, <span class="n">0</span>])
+    shelf.add_geom(furn, name=f<span class="s">"board{i}"</span>, pos=[<span class="n">0</span>, <span class="n">0</span>, <span class="n">0.48</span>], size=[<span class="n">0.15</span>, <span class="n">0.35</span>, <span class="n">0.02</span>])
+    ...                                             <span class="c"># two posts, the same way</span>
+    <span class="k">for</span> j <span class="k">in</span> range(k):                              <span class="c"># k boxes on each shelf</span>
+        shelf.add_geom(obj, name=f<span class="s">"box{i}_{j}"</span>, pos=[<span class="n">0</span>, y_j, <span class="n">0.55</span>])
+model = s.compile()
+print(s.to_xml())                                   <span class="c"># the XML this spec stands for</span></code></pre>
+  <div class="card">
+    <canvas id="l11cvRow" role="img" aria-label="Top view of the generated row of shelves, each with its boxes"></canvas>
+    <label class="slider"><span>Shelves <code>n</code></span> <output id="l11oRowN">3</output><input type="range" id="l11RowN" min="1" max="6" step="1" value="3"></label>
+    <label class="slider"><span>Boxes per shelf <code>k</code></span> <output id="l11oRowK">4</output><input type="range" id="l11RowK" min="1" max="4" step="1" value="4"></label>
+    <div class="readouts">
+      <div class="ro" id="l11rB"><span class="lab">model.nbody = 1 + n</span><span class="val">-</span></div>
+      <div class="ro" id="l11rG"><span class="lab">model.ngeom = 1 + n (3 + k)</span><span class="val">-</span></div>
+      <div class="ro" id="l11rC"><span class="lab">add_geom calls in the loop</span><span class="val">-</span></div>
+    </div>
+    <p class="caption">The counts use the formula below. The script compiled every combination on these sliders (n = 1 to 6, k = 1 to 4) and the formula matched MuJoCo's <code>nbody</code> and <code>ngeom</code> every time.</p>
+  </div>
+  <details class="math"><summary>Step 2: counting what the loop builds</summary><div>
+    <p>The world is body 0 and holds the floor. Each pass of the loop adds one body (the shelf) and 3 + k geoms (a board, two posts, k boxes).</p>
+    <div class="eq">nbody = 1 + n          ngeom = 1 + n (3 + k)
+n = 3, k = 4:  nbody = 4,  ngeom = 1 + 3 × 7 = 22   (script: nbody=4 ngeom=22)
+n = 5, k = 4:  nbody = 6,  ngeom = 1 + 5 × 7 = 36   (script: nbody=6 ngeom=36)</div>
+  </div></details>
+  <h3>Attach: copy a whole model in, with new names</h3>
+  <p><code>spec.attach(child, frame=..., prefix=...)</code> copies another spec into this one at a frame and puts a prefix on every name. That solves the "include twice" problem from section 4.</p>
+<pre><code>cells = mujoco.MjSpec()
+cells.worldbody.add_geom(name=<span class="s">"floor"</span>, type=mujoco.mjtGeom.mjGEOM_PLANE, size=[<span class="n">5</span>, <span class="n">5</span>, <span class="n">0.05</span>])
+<span class="k">for</span> i <span class="k">in</span> range(<span class="n">2</span>):
+    frame = cells.worldbody.add_frame(pos=[<span class="n">0</span>, <span class="n">1.0</span> * i, <span class="n">0</span>])
+    cells.attach(mujoco.MjSpec.from_string(XML), frame=frame, prefix=f<span class="s">"cell{i}_"</span>)
+mc = cells.compile()
+<span class="c"># nbody=9 ngeom=25 nq=18 nkey=8</span>
+<span class="c"># bodies: world, cell0_upper_arm, cell0_forearm, cell0_shelf, cell0_red_box, cell1_upper_arm, ...</span>
+<span class="c"># cell1_upper_arm pos = (0 1 1) m; cell1_weight friction = [2 0.05 0.01]</span></code></pre>
+  <p>Two copies of 4 bodies, 12 geoms, 9 qpos numbers and 4 keys, plus the world and one floor: 9 bodies, 25 geoms, nq = 18, nkey = 8. The classes came along, so <code>cell1_weight</code> still has finger friction. Give each attach a fresh child spec: re-using one spec object for both copies failed to compile in our test.</p>
+  <p class="newwords">New words: <span class="chip">MjSpec</span><span class="chip">compile()</span><span class="chip">recompile()</span><span class="chip">add_default</span><span class="chip">add_body / add_geom</span><span class="chip">to_xml()</span><span class="chip">attach, prefix</span></p>
+</section>
+
+<section class="step" id="l11-s-warehouse">
+  <span class="lvl lvl-words">MuJoCo words</span>
+  <h2>6. Real world: the warehouse robot's style sheet</h2>
+  <p>Now read the Capstone 2 file, <code>16-capstone-warehouse-robot/warehouse_robot.xml</code>, with the same eyes. The script loads it with <code>MjSpec.from_file</code> and groups every geom by the class it uses. It compiles to nbody = 21, ngeom = 41, njnt = 14, nq = 32, nv = 29, nu = 10, nkey = 2.</p>
+  <table>
+    <thead><tr><th>Class</th><th>What it writes</th><th>Used by</th><th>Why it exists</th></tr></thead>
+    <tbody>
+      <tr><td><code>robot</code></td><td>friction 0.8, condim 3, contype 0, conaffinity 0; joints damping 2.0, armature 0.01</td><td>7 geoms (chassis_body, top_plate, turret, arm links, wrist parts), 6 joints</td><td>Body panels should never collide with anything: only the wheels touch the floor (lesson 7's collision rule).</td></tr>
+      <tr><td><code>wheel</code></td><td>friction 1.5, condim 6, contype 1, conaffinity 1; joints damping 0.1</td><td>4 wheel geoms, 4 spin joints</td><td>High grip for traction. condim 6 adds turning and rolling friction at the contact (lesson 14).</td></tr>
+      <tr><td><code>finger</code></td><td>friction 2.0, condim 4, contype 1, conaffinity 1; joints damping 5</td><td>finger_L_geom, finger_R_geom, grip_L, grip_R</td><td>Very high grip so a squeezed box does not slip. condim 4 adds turning friction, so it does not spin either (lesson 13).</td></tr>
+      <tr><td><code>object</code></td><td>friction 0.6, condim 3, contype 1, conaffinity 1</td><td>red_box_geom (0.25 kg), blue_cyl_geom</td><td>Things to be picked up: ordinary cardboard-like friction.</td></tr>
+      <tr><td><code>furniture</code></td><td>friction 0.5, condim 3, contype 1, conaffinity 1</td><td>25 geoms: walls, both shelves, the table, crates, pylons</td><td>The 25-geom case from section 1, written once.</td></tr>
+      <tr><td><code>main</code></td><td>nothing; built-in values</td><td>the floor and the two objects' free joints</td><td>Everything with no class.</td></tr>
+    </tbody>
+  </table>
+  <div class="card warn"><span class="callout-title" style="color:var(--orange)">Read the compiled arrays, not just the class</span>The robot class says contype 0, yet only <code>chassis_body</code> and <code>top_plate</code> compile with 0. The turret, upper_arm_geom, forearm_geom, wrist_housing and wrist_bracket each write <code>contype="1"</code> explicitly, so the arm can bump into shelves. Joints too: the class says damping 2.0, but every arm joint writes its own (arm_yaw 5, shoulder_pitch 8, elbow_pitch 5, wrist_roll 1, wrist_pitch 1). The class still supplies armature 0.01 to arm_yaw and wrist_roll. The free joint <code>chassis_free</code> compiles with damping 0.</div>
+  <p>The file also has two keyframes. Each <code>key_qpos</code> row has nq = 32 numbers: 7 for the chassis free joint, 4 wheels, 7 arm and gripper joints, then 7 for the red box and 7 for the blue cylinder.</p>
+  <table>
+    <thead><tr><th>Key</th><th>chassis x y z (m), quaternion</th><th>arm yaw, shoulder, elbow, wrist roll, wrist pitch (rad)</th><th>grip (m)</th><th>grasp_site after mj_forward (m, world)</th></tr></thead>
+    <tbody>
+      <tr><td><code>home</code></td><td>(0, -1.5, 0.11), [0.7071 0 0 0.7071]</td><td>(0, 0, 2.4, 0, -0.8): arm tucked</td><td>0.04, 0.04</td><td>(0.0000, -1.1241, 0.3044)</td></tr>
+      <tr><td><code>pre_grasp</code></td><td>(-0.93, 1.5, 0.11), [0 0 0 1]</td><td>(0, 0.2, 1.2, 0, 0.15): reaching</td><td>0.04, 0.04</td><td>(-1.4554, 1.5000, 0.5646)</td></tr>
+    </tbody>
+  </table>
+  <p>The quaternion [0.7071 0 0 0.7071] turns the chassis 90 degrees about z, so it faces +y. The XML writes 0.707, and MuJoCo normalises it. In Capstone 2 you will reset to <code>home</code> before every run, exactly like the save points in section 3.</p>
+  <p class="newwords">New words: <span class="chip">armature</span><span class="chip">condim 4 / 6</span><span class="chip">MjSpec.from_file</span></p>
+</section>
+
+<section class="step" id="l11-s-code">
+  <span class="lvl lvl-code">Code</span>
+  <h2>7. Your script, line by line</h2>
+  <table>
+    <thead><tr><th style="width:46%">Code in <code>11_building_bigger_models.py</code></th><th>Physical meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>read_classes(root)</code>, <code>resolve(...)</code></td><td>A small copy of the compiler's search: element, class, parent classes, main, built-in. It reads the XML with ElementTree.</td></tr>
+      <tr><td><code>model.geom(name).friction</code>, <code>.rgba</code>, <code>.contype</code></td><td>The compiled values, one row per geom. The script checks the search's answer against each one.</td></tr>
+      <tr><td><code>model.key_qpos</code>, <code>model.key_qvel</code></td><td>The save points as arrays: (nkey, nq) = (4, 9) and (nkey, nv) = (4, 8).</td></tr>
+      <tr><td><code>mujoco.mj_resetDataKeyframe(model, data, k)</code></td><td>Load save point k into the data: qpos, qvel, time. Then <code>mj_forward</code> so <code>site_xpos</code> is fresh.</td></tr>
+      <tr><td><code>mujoco.MjModel.from_xml_path(".../11_scene.xml")</code></td><td>Load the main file; its two <code>&lt;include&gt;</code> files are pasted in from the same folder.</td></tr>
+      <tr><td><code>spec = mujoco.MjSpec.from_string(XML)</code></td><td>An editable blueprint of the same model.</td></tr>
+      <tr><td><code>spec.geom("red_box_geom").size = [...]</code>; <code>spec.compile()</code></td><td>Change the drawing, then build a new MjModel. The mass is recomputed from the new volume.</td></tr>
+      <tr><td><code>spec.recompile(m_old, d_old)</code></td><td>Rebuild and carry the current state (time, qpos, qvel) into a new data.</td></tr>
+      <tr><td><code>s.add_default(...)</code>, <code>add_body</code>, <code>add_geom</code></td><td>Generate classes and a row of shelves from a loop.</td></tr>
+      <tr><td><code>cells.attach(child, frame=..., prefix=...)</code></td><td>Copy a whole model in at a frame, with renamed parts.</td></tr>
+      <tr><td><code>mujoco.MjSpec.from_file(WAREHOUSE)</code>; <code>g.classname.name</code></td><td>Read the Capstone 2 file and list which class each geom and joint uses.</td></tr>
+    </tbody>
+  </table>
+<pre><code><span class="c"># section 1: the class tree, with what each class writes</span>
+main       parent=None   sets: &lt;geom&gt; rgba="0.75 0.78 0.76 1"
+  robot      parent=main   sets: &lt;geom&gt; rgba="0.1 0.7 0.6 1" contype="0" conaffinity="0"; &lt;joint&gt; axis="0 1 0" damping="0.5"
+    finger     parent=robot  sets: &lt;geom&gt; friction="2 0.05 0.01" condim="4" contype="1" conaffinity="1"
+counts: nbody=5 ngeom=12 njnt=3 nsite=1 nq=9 nv=8 nkey=4
+<span class="c"># section 2: one geom of twelve; every line ends "ok" = matches the compiled model</span>
+geom  3 weight        class=finger    (own class)
+      rgba        = 0.1 0.7 0.6 1              from parent class robot     compiled: 0.1 0.7 0.6 1  ok
+      friction    = 2 0.05 0.01                from class finger           compiled: 2 0.05 0.01  ok
+      contype     = 1                          from class finger           compiled: 1  ok
+resolver vs compiled model: worst difference 2.9e-08 (all attributes match)   <span class="c"># float32 rounding of rgba</span>
+attribute values that came from a class instead of being typed on the element: 39 (geoms) + 4 (joints) = 43
+attribute values typed inside &lt;default&gt;: 17
+<span class="c"># section 3: keyframes</span>
+nkey = 4   key_qpos shape = (4, 9) (nkey, nq)   key_qvel shape = (4, 8) (nkey, nv)
+key 2 reach       qpos[0:2]=(-0.1200,  1.0000) rad  hand site_xpos=( 0.7513,  0.0000,  0.7516) m  time=0.0 s  qvel[0]=0.0 rad/s
+  10 numbers for nq = 9 -> Error: keyframe 'lesson4': invalid qpos size, expected 9, got 10
+  2 numbers for nq = 9  -> no error; key_qpos = [0.5 0.8 0.75 0 0.55 1 0 0 0] (the missing 7 come from qpos0)
+<span class="c"># section 4: include</span>
+  geom_size, geom_pos, geom_rgba, geom_friction, geom_contype, body_mass, key_qpos, key_qvel, dof_damping identical: True
+<span class="c"># section 5: MjSpec</span>
+  new model: size = (0.04 0.04 0.04) m, body_mass = 0.5120 kg  (density 1000 kg/m^3 x 0.08^3 m^3)
+  old model: size = (0.05 0.05 0.05) m, body_mass = 1.0000 kg  (unchanged: a compiled model is fixed)
+  3 shelf(s) x 4 boxes: nbody=4 ngeom=22  (formula 1 + n = 4, 1 + n (3 + k) = 22)
+<span class="c"># section 6: the warehouse robot</span>
+class finger    friction=[2 0.05 0.01] condim=4 contype=1 conaffinity=1 joint damping=5
+   chassis_body=0  top_plate=0  turret=1  upper_arm_geom=1  forearm_geom=1  wrist_housing=1  wrist_bracket=1  <span class="c"># compiled contype</span></code></pre>
+</section>
+
+<section class="step" id="l11-s-check">
+  <span class="lvl lvl-plain">Check yourself</span>
+  <h2>8. Your lesson's checkpoint questions</h2>
+  <p>Answer here, then tell me your answers in the chat so I can update your progress. Success means you can name the value and the level it came from.</p>
+  <div class="predict">
+    <h3>Q1. box_a sits in the shelf body (childclass="furniture") and says class="object". What is its friction, and does furniture play any part?</h3>
+    <textarea aria-label="Answer to question 1"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>0.6 0.01 0.001</strong>, from class object. Its own class beats the body's childclass, so the search goes object, then main, then built-in. Furniture is never checked. Its type (box) and size (0.05) come from object too.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q2. You add &lt;geom name="bolt" type="sphere" size="0.01"/&gt; inside the forearm body, with no class. What are its contype, rgba and friction?</h3>
+    <textarea aria-label="Answer to question 2"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>The forearm is inside <code>upper_arm</code>, which has <code>childclass="robot"</code>, and childclass reaches child bodies. So <strong>contype 0, conaffinity 0, rgba 0.1 0.7 0.6 1</strong> from robot, and <strong>friction 1 0.005 0.0001</strong> from MuJoCo's built-in value. The script compiled exactly this and printed those numbers.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q3. nq = 9. One key has 10 qpos numbers, another has only 2. What happens with each?</h3>
+    <textarea aria-label="Answer to question 3"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>10: the model fails to load</strong> with "invalid qpos size, expected 9, got 10". <strong>2: it loads with no warning</strong>, and MuJoCo 3.15 fills the other 7 from <code>qpos0</code>, so the red box sits at its XML start (0.75, 0, 0.55) m.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q4. You run spec.geom("red_box_geom").size = [0.04, 0.04, 0.04], but your simulation still shows a 1 kg box. What did you forget?</h3>
+    <textarea aria-label="Answer to question 4"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>To <strong>compile again and use the new model</strong>. Editing the spec changes the drawing only. <code>spec.compile()</code> gives a new MjModel (0.512 kg box); the old one stays 1.0 kg forever. Make a new <code>MjData</code> for it, or call <code>spec.recompile(old_model, old_data)</code> to keep the current state.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q5. In the warehouse file, why does the robot class set contype="0" and conaffinity="0"?</h3>
+    <textarea aria-label="Answer to question 5"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>So the chassis panels never collide with anything, the floor included: only the wheels (class wheel, contype 1) touch the ground. With contype 0 and conaffinity 0, the lesson 7 test (contype of one AND conaffinity of the other) is always 0. The arm links that must hit shelves override it with an explicit <code>contype="1"</code>.</p></div>
+  </div>
+
+  <h3>Glossary: new words from this lesson</h3>
+  <dl class="glossary">
+    <dt>default class</dt><dd>A named set of attribute values in <code>&lt;default&gt;</code>. Elements that use it get those values unless they write their own.</dd>
+    <dt>main</dt><dd>The top-level, unnamed default class. Every class starts from it, and elements with no class use it.</dd>
+    <dt>class="..." / childclass="..."</dt><dd>Pick a class for one element / for every element inside a body and its child bodies. An element's own class wins.</dd>
+    <dt>parent class</dt><dd>The class another class sits inside. Settings it does not override are inherited.</dd>
+    <dt>explicit attribute</dt><dd>A value written on the element itself. Always wins.</dd>
+    <dt>built-in default</dt><dd>MuJoCo's own value when nobody sets one, for example friction 1 0.005 0.0001, condim 3, contype 1.</dd>
+    <dt>keyframe, &lt;key&gt;</dt><dd>A named save point: qpos (nq numbers), and optionally qvel, time, ctrl, act.</dd>
+    <dt>nkey, key_qpos, key_qvel</dt><dd>Number of keys and their arrays, shape (nkey, nq) and (nkey, nv).</dd>
+    <dt>mj_resetDataKeyframe</dt><dd>Load a keyframe into the data. <code>mj_resetData</code> still goes to <code>qpos0</code>.</dd>
+    <dt>&lt;include file&gt;</dt><dd>Paste another XML file's contents at that spot before compiling. Paths are relative to the main file.</dd>
+    <dt>MjSpec</dt><dd>The editable model in Python. <code>compile()</code> turns it into a new MjModel; <code>recompile(model, data)</code> also carries the state over.</dd>
+    <dt>add_default, add_body, add_geom, to_xml</dt><dd>Build classes and parts from code, and print the XML the spec stands for.</dd>
+    <dt>attach, prefix</dt><dd>Copy a whole spec into another at a frame, with a prefix added to every name.</dd>
+    <dt>armature</dt><dd>Extra inertia added to a joint, as from a motor's spinning rotor (kg m² for a hinge).</dd>
+  </dl>
+</section>
+
+<section class="step recap" id="l11-recap">
+  <h2>Recap: the lesson in one minute</h2>
+  <div class="mental-model">
+    <p><strong>Default classes</strong> live in <code>&lt;default&gt;</code>; the top level is <code>main</code> and classes nest. For each attribute the compiler takes the first of: explicit on the element, its class (<code>class=</code>, else the nearest body <code>childclass</code>, else main), parent classes, main, MuJoCo's built-in. The compiled <code>MjModel</code> only stores the resulting numbers (<code>geom_friction</code>, <code>geom_rgba</code>, <code>geom_contype</code>...). Here 17 values in <code>&lt;default&gt;</code> reach elements 43 times.</p>
+    <p><strong>Keyframes</strong> (<code>&lt;key name qpos qvel time ctrl&gt;</code>) are save points: <code>model.key_qpos</code> has shape (nkey, nq). Load one with <code>mj_resetDataKeyframe(model, data, k)</code>, then <code>mj_forward</code>. Too many qpos numbers is an error; too few are filled from <code>qpos0</code>.</p>
+    <p><strong><code>&lt;include file&gt;</code></strong> pastes files together before compiling; the result is identical to one file. It cannot place copies.</p>
+    <p><strong>MjSpec</strong> is the editable blueprint: <code>from_string</code>/<code>from_file</code>, edit, <code>add_default</code>/<code>add_body</code>/<code>add_geom</code>, <code>attach</code> with a prefix, then <code>compile()</code> for a new MjModel (and a new MjData), or <code>recompile(model, data)</code> to keep the state. Defaults are copied when an element is created.</p>
+  </div>
+  <div class="checkpoint">
+    <p>In the sandbox, pick each keyframe, then click a geom and change one class setting at a time. Predict which geoms will change before you press.</p>
+    <div class="btn-row">
+      <button class="btn btn-primary btn-sm" type="button" onclick="markComplete(11)">Mark lesson complete</button>
+      <button class="btn btn-sm" type="button" onclick="switchLesson(12)">Next: Kinematics and Jacobians</button>
+    </div>
+  </div>
+</section>
+</div>

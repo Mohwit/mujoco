@@ -1,0 +1,1482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MuJoCo Learning Lab</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0a0f0d;
+  --bg-raised: #111916;
+  --bg-surface: #151d19;
+  --bg-input: #0d1410;
+  --border: #1e2b25;
+  --border-focus: #00e5c0;
+  --teal: #00e5c0;
+  --teal-dim: #00e5c044;
+  --teal-glow: #00e5c033;
+  --orange: #ff6b35;
+  --orange-dim: #ff6b3544;
+  --text: #d4ddd8;
+  --text-dim: #7a8f84;
+  --text-bright: #eaf5f0;
+  --code-bg: #0c1210;
+  --mono: ui-monospace, 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- HEADER ---- */
+.lab-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+}
+
+.header-inner {
+  max-width: 1080px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  gap: 16px;
+}
+
+.lab-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.lab-brand .logo-mark {
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--teal);
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--teal);
+  flex-shrink: 0;
+}
+
+.lab-brand .brand-text {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-bright);
+  letter-spacing: 0.5px;
+}
+
+.lab-brand .brand-tag {
+  font-size: 10px;
+  color: var(--text-dim);
+  background: var(--bg-surface);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: var(--mono);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* ---- PILL NAV ---- */
+.pill-nav {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-surface);
+  border-radius: 8px;
+  padding: 3px;
+  border: 1px solid var(--border);
+}
+
+.pill-btn {
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 6px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.pill-btn:hover { color: var(--text); background: var(--bg-raised); }
+.pill-btn:active { transform: scale(0.97); }
+.pill-btn.active { background: var(--teal); color: var(--bg); font-weight: 600; }
+
+.pill-btn:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 1px;
+}
+
+/* ---- PROGRESS TRACK ---- */
+.progress-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.progress-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.progress-track {
+  width: 100px;
+  height: 4px;
+  background: var(--bg-input);
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--teal);
+  border-radius: 2px;
+  transition: width 0.5s ease;
+  box-shadow: 0 0 8px var(--teal-glow), 0 0 20px var(--teal-dim);
+}
+
+/* ---- MAIN ---- */
+.main-content {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 32px 24px 80px;
+}
+
+/* ---- ACCORDION ---- */
+.lesson-section {
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color 0.3s;
+}
+
+.lesson-section.open { border-color: var(--teal-dim); }
+
+.lesson-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 22px;
+  background: var(--bg-raised);
+  border: none;
+  color: var(--text-bright);
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+.lesson-header:hover { background: var(--bg-surface); }
+.lesson-header:active { transform: scale(0.998); }
+.lesson-header:focus-visible { outline: 2px solid var(--teal); outline-offset: -2px; }
+
+.lesson-num {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--teal);
+  background: var(--teal-dim);
+  padding: 3px 8px;
+  border-radius: 4px;
+  letter-spacing: 1px;
+  flex-shrink: 0;
+}
+
+.lesson-check {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.lesson-check.done { color: var(--teal); }
+
+.lesson-chevron {
+  width: 18px;
+  height: 18px;
+  color: var(--text-dim);
+  transition: transform 0.3s;
+  flex-shrink: 0;
+}
+
+.lesson-section.open .lesson-chevron { transform: rotate(180deg); }
+
+.lesson-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.5s ease;
+}
+
+.lesson-body-inner {
+  padding: 8px 22px 32px;
+}
+
+/* ---- SUBSECTIONS ---- */
+.subsection {
+  margin-top: 28px;
+}
+
+.subsection-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.subsection-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* ---- MENTAL MODEL ---- */
+.mental-model {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px 22px;
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--text);
+}
+
+.mental-model p + p { margin-top: 12px; }
+
+.mental-model strong { color: var(--teal); font-weight: 600; }
+
+.mental-model code {
+  font-family: var(--mono);
+  font-size: 13px;
+  background: var(--code-bg);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--orange);
+}
+
+/* ---- SANDBOX ---- */
+.sandbox {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.sandbox-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.5px;
+}
+
+.sandbox-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--teal);
+  box-shadow: 0 0 6px var(--teal-glow);
+}
+
+.sandbox-layout {
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  min-height: 320px;
+}
+
+@media (max-width: 700px) {
+  .sandbox-layout { grid-template-columns: 1fr; }
+}
+
+.sandbox-viz {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--bg);
+  position: relative;
+}
+
+.sandbox-viz svg { width: 100%; max-width: 300px; height: auto; }
+
+.sandbox-controls {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border-left: 1px solid var(--border);
+}
+
+@media (max-width: 700px) {
+  .sandbox-controls { border-left: none; border-top: 1px solid var(--border); }
+}
+
+.control-group label {
+  display: block;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+  letter-spacing: 0.5px;
+}
+
+.control-group .val {
+  color: var(--teal);
+  font-weight: 600;
+}
+
+/* ---- SLIDERS ---- */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  background: var(--bg-input);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--teal);
+  border: 2px solid var(--bg);
+  box-shadow: 0 0 6px var(--teal-glow);
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--teal);
+  border: 2px solid var(--bg);
+  box-shadow: 0 0 6px var(--teal-glow);
+  cursor: pointer;
+}
+
+input[type="range"]:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 4px;
+  border-radius: 2px;
+}
+
+/* ---- BUTTONS ---- */
+.btn {
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-raised);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn:hover { border-color: var(--teal); color: var(--teal); }
+.btn:active { transform: scale(0.96); }
+.btn:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+
+.btn-primary {
+  background: var(--teal);
+  color: var(--bg);
+  border-color: var(--teal);
+  font-weight: 600;
+}
+
+.btn-primary:hover { background: #00cca9; border-color: #00cca9; color: var(--bg); }
+
+.btn-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ---- READOUT ---- */
+.readout {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: var(--text-dim);
+  line-height: 1.8;
+}
+
+.readout .rk { color: var(--text-dim); }
+.readout .rv { color: var(--teal); }
+.readout .rv-orange { color: var(--orange); }
+
+/* ---- CODE BLOCK ---- */
+.code-block {
+  position: relative;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 0 20px var(--teal-dim), inset 0 0 30px rgba(0,0,0,0.3);
+}
+
+.code-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.code-block pre {
+  padding: 16px 18px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text);
+  tab-size: 2;
+}
+
+.code-block .kw { color: var(--orange); }
+.code-block .fn { color: var(--teal); }
+.code-block .str { color: #a8e6a1; }
+.code-block .cmt { color: var(--text-dim); font-style: italic; }
+.code-block .num { color: #d4a0ff; }
+.code-block .tag { color: var(--orange); }
+.code-block .attr { color: var(--teal); }
+.code-block .val { color: #a8e6a1; }
+
+.copy-btn {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.copy-btn:hover { border-color: var(--teal); color: var(--teal); }
+.copy-btn:active { transform: scale(0.95); }
+
+/* ---- EXERCISE ---- */
+.exercise {
+  background: var(--bg-surface);
+  border: 1px solid var(--orange-dim);
+  border-radius: 8px;
+  padding: 18px 20px;
+}
+
+.exercise-title {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--orange);
+  font-weight: 600;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.exercise p {
+  font-size: 14px;
+  line-height: 1.7;
+  margin-bottom: 10px;
+}
+
+.exercise code {
+  font-family: var(--mono);
+  font-size: 13px;
+  background: var(--code-bg);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--orange);
+}
+
+.prediction-area {
+  margin-top: 10px;
+}
+
+.prediction-area textarea {
+  width: 100%;
+  min-height: 48px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text);
+  resize: vertical;
+  transition: border-color 0.2s;
+}
+
+.prediction-area textarea:focus {
+  outline: none;
+  border-color: var(--teal);
+}
+
+.prediction-area textarea::placeholder { color: var(--text-dim); }
+
+.reveal-btn {
+  margin-top: 8px;
+}
+
+.reveal-answer {
+  display: none;
+  margin-top: 10px;
+  padding: 12px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--teal-dim);
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text);
+}
+
+.reveal-answer.shown { display: block; }
+
+/* ---- CHECKPOINT ---- */
+.checkpoint {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.checkpoint-text {
+  font-size: 14px;
+  color: var(--text);
+  flex: 1;
+}
+
+.checkpoint-btn {
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 8px 18px;
+  border: 1px solid var(--teal);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--teal);
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.checkpoint-btn:hover { background: var(--teal); color: var(--bg); }
+.checkpoint-btn:active { transform: scale(0.96); }
+.checkpoint-btn.completed { background: var(--teal); color: var(--bg); }
+
+/* ---- GRID OVERLAY ---- */
+.grid-bg {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none;
+  z-index: -1;
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 60px 60px;
+  opacity: 0.15;
+}
+
+/* ---- RESPONSIVE ---- */
+@media (max-width: 600px) {
+  .header-inner { flex-wrap: wrap; height: auto; padding: 10px 0; gap: 8px; }
+  .pill-nav { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .pill-btn { padding: 6px 10px; font-size: 11px; }
+  .progress-section { width: 100%; justify-content: flex-end; }
+  .lesson-header { padding: 14px 16px; font-size: 14px; }
+  .lesson-body-inner { padding: 8px 16px 24px; }
+  .sandbox-layout { grid-template-columns: 1fr; }
+  .sandbox-controls { border-left: none; border-top: 1px solid var(--border); }
+}
+</style>
+</head>
+<body>
+
+<div class="grid-bg" aria-hidden="true"></div>
+
+<!-- HEADER -->
+<header class="lab-header">
+  <div class="header-inner">
+    <div class="lab-brand">
+      <div class="logo-mark" aria-hidden="true">Mj</div>
+      <span class="brand-text">MuJoCo Learning Lab</span>
+      <span class="brand-tag">Preview</span>
+    </div>
+
+    <nav class="pill-nav" role="tablist" aria-label="Lesson navigation">
+      <button class="pill-btn active" role="tab" aria-selected="true" data-lesson="1" onclick="scrollToLesson(1)">01 MJCF</button>
+      <button class="pill-btn" role="tab" aria-selected="false" data-lesson="2" onclick="scrollToLesson(2)">02 Frames</button>
+      <button class="pill-btn" role="tab" aria-selected="false" data-lesson="3" onclick="scrollToLesson(3)">03 State</button>
+    </nav>
+
+    <div class="progress-section">
+      <span class="progress-label" id="progress-text">0 / 3</span>
+      <div class="progress-track" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="3">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- MAIN -->
+<main class="main-content">
+
+<!-- ============================================ -->
+<!-- LESSON 01 -->
+<!-- ============================================ -->
+<section class="lesson-section" id="lesson-1" data-lesson="1">
+  <button class="lesson-header" aria-expanded="false" onclick="toggleLesson(this)">
+    <span class="lesson-num">01</span>
+    MJCF Hierarchy: How XML Becomes a Model
+    <span class="lesson-check" id="check-1">incomplete</span>
+    <svg class="lesson-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+  </button>
+  <div class="lesson-body" role="region">
+    <div class="lesson-body-inner">
+
+      <!-- MENTAL MODEL -->
+      <div class="subsection">
+        <div class="subsection-label">Mental Model</div>
+        <div class="mental-model">
+          <p>A MuJoCo model starts as an <strong>MJCF file</strong> (XML). The parser reads it and builds a tree of <strong>bodies</strong>. Each body lives in a parent body's coordinate frame. The root is always <code>worldbody</code>.</p>
+          <p>Bodies by themselves are invisible and massless. You give them shape with <strong>geoms</strong> (geometry: spheres, capsules, boxes, meshes). You give them motion with <strong>joints</strong>. A joint lives between a body and its parent, defining how they can move relative to each other.</p>
+          <p>Think of it like a skeleton: <strong>bodies</strong> are the bones, <strong>joints</strong> are the articulations between bones, and <strong>geoms</strong> are the flesh that gives bones their physical shape and collision surface.</p>
+        </div>
+      </div>
+
+      <!-- INTERACTIVE SANDBOX -->
+      <div class="subsection">
+        <div class="subsection-label">Interactive Sandbox</div>
+        <div class="sandbox">
+          <div class="sandbox-header">
+            <span class="sandbox-dot"></span>
+            pendulum_01.xml
+          </div>
+          <div class="sandbox-layout">
+            <div class="sandbox-viz">
+              <svg id="svg-pendulum-1" viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
+                <!-- ground -->
+                <line x1="0" y1="280" x2="300" y2="280" stroke="#1e2b25" stroke-width="1" stroke-dasharray="4,4"/>
+                <!-- pivot mount -->
+                <rect id="p1-mount" x="140" y="38" width="20" height="12" rx="2" fill="#1e2b25" stroke="#00e5c0" stroke-width="1"/>
+                <!-- rod -->
+                <line id="p1-rod" x1="150" y1="50" x2="150" y2="200" stroke="#7a8f84" stroke-width="3" stroke-linecap="round"/>
+                <!-- pivot -->
+                <circle id="p1-pivot" cx="150" cy="50" r="5" fill="#00e5c0" stroke="#0a0f0d" stroke-width="2"/>
+                <!-- bob -->
+                <circle id="p1-bob" cx="150" cy="200" r="14" fill="#ff6b35" stroke="#0a0f0d" stroke-width="2"/>
+                <!-- axis labels -->
+                <text x="8" y="290" fill="#7a8f84" font-family="ui-monospace, monospace" font-size="9">world frame</text>
+                <!-- height indicator -->
+                <line id="p1-hline" x1="260" y1="50" x2="260" y2="280" stroke="#00e5c044" stroke-width="1" stroke-dasharray="3,3"/>
+                <text id="p1-hlabel" x="268" y="165" fill="#00e5c0" font-family="ui-monospace, monospace" font-size="9" opacity="0.7">h</text>
+              </svg>
+            </div>
+            <div class="sandbox-controls">
+              <div class="control-group">
+                <label>Pivot height <span class="val" id="p1-height-val">0.50</span> m</label>
+                <input type="range" id="p1-height" min="0.1" max="0.9" step="0.01" value="0.5" oninput="updatePendulum1()">
+              </div>
+              <div class="control-group">
+                <label>Rod length <span class="val" id="p1-rod-val">0.40</span> m</label>
+                <input type="range" id="p1-rodlen" min="0.1" max="0.7" step="0.01" value="0.4" oninput="updatePendulum1()">
+              </div>
+              <div class="control-group">
+                <label>Initial angle <span class="val" id="p1-angle-val">0</span> deg</label>
+                <input type="range" id="p1-angle" min="-90" max="90" step="1" value="0" oninput="updatePendulum1()">
+              </div>
+              <div class="readout" id="p1-readout">
+                <span class="rk">pivot_y:</span> <span class="rv">0.50</span><br>
+                <span class="rk">rod_len:</span> <span class="rv">0.40</span><br>
+                <span class="rk">bob_x:</span> <span class="rv">0.00</span><br>
+                <span class="rk">bob_y:</span> <span class="rv-orange">0.10</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CODE EXAMPLE -->
+      <div class="subsection">
+        <div class="subsection-label">MJCF Source</div>
+        <div class="code-block">
+          <div class="code-block-header">
+            <span>pendulum.xml</span>
+            <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          </div>
+<pre><span class="tag">&lt;mujoco</span> <span class="attr">model</span>=<span class="val">"pendulum"</span><span class="tag">&gt;</span>
+  <span class="tag">&lt;worldbody&gt;</span>
+    <span class="cmt">&lt;!-- The pivot mount, fixed in world --&gt;</span>
+    <span class="tag">&lt;body</span> <span class="attr">name</span>=<span class="val">"pivot"</span> <span class="attr">pos</span>=<span class="val">"0 0 0.5"</span><span class="tag">&gt;</span>
+      <span class="tag">&lt;geom</span> <span class="attr">type</span>=<span class="val">"sphere"</span> <span class="attr">size</span>=<span class="val">"0.02"</span> <span class="tag">/&gt;</span>
+
+      <span class="cmt">&lt;!-- Joint goes between parent (world) and this body --&gt;</span>
+      <span class="tag">&lt;joint</span> <span class="attr">type</span>=<span class="val">"hinge"</span> <span class="attr">axis</span>=<span class="val">"0 1 0"</span> <span class="tag">/&gt;</span>
+
+      <span class="cmt">&lt;!-- Rod: capsule centered at half the rod length below --&gt;</span>
+      <span class="tag">&lt;geom</span> <span class="attr">type</span>=<span class="val">"capsule"</span> <span class="attr">fromto</span>=<span class="val">"0 0 0  0 0 -0.4"</span>
+            <span class="attr">size</span>=<span class="val">"0.01"</span> <span class="tag">/&gt;</span>
+
+      <span class="cmt">&lt;!-- Bob at the end of the rod --&gt;</span>
+      <span class="tag">&lt;body</span> <span class="attr">name</span>=<span class="val">"bob"</span> <span class="attr">pos</span>=<span class="val">"0 0 -0.4"</span><span class="tag">&gt;</span>
+        <span class="tag">&lt;geom</span> <span class="attr">type</span>=<span class="val">"sphere"</span> <span class="attr">size</span>=<span class="val">"0.05"</span>
+              <span class="attr">rgba</span>=<span class="val">"1 0.42 0.21 1"</span> <span class="tag">/&gt;</span>
+      <span class="tag">&lt;/body&gt;</span>
+    <span class="tag">&lt;/body&gt;</span>
+  <span class="tag">&lt;/worldbody&gt;</span>
+<span class="tag">&lt;/mujoco&gt;</span></pre>
+        </div>
+      </div>
+
+      <!-- EXERCISE -->
+      <div class="subsection">
+        <div class="subsection-label">Prediction Exercise</div>
+        <div class="exercise">
+          <div class="exercise-title">?  Predict Before You Run</div>
+          <p>If the pivot is at height <code>0.5</code> and the rod length is <code>0.4</code>, what is the lowest point the bob center can reach? What world-frame z-coordinate is that?</p>
+          <div class="prediction-area">
+            <textarea placeholder="Type your prediction here before revealing the answer..."></textarea>
+            <button class="btn reveal-btn" onclick="revealAnswer(this)">Reveal answer</button>
+            <div class="reveal-answer">The bob center reaches <strong style="color:#00e5c0">z = 0.1 m</strong>. The pivot sits at 0.5, the rod extends 0.4 downward: 0.5 - 0.4 = 0.1. The bob's surface would be at 0.1 - 0.05 = 0.05 m above ground. This is the straight-down rest position.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CHECKPOINT -->
+      <div class="subsection">
+        <div class="subsection-label">Checkpoint</div>
+        <div class="checkpoint">
+          <div class="checkpoint-text">I understand that MJCF bodies form a tree, joints connect a body to its parent, and geoms define shape.</div>
+          <button class="checkpoint-btn" onclick="completeLesson(1, this)">Mark complete</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ============================================ -->
+<!-- LESSON 02 -->
+<!-- ============================================ -->
+<section class="lesson-section" id="lesson-2" data-lesson="2">
+  <button class="lesson-header" aria-expanded="false" onclick="toggleLesson(this)">
+    <span class="lesson-num">02</span>
+    Frames and Axes: Local vs World Coordinates
+    <span class="lesson-check" id="check-2">incomplete</span>
+    <svg class="lesson-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+  </button>
+  <div class="lesson-body" role="region">
+    <div class="lesson-body-inner">
+
+      <!-- MENTAL MODEL -->
+      <div class="subsection">
+        <div class="subsection-label">Mental Model</div>
+        <div class="mental-model">
+          <p>Every body in MuJoCo carries its own <strong>local coordinate frame</strong>. When you write <code>pos="0 0 -0.4"</code> on a child body, that offset is measured <em>in the parent's frame</em>, not the world frame.</p>
+          <p>To find where something is in the world, MuJoCo chains transforms from the root: world to body A, body A to body B, and so on. This is the <strong>forward kinematics</strong> pass. After <code>mj_forward</code> runs, every body's world position is stored in <code>data.xpos</code>.</p>
+          <p>When a joint rotates, only the local frame of that body (and its children) rotates with it. The parent stays fixed. This is why a hinge on the pendulum pivot rotates the entire rod and bob together: they are children of that pivot body.</p>
+        </div>
+      </div>
+
+      <!-- INTERACTIVE SANDBOX -->
+      <div class="subsection">
+        <div class="subsection-label">Interactive Sandbox</div>
+        <div class="sandbox">
+          <div class="sandbox-header">
+            <span class="sandbox-dot"></span>
+            frame_explorer.py
+          </div>
+          <div class="sandbox-layout">
+            <div class="sandbox-viz">
+              <svg id="svg-frames-2" viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
+                <!-- ground -->
+                <line x1="0" y1="280" x2="300" y2="280" stroke="#1e2b25" stroke-width="1" stroke-dasharray="4,4"/>
+                <!-- world axes -->
+                <line x1="30" y1="270" x2="30" y2="240" stroke="#7a8f84" stroke-width="1"/>
+                <line x1="30" y1="270" x2="60" y2="270" stroke="#7a8f84" stroke-width="1"/>
+                <text x="22" y="238" fill="#7a8f84" font-family="ui-monospace, monospace" font-size="8">z</text>
+                <text x="62" y="273" fill="#7a8f84" font-family="ui-monospace, monospace" font-size="8">x</text>
+                <!-- base body -->
+                <rect id="f2-base" x="130" y="200" width="40" height="40" rx="4" fill="#1e2b25" stroke="#00e5c0" stroke-width="1.5"/>
+                <!-- local axes on base -->
+                <g id="f2-base-axes">
+                  <line x1="150" y1="200" x2="150" y2="175" stroke="#00e5c0" stroke-width="1.5" opacity="0.6"/>
+                  <line x1="150" y1="220" x2="180" y2="220" stroke="#ff6b35" stroke-width="1.5" opacity="0.6"/>
+                  <text x="152" y="173" fill="#00e5c0" font-family="ui-monospace, monospace" font-size="8" opacity="0.7">z_local</text>
+                  <text x="182" y="223" fill="#ff6b35" font-family="ui-monospace, monospace" font-size="8" opacity="0.7">x_local</text>
+                </g>
+                <!-- link from base -->
+                <line id="f2-link" x1="150" y1="200" x2="150" y2="130" stroke="#7a8f84" stroke-width="3" stroke-linecap="round"/>
+                <!-- hinge joint indicator -->
+                <circle id="f2-hinge" cx="150" cy="200" r="6" fill="none" stroke="#00e5c0" stroke-width="1.5" stroke-dasharray="2,2"/>
+                <!-- child body -->
+                <g id="f2-child-group">
+                  <circle id="f2-child" cx="150" cy="130" r="12" fill="#ff6b35" stroke="#0a0f0d" stroke-width="2"/>
+                  <!-- local axes on child -->
+                  <line id="f2-child-z" x1="150" y1="130" x2="150" y2="105" stroke="#00e5c0" stroke-width="1.5" opacity="0.5"/>
+                  <line id="f2-child-x" x1="150" y1="130" x2="175" y2="130" stroke="#ff6b35" stroke-width="1.5" opacity="0.5"/>
+                </g>
+                <!-- label -->
+                <text x="8" y="290" fill="#7a8f84" font-family="ui-monospace, monospace" font-size="9">world frame</text>
+              </svg>
+            </div>
+            <div class="sandbox-controls">
+              <div class="control-group">
+                <label>Base height <span class="val" id="f2-height-val">0.40</span> m</label>
+                <input type="range" id="f2-height" min="0.1" max="0.8" step="0.01" value="0.4" oninput="updateFrames2()">
+              </div>
+              <div class="control-group">
+                <label>Link offset <span class="val" id="f2-offset-val">0.30</span> m</label>
+                <input type="range" id="f2-offset" min="0.1" max="0.5" step="0.01" value="0.3" oninput="updateFrames2()">
+              </div>
+              <div class="control-group">
+                <label>Hinge angle <span class="val" id="f2-angle-val">0</span> deg</label>
+                <input type="range" id="f2-angle" min="-120" max="120" step="1" value="0" oninput="updateFrames2()">
+              </div>
+              <div class="readout" id="f2-readout">
+                <span class="rk">base_world:</span> <span class="rv">[0.00, 0.40]</span><br>
+                <span class="rk">child_local:</span> <span class="rv">[0.00, 0.30]</span><br>
+                <span class="rk">child_world:</span> <span class="rv-orange">[0.00, 0.70]</span><br>
+                <span class="rk">hinge_q:</span> <span class="rv">0.000 rad</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CODE EXAMPLE -->
+      <div class="subsection">
+        <div class="subsection-label">Python Source</div>
+        <div class="code-block">
+          <div class="code-block-header">
+            <span>frame_check.py</span>
+            <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          </div>
+<pre><span class="kw">import</span> mujoco
+
+model = mujoco.<span class="fn">MjModel</span>.<span class="fn">from_xml_path</span>(<span class="str">"two_link.xml"</span>)
+data  = mujoco.<span class="fn">MjData</span>(model)
+
+<span class="cmt"># Set the hinge angle (in radians)</span>
+data.qpos[<span class="num">0</span>] = <span class="num">0.5</span>
+
+<span class="cmt"># Run forward kinematics to compute world positions</span>
+mujoco.<span class="fn">mj_forward</span>(model, data)
+
+<span class="cmt"># data.xpos holds world positions of every body</span>
+base_world  = data.xpos[<span class="num">1</span>]  <span class="cmt"># body 1: base</span>
+child_world = data.xpos[<span class="num">2</span>]  <span class="cmt"># body 2: child</span>
+
+<span class="fn">print</span>(<span class="str">f"base  world pos: </span>{base_world}<span class="str">"</span>)
+<span class="fn">print</span>(<span class="str">f"child world pos: </span>{child_world}<span class="str">"</span>)</pre>
+        </div>
+      </div>
+
+      <!-- EXERCISE -->
+      <div class="subsection">
+        <div class="subsection-label">Prediction Exercise</div>
+        <div class="exercise">
+          <div class="exercise-title">?  Predict Before You Run</div>
+          <p>Base sits at world z = <code>0.4</code>. The child's local offset is <code>[0, 0, 0.3]</code>. If the hinge rotates 90 degrees around the Y axis, what is the child's world position?</p>
+          <div class="prediction-area">
+            <textarea placeholder="Think about what rotating 90 degrees does to the local z-axis..."></textarea>
+            <button class="btn reveal-btn" onclick="revealAnswer(this)">Reveal answer</button>
+            <div class="reveal-answer">After a 90-degree Y rotation, the local z-axis points along the world x-axis. The child offset <code>[0, 0, 0.3]</code> in local becomes <code>[0.3, 0, 0]</code> in the base frame. The child world position is <strong style="color:#00e5c0">[0.3, 0, 0.4]</strong>. It moved sideways instead of upward.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CHECKPOINT -->
+      <div class="subsection">
+        <div class="subsection-label">Checkpoint</div>
+        <div class="checkpoint">
+          <div class="checkpoint-text">I understand that local positions are relative to the parent frame, and joints rotate the entire subtree.</div>
+          <button class="checkpoint-btn" onclick="completeLesson(2, this)">Mark complete</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ============================================ -->
+<!-- LESSON 03 -->
+<!-- ============================================ -->
+<section class="lesson-section" id="lesson-3" data-lesson="3">
+  <button class="lesson-header" aria-expanded="false" onclick="toggleLesson(this)">
+    <span class="lesson-num">03</span>
+    State and Stepping: mj_forward vs mj_step
+    <span class="lesson-check" id="check-3">incomplete</span>
+    <svg class="lesson-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+  </button>
+  <div class="lesson-body" role="region">
+    <div class="lesson-body-inner">
+
+      <!-- MENTAL MODEL -->
+      <div class="subsection">
+        <div class="subsection-label">Mental Model</div>
+        <div class="mental-model">
+          <p>MuJoCo separates <strong>state</strong> from <strong>derived quantities</strong>. The state is <code>qpos</code> (joint positions) and <code>qvel</code> (joint velocities). Everything else, including world positions, forces, and accelerations, is computed from the state.</p>
+          <p><code>mj_forward(model, data)</code> computes all derived quantities from the current state <em>without advancing time</em>. You call it after manually setting <code>qpos</code>/<code>qvel</code> to see where things end up.</p>
+          <p><code>mj_step(model, data)</code> integrates the equations of motion and advances the simulation by one timestep. It updates <code>qpos</code> and <code>qvel</code> based on forces, gravity, contacts, and actuators. After stepping, <code>data.time</code> advances by <code>model.opt.timestep</code>.</p>
+          <p>Key insight: <strong>forward</strong> = "given this state, compute everything." <strong>step</strong> = "compute everything, then evolve the state by one dt."</p>
+        </div>
+      </div>
+
+      <!-- INTERACTIVE SANDBOX -->
+      <div class="subsection">
+        <div class="subsection-label">Interactive Sandbox</div>
+        <div class="sandbox">
+          <div class="sandbox-header">
+            <span class="sandbox-dot"></span>
+            state_stepper.py
+          </div>
+          <div class="sandbox-layout">
+            <div class="sandbox-viz">
+              <svg id="svg-state-3" viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
+                <!-- ground -->
+                <line x1="0" y1="280" x2="300" y2="280" stroke="#1e2b25" stroke-width="1" stroke-dasharray="4,4"/>
+                <!-- pivot -->
+                <rect x="140" y="78" width="20" height="12" rx="2" fill="#1e2b25" stroke="#00e5c0" stroke-width="1"/>
+                <!-- rod -->
+                <line id="s3-rod" x1="150" y1="90" x2="150" y2="220" stroke="#7a8f84" stroke-width="3" stroke-linecap="round"/>
+                <!-- pivot dot -->
+                <circle cx="150" cy="90" r="5" fill="#00e5c0" stroke="#0a0f0d" stroke-width="2"/>
+                <!-- bob -->
+                <circle id="s3-bob" cx="150" cy="220" r="14" fill="#ff6b35" stroke="#0a0f0d" stroke-width="2"/>
+                <!-- velocity arrow -->
+                <line id="s3-vel-arrow" x1="150" y1="220" x2="150" y2="220" stroke="#00e5c0" stroke-width="2" marker-end="url(#arrow3)"/>
+                <defs>
+                  <marker id="arrow3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#00e5c0"/>
+                  </marker>
+                </defs>
+                <!-- time display -->
+                <text id="s3-time-text" x="8" y="20" fill="#7a8f84" font-family="ui-monospace, monospace" font-size="10">t = 0.000 s</text>
+                <text x="8" y="290" fill="#7a8f84" font-family="ui-monospace, monospace" font-size="9">gravity = -9.81 m/s2</text>
+              </svg>
+            </div>
+            <div class="sandbox-controls">
+              <div class="control-group">
+                <label>Initial angle <span class="val" id="s3-angle-val">30</span> deg</label>
+                <input type="range" id="s3-angle" min="-90" max="90" step="1" value="30" oninput="resetState3()">
+              </div>
+              <div class="control-group">
+                <label>Initial velocity <span class="val" id="s3-vel-val">0.0</span> rad/s</label>
+                <input type="range" id="s3-vel" min="-5" max="5" step="0.1" value="0" oninput="resetState3()">
+              </div>
+              <div class="btn-row">
+                <button class="btn-primary btn" onclick="stepState3()">Step (dt=0.002)</button>
+                <button class="btn" onclick="step10State3()">Step x10</button>
+                <button class="btn" onclick="resetState3()">Reset</button>
+              </div>
+              <div class="btn-row">
+                <button class="btn" id="s3-play-btn" onclick="togglePlay3()">Play</button>
+                <button class="btn" onclick="step100State3()">Step x100</button>
+              </div>
+              <div class="readout" id="s3-readout">
+                <span class="rk">time:</span>  <span class="rv">0.000</span> s<br>
+                <span class="rk">qpos:</span>  <span class="rv">0.524</span> rad<br>
+                <span class="rk">qvel:</span>  <span class="rv">0.000</span> rad/s<br>
+                <span class="rk">qacc:</span>  <span class="rv-orange">0.000</span> rad/s2
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CODE EXAMPLE -->
+      <div class="subsection">
+        <div class="subsection-label">Python Source</div>
+        <div class="code-block">
+          <div class="code-block-header">
+            <span>step_vs_forward.py</span>
+            <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          </div>
+<pre><span class="kw">import</span> mujoco
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+
+model = mujoco.<span class="fn">MjModel</span>.<span class="fn">from_xml_path</span>(<span class="str">"pendulum.xml"</span>)
+data  = mujoco.<span class="fn">MjData</span>(model)
+
+<span class="cmt"># Set initial state</span>
+data.qpos[<span class="num">0</span>] = np.<span class="fn">deg2rad</span>(<span class="num">30</span>)  <span class="cmt"># 30 degrees</span>
+data.qvel[<span class="num">0</span>] = <span class="num">0.0</span>
+
+<span class="cmt"># mj_forward: compute derived quantities, no time advance</span>
+mujoco.<span class="fn">mj_forward</span>(model, data)
+<span class="fn">print</span>(<span class="str">f"after forward: time=</span>{data.time:<span class="num">.3f</span>}<span class="str">"</span>)
+<span class="fn">print</span>(<span class="str">f"  qacc=</span>{data.qacc[<span class="num">0</span>]:<span class="num">.4f</span>}<span class="str">"</span>)   <span class="cmt"># computed!</span>
+
+<span class="cmt"># mj_step: integrate, advance time</span>
+mujoco.<span class="fn">mj_step</span>(model, data)
+<span class="fn">print</span>(<span class="str">f"after step:    time=</span>{data.time:<span class="num">.3f</span>}<span class="str">"</span>)
+<span class="fn">print</span>(<span class="str">f"  qpos=</span>{data.qpos[<span class="num">0</span>]:<span class="num">.4f</span>}<span class="str">"</span>)   <span class="cmt"># changed!</span>
+<span class="fn">print</span>(<span class="str">f"  qvel=</span>{data.qvel[<span class="num">0</span>]:<span class="num">.4f</span>}<span class="str">"</span>)   <span class="cmt"># changed!</span></pre>
+        </div>
+      </div>
+
+      <!-- EXERCISE -->
+      <div class="subsection">
+        <div class="subsection-label">Prediction Exercise</div>
+        <div class="exercise">
+          <div class="exercise-title">?  Predict Before You Run</div>
+          <p>The pendulum starts at <code>30 deg</code> with <code>0 velocity</code>. After one step (dt = 0.002), will <code>qpos</code> increase or decrease? Will <code>qvel</code> be positive or negative? Use the sandbox to check.</p>
+          <div class="prediction-area">
+            <textarea placeholder="Think about which direction gravity pulls the pendulum from 30 degrees..."></textarea>
+            <button class="btn reveal-btn" onclick="revealAnswer(this)">Reveal answer</button>
+            <div class="reveal-answer">Gravity pulls the bob toward the bottom (angle = 0). Starting at +30 deg, gravity creates a <strong>negative angular acceleration</strong>. After one step: <code>qpos</code> barely changes (still near 0.524 rad) but <code>qvel</code> becomes slightly <strong style="color:#ff6b35">negative</strong>, because the pendulum starts swinging back toward center. Try stepping 10 or 100 times to see the motion clearly.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CHECKPOINT -->
+      <div class="subsection">
+        <div class="subsection-label">Checkpoint</div>
+        <div class="checkpoint">
+          <div class="checkpoint-text">I understand the difference between mj_forward (compute only) and mj_step (compute + integrate), and how qpos/qvel/qacc relate.</div>
+          <button class="checkpoint-btn" onclick="completeLesson(3, this)">Mark complete</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+</main>
+
+<script>
+// =============================================
+// GLOBAL STATE
+// =============================================
+const completedLessons = new Set();
+
+// =============================================
+// ACCORDION
+// =============================================
+function toggleLesson(btn) {
+  const section = btn.closest('.lesson-section');
+  const body = section.querySelector('.lesson-body');
+  const isOpen = section.classList.contains('open');
+
+  if (isOpen) {
+    body.style.maxHeight = '0px';
+    section.classList.remove('open');
+    btn.setAttribute('aria-expanded', 'false');
+  } else {
+    section.classList.add('open');
+    btn.setAttribute('aria-expanded', 'true');
+    body.style.maxHeight = body.scrollHeight + 'px';
+    // Re-measure after transitions that might change content height
+    setTimeout(() => {
+      if (section.classList.contains('open')) {
+        body.style.maxHeight = body.scrollHeight + 'px';
+      }
+    }, 550);
+  }
+}
+
+function scrollToLesson(n) {
+  const el = document.getElementById('lesson-' + n);
+  if (!el) return;
+  const section = el;
+  if (!section.classList.contains('open')) {
+    const btn = section.querySelector('.lesson-header');
+    toggleLesson(btn);
+  }
+  setTimeout(() => {
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 100);
+  // Update pill nav
+  document.querySelectorAll('.pill-btn').forEach(p => {
+    p.classList.toggle('active', parseInt(p.dataset.lesson) === n);
+    p.setAttribute('aria-selected', parseInt(p.dataset.lesson) === n ? 'true' : 'false');
+  });
+}
+
+// =============================================
+// PROGRESS
+// =============================================
+function updateProgress() {
+  const count = completedLessons.size;
+  document.getElementById('progress-text').textContent = count + ' / 3';
+  document.getElementById('progress-fill').style.width = (count / 3 * 100) + '%';
+  document.querySelector('.progress-track').setAttribute('aria-valuenow', count);
+}
+
+function completeLesson(n, btn) {
+  if (completedLessons.has(n)) {
+    completedLessons.delete(n);
+    btn.textContent = 'Mark complete';
+    btn.classList.remove('completed');
+    document.getElementById('check-' + n).textContent = 'incomplete';
+    document.getElementById('check-' + n).classList.remove('done');
+  } else {
+    completedLessons.add(n);
+    btn.textContent = 'Completed';
+    btn.classList.add('completed');
+    document.getElementById('check-' + n).textContent = 'complete';
+    document.getElementById('check-' + n).classList.add('done');
+  }
+  updateProgress();
+}
+
+// =============================================
+// REVEAL ANSWERS
+// =============================================
+function revealAnswer(btn) {
+  const answer = btn.nextElementSibling;
+  answer.classList.toggle('shown');
+  btn.textContent = answer.classList.contains('shown') ? 'Hide answer' : 'Reveal answer';
+}
+
+// =============================================
+// COPY CODE
+// =============================================
+function copyCode(btn) {
+  const pre = btn.closest('.code-block').querySelector('pre');
+  const text = pre.textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'copied';
+    setTimeout(() => { btn.textContent = 'copy'; }, 1500);
+  }).catch(() => {
+    btn.textContent = 'failed';
+    setTimeout(() => { btn.textContent = 'copy'; }, 1500);
+  });
+}
+
+// =============================================
+// LESSON 01 PENDULUM
+// =============================================
+function updatePendulum1() {
+  const height = parseFloat(document.getElementById('p1-height').value);
+  const rodLen = parseFloat(document.getElementById('p1-rodlen').value);
+  const angleDeg = parseFloat(document.getElementById('p1-angle').value);
+
+  document.getElementById('p1-height-val').textContent = height.toFixed(2);
+  document.getElementById('p1-rod-val').textContent = rodLen.toFixed(2);
+  document.getElementById('p1-angle-val').textContent = angleDeg;
+
+  // SVG coordinate mapping: 0m = y280, 1m = y30 (250px range)
+  const mToY = m => 280 - m * 250;
+  const mToLen = m => m * 250;
+
+  const pivotY = mToY(height);
+  const angleRad = angleDeg * Math.PI / 180;
+  const rodPxLen = mToLen(rodLen);
+
+  const bobX = 150 + Math.sin(angleRad) * rodPxLen;
+  const bobY = pivotY + Math.cos(angleRad) * rodPxLen;
+
+  // Update mount
+  document.getElementById('p1-mount').setAttribute('y', pivotY - 12);
+  // Update pivot
+  document.getElementById('p1-pivot').setAttribute('cy', pivotY);
+  // Update rod
+  const rod = document.getElementById('p1-rod');
+  rod.setAttribute('x1', 150);
+  rod.setAttribute('y1', pivotY);
+  rod.setAttribute('x2', bobX);
+  rod.setAttribute('y2', bobY);
+  // Update bob
+  document.getElementById('p1-bob').setAttribute('cx', bobX);
+  document.getElementById('p1-bob').setAttribute('cy', bobY);
+  // Update height indicator
+  document.getElementById('p1-hline').setAttribute('y1', pivotY);
+  document.getElementById('p1-hlabel').setAttribute('y', (pivotY + 280) / 2 + 4);
+
+  // Readout
+  const bobWorldX = (Math.sin(angleRad) * rodLen).toFixed(2);
+  const bobWorldZ = (height - Math.cos(angleRad) * rodLen).toFixed(2);
+  document.getElementById('p1-readout').innerHTML =
+    '<span class="rk">pivot_y:</span> <span class="rv">' + height.toFixed(2) + '</span><br>' +
+    '<span class="rk">rod_len:</span> <span class="rv">' + rodLen.toFixed(2) + '</span><br>' +
+    '<span class="rk">bob_x:</span> <span class="rv">' + bobWorldX + '</span><br>' +
+    '<span class="rk">bob_y:</span> <span class="rv-orange">' + bobWorldZ + '</span>';
+}
+
+// =============================================
+// LESSON 02 FRAMES
+// =============================================
+function updateFrames2() {
+  const baseH = parseFloat(document.getElementById('f2-height').value);
+  const offset = parseFloat(document.getElementById('f2-offset').value);
+  const angleDeg = parseFloat(document.getElementById('f2-angle').value);
+
+  document.getElementById('f2-height-val').textContent = baseH.toFixed(2);
+  document.getElementById('f2-offset-val').textContent = offset.toFixed(2);
+  document.getElementById('f2-angle-val').textContent = angleDeg;
+
+  const mToY = m => 280 - m * 250;
+  const mToLen = m => m * 250;
+  const angleRad = angleDeg * Math.PI / 180;
+
+  const baseY = mToY(baseH);
+  const linkLen = mToLen(offset);
+
+  // Child position in world (rotated offset)
+  const childDx = Math.sin(angleRad) * linkLen;
+  const childDy = -Math.cos(angleRad) * linkLen; // negative because SVG y is inverted
+  const childCx = 150 + childDx;
+  const childCy = baseY + childDy;
+
+  // Update base
+  document.getElementById('f2-base').setAttribute('y', baseY - 20);
+  // Update hinge
+  document.getElementById('f2-hinge').setAttribute('cy', baseY);
+  // Update link
+  const link = document.getElementById('f2-link');
+  link.setAttribute('x1', 150);
+  link.setAttribute('y1', baseY);
+  link.setAttribute('x2', childCx);
+  link.setAttribute('y2', childCy);
+  // Update child
+  document.getElementById('f2-child').setAttribute('cx', childCx);
+  document.getElementById('f2-child').setAttribute('cy', childCy);
+
+  // Update base local axes
+  const baseAxes = document.getElementById('f2-base-axes');
+  baseAxes.innerHTML =
+    '<line x1="150" y1="' + baseY + '" x2="150" y2="' + (baseY - 25) + '" stroke="#00e5c0" stroke-width="1.5" opacity="0.6"/>' +
+    '<line x1="150" y1="' + baseY + '" x2="180" y2="' + baseY + '" stroke="#ff6b35" stroke-width="1.5" opacity="0.6"/>' +
+    '<text x="152" y="' + (baseY - 27) + '" fill="#00e5c0" font-family="ui-monospace, monospace" font-size="8" opacity="0.7">z</text>' +
+    '<text x="182" y="' + (baseY + 3) + '" fill="#ff6b35" font-family="ui-monospace, monospace" font-size="8" opacity="0.7">x</text>';
+
+  // Update child local axes (rotated)
+  const axLen = 25;
+  const czDx = Math.sin(angleRad) * axLen;
+  const czDy = -Math.cos(angleRad) * axLen;
+  const cxDx = Math.cos(angleRad) * axLen;
+  const cxDy = Math.sin(angleRad) * axLen;
+
+  document.getElementById('f2-child-z').setAttribute('x1', childCx);
+  document.getElementById('f2-child-z').setAttribute('y1', childCy);
+  document.getElementById('f2-child-z').setAttribute('x2', childCx + czDx);
+  document.getElementById('f2-child-z').setAttribute('y2', childCy + czDy);
+
+  document.getElementById('f2-child-x').setAttribute('x1', childCx);
+  document.getElementById('f2-child-x').setAttribute('y1', childCy);
+  document.getElementById('f2-child-x').setAttribute('x2', childCx + cxDx);
+  document.getElementById('f2-child-x').setAttribute('y2', childCy + cxDy);
+
+  // Readout
+  const childWorldX = (Math.sin(angleRad) * offset).toFixed(2);
+  const childWorldZ = (baseH + Math.cos(angleRad) * offset).toFixed(2);
+  const rad = (angleRad).toFixed(3);
+  document.getElementById('f2-readout').innerHTML =
+    '<span class="rk">base_world:</span> <span class="rv">[0.00, ' + baseH.toFixed(2) + ']</span><br>' +
+    '<span class="rk">child_local:</span> <span class="rv">[0.00, ' + offset.toFixed(2) + ']</span><br>' +
+    '<span class="rk">child_world:</span> <span class="rv-orange">[' + childWorldX + ', ' + childWorldZ + ']</span><br>' +
+    '<span class="rk">hinge_q:</span> <span class="rv">' + rad + ' rad</span>';
+}
+
+// =============================================
+// LESSON 03 STATE STEPPER
+// =============================================
+const state3 = {
+  time: 0,
+  qpos: 30 * Math.PI / 180,
+  qvel: 0,
+  qacc: 0,
+  dt: 0.002,
+  g: 9.81,
+  L: 0.5, // rod length in meters
+  playing: false,
+  animId: null
+};
+
+function computeAcc3() {
+  // Simple pendulum: acc = -(g/L) * sin(qpos)
+  state3.qacc = -(state3.g / state3.L) * Math.sin(state3.qpos);
+}
+
+function stepOnce3() {
+  computeAcc3();
+  // Semi-implicit Euler
+  state3.qvel += state3.qacc * state3.dt;
+  state3.qpos += state3.qvel * state3.dt;
+  state3.time += state3.dt;
+}
+
+function renderState3() {
+  const angleDeg = state3.qpos * 180 / Math.PI;
+  const pivotY = 90;
+  const rodPxLen = 130;
+
+  const bobX = 150 + Math.sin(state3.qpos) * rodPxLen;
+  const bobY = pivotY + Math.cos(state3.qpos) * rodPxLen;
+
+  document.getElementById('s3-rod').setAttribute('x2', bobX);
+  document.getElementById('s3-rod').setAttribute('y2', bobY);
+  document.getElementById('s3-bob').setAttribute('cx', bobX);
+  document.getElementById('s3-bob').setAttribute('cy', bobY);
+
+  // Velocity arrow (tangent to arc)
+  const velScale = 12;
+  const vx = Math.cos(state3.qpos) * state3.qvel * velScale;
+  const vy = -Math.sin(state3.qpos) * state3.qvel * velScale;
+  const arrow = document.getElementById('s3-vel-arrow');
+  arrow.setAttribute('x1', bobX);
+  arrow.setAttribute('y1', bobY);
+  arrow.setAttribute('x2', bobX + vx);
+  arrow.setAttribute('y2', bobY + vy);
+  arrow.style.display = Math.abs(state3.qvel) > 0.01 ? '' : 'none';
+
+  // Time text
+  document.getElementById('s3-time-text').textContent = 't = ' + state3.time.toFixed(3) + ' s';
+
+  // Readout
+  computeAcc3();
+  document.getElementById('s3-readout').innerHTML =
+    '<span class="rk">time:</span>  <span class="rv">' + state3.time.toFixed(3) + '</span> s<br>' +
+    '<span class="rk">qpos:</span>  <span class="rv">' + state3.qpos.toFixed(4) + '</span> rad<br>' +
+    '<span class="rk">qvel:</span>  <span class="rv">' + state3.qvel.toFixed(4) + '</span> rad/s<br>' +
+    '<span class="rk">qacc:</span>  <span class="rv-orange">' + state3.qacc.toFixed(4) + '</span> rad/s2';
+
+  // Update slider displays (without resetting)
+  document.getElementById('s3-angle-val').textContent = Math.round(angleDeg);
+  document.getElementById('s3-vel-val').textContent = state3.qvel.toFixed(1);
+}
+
+function stepState3() {
+  stepOnce3();
+  renderState3();
+}
+
+function step10State3() {
+  for (let i = 0; i < 10; i++) stepOnce3();
+  renderState3();
+}
+
+function step100State3() {
+  for (let i = 0; i < 100; i++) stepOnce3();
+  renderState3();
+}
+
+function resetState3() {
+  const angleDeg = parseFloat(document.getElementById('s3-angle').value);
+  const vel = parseFloat(document.getElementById('s3-vel').value);
+  state3.time = 0;
+  state3.qpos = angleDeg * Math.PI / 180;
+  state3.qvel = vel;
+  state3.qacc = 0;
+  if (state3.playing) togglePlay3();
+  renderState3();
+}
+
+function togglePlay3() {
+  state3.playing = !state3.playing;
+  const btn = document.getElementById('s3-play-btn');
+  btn.textContent = state3.playing ? 'Pause' : 'Play';
+  if (state3.playing) {
+    playLoop3();
+  } else {
+    cancelAnimationFrame(state3.animId);
+  }
+}
+
+function playLoop3() {
+  if (!state3.playing) return;
+  // Run several substeps per frame for smoother physics
+  for (let i = 0; i < 8; i++) stepOnce3();
+  renderState3();
+  state3.animId = requestAnimationFrame(playLoop3);
+}
+
+// =============================================
+// INIT
+// =============================================
+updatePendulum1();
+updateFrames2();
+resetState3();
+
+// Open lesson 1 by default
+document.addEventListener('DOMContentLoaded', () => {
+  scrollToLesson(1);
+});
+
+// Scroll-based pill nav highlight
+let scrollTicking = false;
+window.addEventListener('scroll', () => {
+  if (!scrollTicking) {
+    requestAnimationFrame(() => {
+      const sections = document.querySelectorAll('.lesson-section');
+      let current = 1;
+      sections.forEach(s => {
+        const rect = s.getBoundingClientRect();
+        if (rect.top < window.innerHeight / 2) {
+          current = parseInt(s.dataset.lesson);
+        }
+      });
+      document.querySelectorAll('.pill-btn').forEach(p => {
+        const n = parseInt(p.dataset.lesson);
+        p.classList.toggle('active', n === current);
+        p.setAttribute('aria-selected', n === current ? 'true' : 'false');
+      });
+      scrollTicking = false;
+    });
+    scrollTicking = true;
+  }
+});
+</script>
+
+</body>
+</html>

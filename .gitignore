@@ -1,0 +1,13 @@
+# Local environment and tooling
+.venv/
+.pi/
+.agents/
+.claude/
+__pycache__/
+*.pyc
+.DS_Store
+MUJOCO_LOG.TXT
+node_modules/
+
+# Build output
+_site/

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MuJoCo State and Stepping Sandbox</title>
+  <style>
+    :root { color-scheme: light; font-family: system-ui, sans-serif; color: #172033; background: #f8fafc; }
+    body { max-width: 1000px; margin: 0 auto; padding: 2rem; } h1 { margin-bottom: .35rem; } .intro { color: #475569; max-width: 70ch; }
+    .layout { display: grid; grid-template-columns: minmax(240px, .8fr) minmax(360px, 1.2fr); gap: 1rem; } .card { background: white; border: 1px solid #dbe3ef; border-radius: 14px; padding: 1.25rem; box-shadow: 0 4px 18px #17203312; }
+    .controls { display: grid; gap: 1rem; } label { display: grid; gap: .4rem; color: #334155; } input { width: 100%; accent-color: #087f72; } button { border: 1px solid #087f72; border-radius: 8px; background: #087f72; color: white; padding: .65rem .9rem; cursor: pointer; font-weight: 700; } .secondary { background: white; color: #087f72; }
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; } .stat { background: #f1f5f9; border-radius: 8px; padding: .7rem; } .stat strong { display: block; font: 700 1.1rem ui-monospace, monospace; margin-top: .2rem; }
+    svg { display: block; width: 100%; background: #f8fafc; border: 1px solid #dbe3ef; border-radius: 10px; } .axis { stroke: #94a3b8; stroke-dasharray: 5 5; } .rod { stroke: #087f72; stroke-width: 12; stroke-linecap: round; } .pivot { fill: #172033; } .bob { fill: #f59e0b; stroke: #92400e; stroke-width: 2; }
+    code { background: #eef2ff; padding: .1rem .3rem; border-radius: 4px; } .note { color: #475569; font-size: .9rem; }
+    @media (max-width: 700px) { body { padding: 1rem; } .layout { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <h1>State and stepping sandbox</h1>
+  <p class="intro">Set an initial state, then advance one timestep at a time. This small preview mirrors the ideas in <code>MjData</code>: position, velocity, acceleration, and time.</p>
+  <div class="layout">
+    <section class="card controls">
+      <h2>Initial state</h2>
+      <label for="qpos">qpos angle <output id="qposValue">0.70 rad</output><input id="qpos" type="range" min="-1.4" max="1.4" step="0.05" value="0.7"></label>
+      <label for="qvel">qvel velocity <output id="qvelValue">0.00 rad/s</output><input id="qvel" type="range" min="-2" max="2" step="0.05" value="0"></label>
+      <div><button id="step" type="button">mj_step()</button> <button id="reset" class="secondary" type="button">Reset data</button></div>
+      <div class="stats"><div class="stat"><small>time</small><strong id="timeValue">0.000 s</strong></div><div class="stat"><small>qacc</small><strong id="qaccValue">0.000</strong></div></div>
+      <p class="note">The browser preview uses a small educational update. The runnable Python file uses MuJoCo's actual integrator.</p>
+    </section>
+    <section class="card"><h2>Current state</h2>
+      <svg viewBox="0 0 500 430" role="img" aria-labelledby="title desc"><title id="title">Pendulum state</title><desc id="desc">A pendulum whose angle changes after each step.</desc><line class="axis" x1="250" y1="20" x2="250" y2="400"></line><g id="pendulum" transform="translate(250 100) rotate(40)"><circle class="pivot" cx="0" cy="0" r="9"></circle><line class="rod" x1="0" y1="0" x2="0" y2="190"></line><circle class="bob" cx="0" cy="210" r="21"></circle></g><text x="250" y="420" text-anchor="middle" fill="#475569">qpos controls the pose</text></svg>
+    </section>
+  </div>
+  <script>
+    const state = { qpos: .7, qvel: 0, time: 0, dt: .002 };
+    const $ = id => document.getElementById(id);
+    function render() { const qacc = -9.81 * Math.sin(state.qpos); $('qpos').value = state.qpos; $('qvel').value = state.qvel; $('qposValue').value = `${state.qpos.toFixed(2)} rad`; $('qvelValue').value = `${state.qvel.toFixed(2)} rad/s`; $('timeValue').textContent = `${state.time.toFixed(3)} s`; $('qaccValue').textContent = qacc.toFixed(3); $('pendulum').setAttribute('transform', `translate(250 100) rotate(${state.qpos * 180 / Math.PI})`); }
+    $('qpos').addEventListener('input', e => { state.qpos = Number(e.target.value); state.time = 0; render(); }); $('qvel').addEventListener('input', e => { state.qvel = Number(e.target.value); state.time = 0; render(); });
+    $('step').addEventListener('click', () => { const qacc = -9.81 * Math.sin(state.qpos); state.qvel += qacc * state.dt; state.qpos += state.qvel * state.dt; state.time += state.dt; render(); }); $('reset').addEventListener('click', () => { state.qpos = .7; state.qvel = 0; state.time = 0; render(); }); render();
+  </script>
+</body>
+</html>

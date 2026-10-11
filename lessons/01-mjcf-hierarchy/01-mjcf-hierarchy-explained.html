@@ -1,0 +1,721 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 01 explained — From text to a swinging pendulum</title>
+<style>
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#0a0f0d;--raised:#111916;--surface:#151d19;--input:#0d1410;--border:#1e2b25;
+  --teal:#00c9a7;--teal-wash:rgba(0,229,192,.08);--orange:#ff7a45;--orange-wash:rgba(255,122,69,.10);
+  --purple:#c79bff;--blue:#6cb4ff;--yellow:#ffd166;--red:#ff5c6c;
+  --text:#d4ddd8;--dim:#8ea398;--bright:#f0faf5;--code:#0c1210;--grid:#1a2520;
+  --x:#ff5c6c;--y:#7bd88f;--z:#6cb4ff;
+  color-scheme:dark;
+}
+:root[data-theme=light]{
+  --bg:#f4f7f5;--raised:#ffffff;--surface:#eaf0ec;--input:#ffffff;--border:#c9d6ce;
+  --teal:#00796b;--teal-wash:rgba(0,121,107,.07);--orange:#c2410c;--orange-wash:rgba(194,65,12,.07);
+  --purple:#7c3aed;--blue:#1d6fd6;--yellow:#a16207;--red:#c81e3a;
+  --text:#1e2d26;--dim:#52665c;--bright:#0b1510;--code:#f0f4f1;--grid:#dde6e0;
+  --x:#d62839;--y:#2b8a3e;--z:#1d6fd6;
+  color-scheme:light;
+}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--bg);color:var(--text);font:17px/1.65 system-ui,-apple-system,"Segoe UI",sans-serif}
+a{color:var(--teal)}
+:focus-visible{outline:2px solid var(--teal);outline-offset:2px;border-radius:4px}
+code,pre,kbd,.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+code{background:var(--surface);color:var(--orange);padding:.08em .35em;border-radius:5px;font-size:.88em}
+pre{background:var(--code);border:1px solid var(--border);border-radius:10px;padding:14px 16px;overflow-x:auto;font-size:14px;line-height:1.55;margin:0}
+pre code{background:none;color:var(--text);padding:0;font-size:inherit}
+.k{color:var(--purple)}.s{color:var(--y)}.n{color:var(--yellow)}.c{color:var(--dim);font-style:italic}.t{color:var(--blue)}.a{color:var(--orange)}
+.hl{background:var(--teal-wash);box-shadow:inset 3px 0 0 var(--teal);display:inline-block;width:100%}
+
+/* top bar + ladder */
+.topbar{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--border)}
+.topbar-inner{max-width:980px;margin:0 auto;padding:8px 20px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.brand{font-weight:700;color:var(--bright);text-decoration:none;font-size:15px;white-space:nowrap}
+.brand span{color:var(--teal)}
+.ladder{display:flex;gap:4px;flex:1;flex-wrap:wrap;list-style:none;margin:0;padding:0}
+.ladder a{display:block;font-size:12px;padding:3px 9px;border-radius:999px;border:1px solid var(--border);color:var(--dim);text-decoration:none;white-space:nowrap}
+.ladder a.on{border-color:var(--teal);color:var(--teal);background:var(--teal-wash)}
+.theme-btn{font-size:12px}
+
+main{max-width:980px;margin:0 auto;padding:28px 20px 80px}
+header.hero{padding:24px 0 8px}
+.eyebrow{font:600 12px/1 ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--teal)}
+h1{font-size:clamp(28px,5vw,42px);line-height:1.15;margin:.35em 0 .3em;color:var(--bright)}
+h2{font-size:26px;line-height:1.25;margin:0 0 .4em;color:var(--bright)}
+h3{font-size:19px;margin:1.4em 0 .4em;color:var(--bright)}
+.lead{font-size:19px;color:var(--dim);max-width:68ch}
+p,li{max-width:72ch}
+section.step{padding:44px 0 8px;border-top:1px solid var(--border);margin-top:36px;scroll-margin-top:60px}
+.lvl{display:inline-flex;gap:6px;align-items:center;font:600 11px/1 ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase;padding:5px 9px;border-radius:999px;margin-bottom:12px}
+.lvl-plain{color:var(--y);background:color-mix(in srgb,var(--y) 12%,transparent)}
+.lvl-pic{color:var(--blue);background:color-mix(in srgb,var(--blue) 12%,transparent)}
+.lvl-words{color:var(--purple);background:color-mix(in srgb,var(--purple) 12%,transparent)}
+.lvl-math{color:var(--orange);background:var(--orange-wash)}
+.lvl-code{color:var(--teal);background:var(--teal-wash)}
+
+.card{background:var(--raised);border:1px solid var(--border);border-radius:14px;padding:18px 20px;margin:18px 0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media (max-width:760px){.grid2,.grid3{grid-template-columns:1fr}body{font-size:16px}}
+.analogy{border-left:4px solid var(--y);background:color-mix(in srgb,var(--y) 6%,var(--raised))}
+.analogy strong:first-child{color:var(--y)}
+.rule{border-left:4px solid var(--teal);background:var(--teal-wash)}
+.warn{border-left:4px solid var(--orange);background:var(--orange-wash)}
+.callout-title{font:700 12px/1 ui-monospace,monospace;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px;display:block}
+
+/* jargon terms */
+dfn.term{font-style:normal;font-weight:650;color:var(--purple);border-bottom:1.5px dotted var(--purple);cursor:help;position:relative}
+dfn.term:hover::after,dfn.term:focus::after{content:attr(data-def);position:absolute;left:0;top:calc(100% + 6px);width:min(300px,80vw);background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font:400 13.5px/1.45 system-ui,sans-serif;z-index:30;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.newwords{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:14px 0 0;font-size:13px;color:var(--dim)}
+.newwords span.chip{font:600 12px ui-monospace,monospace;padding:3px 8px;border-radius:6px;background:color-mix(in srgb,var(--purple) 12%,transparent);color:var(--purple)}
+
+/* maths boxes */
+details.math{border:1px solid color-mix(in srgb,var(--orange) 40%,var(--border));border-radius:12px;background:var(--orange-wash);margin:16px 0}
+details.math>summary{cursor:pointer;padding:12px 16px;font-weight:650;color:var(--orange);list-style:none}
+details.math>summary::before{content:"∑  ";}
+details.math[open]>summary{border-bottom:1px solid color-mix(in srgb,var(--orange) 30%,var(--border))}
+details.math>div{padding:4px 18px 14px}
+.eq{font:15.5px/1.7 ui-monospace,monospace;background:var(--code);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin:10px 0;overflow-x:auto;white-space:pre;color:var(--bright)}
+
+/* controls */
+button,.btn{font:600 14px system-ui,sans-serif;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:8px;padding:8px 13px;cursor:pointer}
+button:hover{border-color:var(--teal)}
+button.primary{background:var(--teal);border-color:var(--teal);color:#04120e}
+button:disabled{opacity:.45;cursor:not-allowed}
+.btnrow{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+label.slider{display:grid;grid-template-columns:1fr auto;gap:2px 10px;font-size:14px;margin:10px 0}
+label.slider input{grid-column:1/-1;width:100%;accent-color:var(--teal)}
+label.slider output{font:600 13px ui-monospace,monospace;color:var(--teal)}
+label.check{display:flex;gap:8px;align-items:center;font-size:14px;margin:6px 0;cursor:pointer}
+canvas{display:block;width:100%;border-radius:10px;background:var(--code);border:1px solid var(--border);touch-action:none}
+.caption{font-size:13.5px;color:var(--dim);margin-top:8px}
+
+/* readouts */
+.readouts{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin:10px 0}
+.ro{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 10px;transition:border-color .25s}
+.ro .lab{font-size:12px;color:var(--dim);display:block}
+.ro .val{font:700 16px ui-monospace,monospace;color:var(--bright)}
+.ro .unit{font-size:11.5px;color:var(--dim)}
+.ro.flash{border-color:var(--orange);background:var(--orange-wash)}
+.ro.frozen .val{color:var(--dim)}
+.ro.frozen{border-style:dashed}
+
+/* predict */
+.predict{border:1px dashed var(--yellow);border-radius:14px;padding:16px 18px;background:color-mix(in srgb,var(--yellow) 5%,var(--raised));margin:20px 0}
+.predict h4{margin:0 0 6px;color:var(--yellow);font-size:15px;letter-spacing:.02em}
+.predict textarea{width:100%;min-height:64px;background:var(--input);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font:15px system-ui,sans-serif;resize:vertical}
+.predict .answer{display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+.predict.revealed .answer{display:block}
+.predict ol{margin:6px 0;padding-left:22px}
+
+table{border-collapse:collapse;width:100%;font-size:15px;margin:12px 0}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+th{color:var(--dim);font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:.05em}
+.glossary dt{font:700 14px ui-monospace,monospace;color:var(--purple);margin-top:10px}
+.glossary dd{margin:2px 0 0 0;color:var(--text)}
+footer.next{margin-top:48px;padding:20px;border:1px solid var(--border);border-radius:14px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+@media print{.topbar,button,.btnrow{display:none}details.math{display:block}details.math>div{display:block}.predict .answer{display:block}}
+.grid2>*,.grid3>*{min-width:0}
+@media (max-width:760px){.ladder{flex-wrap:nowrap;overflow-x:auto;order:3;flex-basis:100%;padding-bottom:2px}.topbar-inner{gap:6px}}
+
+</style>
+</head>
+<body>
+<div class="topbar"><div class="topbar-inner">
+  <a class="brand" href="../index.html">MuJoCo <span>Learning Lab</span></a>
+  <ul class="ladder" aria-label="Sections on this page">
+    <li><a href="#s-idea">1 · Big idea</a></li>
+    <li><a href="#s-objects">2 · Three objects</a></li>
+    <li><a href="#s-parts">3 · Body, geom, joint</a></li>
+    <li><a href="#s-build">4 · Build it</a></li>
+    <li><a href="#s-experiment">5 · Experiments</a></li>
+    <li><a href="#s-code">6 · The script</a></li>
+    <li><a href="#s-math">7 · Maths</a></li>
+    <li><a href="#s-check">8 · Check yourself</a></li>
+  </ul>
+  <button class="theme-btn" id="themeBtn" type="button">☀ Light</button>
+</div></div>
+
+<main>
+<header class="hero">
+  <p class="eyebrow">Lesson 01 · explained gently</p>
+  <h1>From a text file to a swinging pendulum</h1>
+  <p class="lead">This page shows how MuJoCo turns a short piece of text into something that moves. You need no physics background. Each section climbs one step: plain words, then pictures, then the official names, then (optional) maths, then code.</p>
+  <div class="card" style="font-size:15px">
+    <strong>How to use this page.</strong> Hover or tab onto a <dfn class="term" tabindex="0" data-def="Purple dotted words are technical terms. Hover or focus them to see a plain-English definition.">purple word</dfn> to see its meaning. Orange <strong style="color:var(--orange)">∑ boxes</strong> hold the maths — open them when you feel ready, skip them if not. Yellow <strong style="color:var(--yellow)">predict</strong> boxes ask you to guess before you see the answer. Guessing wrong is how you learn here.
+  </div>
+</header>
+
+<!-- ============ 1 ============ -->
+<section class="step" id="s-idea">
+  <span class="lvl lvl-plain">● Plain words</span>
+  <h2>1. A simulator must know two different kinds of thing</h2>
+  <p>Think about a board game. Some things never change while you play: the board, the rulebook, how many pieces there are. Other things change on every turn: where each piece is standing right now.</p>
+  <p>A physics simulator has the same split:</p>
+  <div class="grid2">
+    <div class="card"><span class="callout-title" style="color:var(--blue)">What the thing IS</span>How long is the rod? How heavy is the ball? Where is the hinge? How strong is gravity? <br><em>These stay fixed while the simulation runs.</em></div>
+    <div class="card"><span class="callout-title" style="color:var(--orange)">What the thing is DOING</span>What angle is the pendulum at right now? How fast is it swinging? What time is it on the simulation clock? <br><em>These change every few milliseconds.</em></div>
+  </div>
+  <div class="card analogy"><strong>Analogy — a LEGO set.</strong> The instruction booklet describes the model (that is the XML file). The finished model on your desk is the built design (MuJoCo calls it the <em>model</em>). The way you are holding it and moving it right now is the <em>state</em> (MuJoCo calls it the <em>data</em>). One booklet, one model — but the pose changes every second.</div>
+
+  <h3>Watch the split happen</h3>
+  <p>Press <kbd>Play</kbd>. The left box never changes. The right box changes all the time. The pendulum on the right is drawn using <em>only</em> the numbers in those two boxes.</p>
+  <div class="card">
+    <div class="grid3" style="align-items:stretch">
+      <div>
+        <span class="callout-title" style="color:var(--dim)">① Text (XML file)</span>
+<pre style="font-size:12px"><code><span class="t">&lt;body</span> <span class="a">name</span>=<span class="s">"pendulum"</span>
+      <span class="a">pos</span>=<span class="s">"0 0 1"</span><span class="t">&gt;</span>
+  <span class="t">&lt;joint</span> <span class="a">type</span>=<span class="s">"hinge"</span>
+         <span class="a">axis</span>=<span class="s">"0 1 0"</span><span class="t">/&gt;</span>
+  <span class="t">&lt;geom</span> <span class="a">name</span>=<span class="s">"rod"</span> …<span class="t">/&gt;</span>
+  <span class="t">&lt;body</span> <span class="a">name</span>=<span class="s">"bob"</span> …<span class="t">&gt;</span>
+    <span class="t">&lt;geom</span> <span class="a">name</span>=<span class="s">"weight"</span> …<span class="t">/&gt;</span>
+  <span class="t">&lt;/body&gt;</span>
+<span class="t">&lt;/body&gt;</span></code></pre>
+        <p class="caption">MuJoCo reads this once, at the start. ⟶ <code>MjModel.from_xml_string()</code></p>
+      </div>
+      <div>
+        <span class="callout-title" style="color:var(--blue)">② MjModel — fixed 🔒</span>
+        <div class="readouts" style="grid-template-columns:1fr 1fr">
+          <div class="ro frozen"><span class="lab">nbody (bodies)</span><span class="val">3</span></div>
+          <div class="ro frozen"><span class="lab">njnt (joints)</span><span class="val">1</span></div>
+          <div class="ro frozen"><span class="lab">ngeom (shapes)</span><span class="val">2</span></div>
+          <div class="ro frozen"><span class="lab">timestep</span><span class="val">0.002</span> <span class="unit">s</span></div>
+          <div class="ro frozen"><span class="lab">gravity z</span><span class="val">−9.81</span> <span class="unit">m/s²</span></div>
+          <div class="ro frozen"><span class="lab">rod mass</span><span class="val">8.38</span> <span class="unit">kg</span></div>
+          <div class="ro frozen"><span class="lab">bob mass</span><span class="val">7.24</span> <span class="unit">kg</span></div>
+          <div class="ro frozen"><span class="lab">pivot height</span><span class="val">1.0</span> <span class="unit">m</span></div>
+        </div>
+        <p class="caption">Dashed border = never changed by the simulation.</p>
+      </div>
+      <div>
+        <span class="callout-title" style="color:var(--orange)">③ MjData — changing ⟳</span>
+        <div class="readouts" style="grid-template-columns:1fr 1fr">
+          <div class="ro" id="a-time"><span class="lab">time</span><span class="val">0.000</span> <span class="unit">s</span></div>
+          <div class="ro" id="a-qpos"><span class="lab">qpos[0] angle</span><span class="val">0.700</span> <span class="unit">rad</span></div>
+          <div class="ro" id="a-qvel"><span class="lab">qvel[0] spin speed</span><span class="val">0.000</span> <span class="unit">rad/s</span></div>
+          <div class="ro" id="a-steps"><span class="lab">steps taken</span><span class="val">0</span></div>
+        </div>
+        <canvas id="cvA" aria-label="Pendulum drawn from MjModel and MjData values" role="img"></canvas>
+      </div>
+    </div>
+    <div class="btnrow">
+      <button class="primary" id="aPlay" type="button">▶ Play</button>
+      <button id="aStep" type="button">mj_step() × 1</button>
+      <button id="aReset" type="button">↺ Reset</button>
+    </div>
+    <p class="caption">This page runs its own small copy of the pendulum maths in your browser, using the same masses and timestep as your lesson script. It is a faithful sketch, not real MuJoCo.</p>
+  </div>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">Rule to remember</span><strong>Model = blueprint (fixed). Data = snapshot (changing).</strong> If a number describes the design, look in <code>model</code>. If it describes "right now", look in <code>data</code>.</div>
+</section>
+
+<!-- ============ 2 ============ -->
+<section class="step" id="s-objects">
+  <span class="lvl lvl-words">● MuJoCo words</span>
+  <h2>2. The official names for those boxes</h2>
+  <p>Now that the idea is clear, here are the names MuJoCo uses. There are four — one text format and three Python objects.</p>
+  <table>
+    <thead><tr><th>Name</th><th>Plain meaning</th><th>LEGO analogy</th><th>Changes while running?</th></tr></thead>
+    <tbody>
+      <tr><td><dfn class="term" tabindex="0" data-def="MuJoCo's XML file format. 'MJCF' stands for MuJoCo Format. It is plain text that describes bodies, joints and shapes.">MJCF</dfn></td><td>The text file that describes your robot or object</td><td>Instruction booklet</td><td>—</td></tr>
+      <tr><td><dfn class="term" tabindex="0" data-def="An editable description of a model that lives in Python memory. You can add or remove bodies, then call compile() to get an MjModel.">MjSpec</dfn></td><td>An editable version of the booklet, inside Python</td><td>A booklet you can still scribble on</td><td>You edit it before building</td></tr>
+      <tr><td><dfn class="term" tabindex="0" data-def="The compiled, fixed design: counts, sizes, masses, timestep, gravity. Built once from MJCF or MjSpec.">MjModel</dfn></td><td>The finished design: sizes, masses, counts</td><td>The built model</td><td><strong>No</strong> (the structure is frozen)</td></tr>
+      <tr><td><dfn class="term" tabindex="0" data-def="The live state of one simulation: time, joint angles, speeds, forces, and everything MuJoCo computes from them.">MjData</dfn></td><td>Everything about "right now"</td><td>How you are holding it this second</td><td><strong>Yes</strong>, every step</td></tr>
+    </tbody>
+  </table>
+<div class="grid2">
+<pre><code><span class="c"># ① text → fixed design (done once)</span>
+model = mujoco.MjModel.from_xml_string(XML)
+
+<span class="c"># ② fixed design → a live state (can make many)</span>
+data = mujoco.MjData(model)
+
+<span class="c"># ③ edit the blueprint in Python (optional)</span>
+spec = mujoco.MjSpec.from_string(XML)
+model2 = spec.compile()</code></pre>
+<div>
+  <p style="margin-top:0"><strong>Line ①</strong> reads the text and works out every fixed number: how many bodies, how heavy each shape is, where the hinge is.</p>
+  <p><strong>Line ②</strong> creates an empty "right now" for that design. Everything starts at zero: time = 0, angle = 0.</p>
+  <p><strong>Line ③</strong> is for later lessons. You use <code>MjSpec</code> when your Python code should <em>build or change</em> a model, for example "add 10 boxes".</p>
+</div>
+</div>
+  <div class="card warn"><span class="callout-title" style="color:var(--orange)">Honest detail</span>You <em>can</em> change a few model numbers by hand between steps, for example <code>model.opt.gravity</code>. The simulation itself never changes them. You can <strong>never</strong> change the structure (how many bodies or joints) without building a new model.</div>
+  <p class="newwords">New words: <span class="chip">MJCF</span><span class="chip">MjSpec</span><span class="chip">MjModel</span><span class="chip">MjData</span></p>
+</section>
+
+<!-- ============ 3 ============ -->
+<section class="step" id="s-parts">
+  <span class="lvl lvl-pic">● Picture</span>
+  <h2>3. Three building words: body, geom, joint</h2>
+  <p>Every MuJoCo model is made from three kinds of piece. Toggle them below to see each one on its own.</p>
+  <div class="grid3">
+    <div class="card"><span class="callout-title" style="color:var(--teal)">Body = an invisible hand</span>A <dfn class="term" tabindex="0" data-def="A body is a point in space with its own set of x, y, z directions (a 'frame'). It holds shapes and other bodies. On its own it is invisible.">body</dfn> is an invisible point in space with its own little set of directions. Bodies hold things. A body can hold other bodies, like a hand holding another hand.</div>
+    <div class="card"><span class="callout-title" style="color:var(--orange)">Geom = the shape it holds</span>A <dfn class="term" tabindex="0" data-def="A geom (geometric shape) is a sphere, capsule, box, etc. attached to a body. It is what you see, what collides, and it gives the body mass.">geom</dfn> is a shape: a sphere, a capsule, a box. It is what you see. It is also what bumps into things, and it gives the body its weight.</div>
+    <div class="card"><span class="callout-title" style="color:var(--purple)">Joint = permission to move</span>A <dfn class="term" tabindex="0" data-def="A joint lets a body move relative to its parent body. Without a joint, a body is welded rigidly to its parent.">joint</dfn> lets a body move relative to its parent. <strong>No joint means glued.</strong> A <dfn class="term" tabindex="0" data-def="A hinge joint allows rotation around one line (its axis), like a door hinge. It adds one number to qpos: the angle in radians.">hinge</dfn> lets it rotate around one line, like a door.</div>
+  </div>
+  <div class="card">
+    <canvas id="cvX" aria-label="Pendulum with toggles for bodies, geoms and joint" role="img"></canvas>
+    <div class="btnrow" style="align-items:center">
+      <label class="check"><input type="checkbox" id="xGeom" checked> Show geoms (shapes)</label>
+      <label class="check"><input type="checkbox" id="xBody" checked> Show bodies (frames)</label>
+      <label class="check"><input type="checkbox" id="xJoint" checked> Show joint</label>
+      <button id="xWiggle" type="button">Wiggle the joint</button>
+    </div>
+    <p class="caption">Untick "geoms" — the pendulum vanishes, but the bodies are still there. That is why we call bodies invisible. The small red/blue arrows are each body's own x (red) and z (blue) directions.</p>
+  </div>
+  <div class="card analogy"><strong>Why a separate "bob" body?</strong> Your lesson puts the heavy ball on its <em>own</em> body, a child of the pendulum body. It has no joint, so it is glued to the rod end. When the hinge turns, the whole family — pendulum body, rod, bob body, ball — turns together. Children always follow their parent.</div>
+  <p class="newwords">New words: <span class="chip">body</span><span class="chip">geom</span><span class="chip">joint</span><span class="chip">hinge</span><span class="chip">parent / child</span></p>
+</section>
+
+<!-- ============ 4 ============ -->
+<section class="step" id="s-build">
+  <span class="lvl lvl-pic">● Picture</span> <span class="lvl lvl-words">● MuJoCo words</span>
+  <h2>4. Build the pendulum one line at a time</h2>
+  <p>MuJoCo counts every piece. Your script prints those counts as <code>nbody</code>, <code>njnt</code>, <code>ngeom</code>, <code>nq</code> and <code>nv</code>. Before each line is added, guess which count will change.</p>
+  <ul style="font-size:15px">
+    <li><code>nbody</code>, <code>njnt</code>, <code>ngeom</code> — "number of bodies / joints / geoms".</li>
+    <li><code>nq</code> — how many numbers MuJoCo needs to say <em>where</em> everything is (positions). It's the length of <dfn class="term" tabindex="0" data-def="qpos = 'generalised positions'. A list of numbers that says where every joint is. For one hinge, it is one angle in radians.">qpos</dfn>.</li>
+    <li><code>nv</code> — how many numbers it needs to say <em>how fast</em> everything moves. It's the length of <dfn class="term" tabindex="0" data-def="qvel = 'generalised velocities'. How fast each joint is moving. For a hinge, the spin speed in radians per second.">qvel</dfn>.</li>
+  </ul>
+  <div class="card">
+    <div class="grid2">
+      <div>
+        <pre id="bXml" style="min-height:240px;font-size:13px"></pre>
+        <div class="readouts" style="grid-template-columns:repeat(5,1fr)">
+          <div class="ro" id="c-nbody"><span class="lab">nbody</span><span class="val">1</span></div>
+          <div class="ro" id="c-njnt"><span class="lab">njnt</span><span class="val">0</span></div>
+          <div class="ro" id="c-ngeom"><span class="lab">ngeom</span><span class="val">0</span></div>
+          <div class="ro" id="c-nq"><span class="lab">nq</span><span class="val">0</span></div>
+          <div class="ro" id="c-nv"><span class="lab">nv</span><span class="val">0</span></div>
+        </div>
+      </div>
+      <div>
+        <canvas id="cvB" aria-label="Pendulum being built step by step" role="img"></canvas>
+        <pre id="bTree" style="margin-top:10px;font-size:13px;min-height:120px"></pre>
+      </div>
+    </div>
+    <div class="predict" style="margin:14px 0 0" aria-live="polite">
+      <h4 id="bQ">Question</h4>
+      <div class="btnrow" id="bOpts"></div>
+      <p id="bFeedback" style="margin:6px 0 0"></p>
+    </div>
+    <div class="btnrow">
+      <button class="primary" id="bNext" type="button" disabled>Add the next line ▸</button>
+      <button id="bRestart" type="button">↺ Start over</button>
+      <button id="bSwing" type="button" hidden>Swing it (change qpos)</button>
+    </div>
+  </div>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">What the builder shows</span>
+    <ul style="margin:0;padding-left:20px">
+      <li>The <strong>world</strong> body always exists, even in an empty file. That's why <code>nbody</code> starts at 1.</li>
+      <li>Only <strong>joints</strong> change <code>nq</code> and <code>nv</code>. Bodies and shapes don't add ways to move.</li>
+      <li>Swinging the pendulum changes <code>qpos</code> (the data), but every count (the model) stays the same.</li>
+    </ul>
+  </div>
+  <p class="newwords">New words: <span class="chip">nbody · njnt · ngeom</span><span class="chip">nq · nv</span><span class="chip">qpos · qvel</span><span class="chip">world body</span></p>
+</section>
+
+<!-- ============ 5 ============ -->
+<section class="step" id="s-experiment">
+  <span class="lvl lvl-pic">● Picture</span>
+  <h2>5. Your lesson's two experiments, live</h2>
+  <p>Lesson 1 asked you to try two edits to the XML. Guess first, then move the sliders.</p>
+  <div class="predict">
+    <h4>🔮 Predict before you touch the sliders</h4>
+    <ol>
+      <li><strong>Experiment A:</strong> the pendulum body's <code>pos</code> goes from <code>0 0 1</code> to <code>0 0 2</code>. Where does the bob end up? Does <code>nq</code> change?</li>
+      <li><strong>Experiment B:</strong> the rod's <code>fromto</code> goes from <code>0 0 0 0 0 -1</code> to <code>0 0 0 0 0 -2</code>. Does the ball move to the new end of the rod?</li>
+    </ol>
+    <textarea aria-label="Your prediction for experiments A and B" placeholder="Type your guesses here…"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p><strong>A.</strong> The bob rises 1 m too. It is a child of the pendulum body, and children follow their parent. <code>nq</code> stays <strong>1</strong>, because you still have exactly one hinge.</p>
+      <p><strong>B.</strong> <strong>No!</strong> The rod gets longer, but the ball stays 1 m below the hinge. The ball sits on the <em>bob body</em>, and the bob body has its own <code>pos="0 0 -1"</code>. The rod and the bob are not linked. MuJoCo does exactly what the XML says, not what you meant. To fix it, change the bob's <code>pos</code> to <code>0 0 -2</code> as well.</p>
+    </div>
+  </div>
+  <div class="card">
+    <div class="grid2">
+      <canvas id="cvE" aria-label="Pendulum experiment view" role="img"></canvas>
+      <div>
+        <label class="slider"><span>Pendulum body <code>pos</code> z (height of hinge)</span> <output id="oPz">1.00 m</output><input type="range" id="ePz" min="0.6" max="2.4" step="0.05" value="1"></label>
+        <label class="slider"><span>Rod <code>fromto</code> end z (rod length)</span> <output id="oL">1.00 m</output><input type="range" id="eL" min="0.4" max="2" step="0.05" value="1"></label>
+        <label class="slider"><span>Bob body <code>pos</code> z (in pendulum's frame)</span> <output id="oBz">−1.00 m</output><input type="range" id="eBz" min="-2" max="-0.4" step="0.05" value="-1"></label>
+        <label class="slider"><span>Hinge angle <code>qpos[0]</code></span> <output id="oTh">0.00 rad</output><input type="range" id="eTh" min="-1.4" max="1.4" step="0.02" value="0"></label>
+        <div class="readouts" style="grid-template-columns:1fr 1fr">
+          <div class="ro"><span class="lab">bob world x</span><span class="val" id="rBx">0.00</span> <span class="unit">m</span></div>
+          <div class="ro"><span class="lab">bob world z</span><span class="val" id="rBz">0.00</span> <span class="unit">m</span></div>
+          <div class="ro frozen"><span class="lab">model.nq</span><span class="val">1</span></div>
+          <div class="ro frozen"><span class="lab">model.nbody</span><span class="val">3</span></div>
+        </div>
+        <button id="eReset" type="button">↺ Back to the lesson values</button>
+      </div>
+    </div>
+    <pre id="eXml" style="margin-top:12px;font-size:13px"></pre>
+    <p class="caption">The XML above rewrites itself as you drag. Orange numbers are the ones you changed. "World" means measured from the fixed floor origin, in metres.</p>
+  </div>
+</section>
+
+<!-- ============ 6 ============ -->
+<section class="step" id="s-code">
+  <span class="lvl lvl-code">● Code</span>
+  <h2>6. Your script, line by line</h2>
+  <p>Here is what <code>01_mjcf_hierarchy.py</code> does, with the physical meaning of each MuJoCo line.</p>
+  <table>
+    <thead><tr><th style="width:46%">Code</th><th>What it means physically</th></tr></thead>
+    <tbody>
+      <tr><td><code>model = mujoco.MjModel.from_xml_string(XML)</code></td><td>Read the description. Work out every fixed number: 3 bodies, 1 hinge, rod mass 8.38 kg, ball mass 7.24 kg.</td></tr>
+      <tr><td><code>data = mujoco.MjData(model)</code></td><td>Make a fresh "right now" for that design. Time = 0, angle = 0 (hanging straight down), not moving.</td></tr>
+      <tr><td><code>model.nbody</code>, <code>model.njnt</code>, …</td><td>Read the counts from the <strong>model</strong>. They describe the design, so they live there.</td></tr>
+      <tr><td><code>mj_id2name(model, mjOBJ_BODY, i)</code></td><td>MuJoCo stores everything by number (ID). This turns ID 1 back into the name "pendulum".</td></tr>
+      <tr><td><code>data.qpos[0] = 0.7</code></td><td>Tilt the pendulum by 0.7 radians (about 40°). This edits the <strong>data</strong>.</td></tr>
+      <tr><td><code>mujoco.mj_forward(model, data)</code></td><td>"Look at the new angle and work out where every piece is." The clock does <em>not</em> move.</td></tr>
+      <tr><td><code>mujoco.mj_step(model, data)</code></td><td>Move time forward by one tick (0.002 s). Gravity pulls; the angle changes a tiny bit.</td></tr>
+    </tbody>
+  </table>
+<pre><code><span class="c"># What your script printed — with labels and units added</span>
+bodies: <span class="n">3</span>     <span class="c"># world, pendulum, bob</span>
+joints: <span class="n">1</span>     <span class="c"># the hinge</span>
+geoms:  <span class="n">2</span>     <span class="c"># rod (capsule), weight (sphere)</span>
+qpos:   <span class="n">1</span>     <span class="c"># one angle is enough to say where everything is</span>
+qvel:   <span class="n">1</span>     <span class="c"># one spin speed is enough to say how it moves</span>
+qpos[0] before:      <span class="n">0.0</span>          rad  <span class="c"># hanging straight down</span>
+qpos[0] after step:  <span class="n">0.69997161</span>   rad  <span class="c"># set to 0.7, then fell 0.0000284 rad in 2 ms</span></code></pre>
+  <div class="card analogy"><strong>Why did the angle barely change?</strong> One step is only 2 milliseconds. The pendulum started from rest, like a ball you have just let go of. In the first instant it has hardly moved at all. Open the maths box in section 7 to see exactly where 0.0000284 comes from.</div>
+  <p class="newwords">New words: <span class="chip">ID</span><span class="chip">mj_forward</span><span class="chip">mj_step</span><span class="chip">radian</span></p>
+</section>
+
+<!-- ============ 7 ============ -->
+<section class="step" id="s-math">
+  <span class="lvl lvl-math">● Maths (optional)</span>
+  <h2>7. The maths underneath — only if you want it</h2>
+  <p>You don't need this to use MuJoCo. It shows that nothing is magic: every number in your output can be worked out by hand.</p>
+
+  <details class="math"><summary>What is a radian?</summary><div>
+    <p>A radian is another way to measure angles. If you walk along a circle a distance equal to its radius, you have turned 1 radian. A full turn is 2π ≈ 6.283 radians.</p>
+    <div class="eq">degrees = radians × 180 / π
+0.7 rad × 57.3 = about 40°</div>
+    <p>MuJoCo always uses radians inside <code>qpos</code>, even if the XML lets you write degrees.</p>
+  </div></details>
+
+  <details class="math"><summary>Where do the masses 8.38 kg and 7.24 kg come from?</summary><div>
+    <p>You never wrote a mass in the XML. MuJoCo assumes every shape is as dense as water — 1000 kg per cubic metre — and multiplies by the shape's volume.</p>
+    <p><strong>The ball</strong> is a sphere with radius r = 0.12 m:</p>
+    <div class="eq">volume = (4/3)·π·r³ = (4/3)·π·0.12³ = 0.007238 m³
+mass   = 1000 × 0.007238  = 7.24 kg</div>
+    <p><strong>The rod</strong> is a capsule: a cylinder (radius 0.05 m, length 1 m) with a half-ball on each end. Two half-balls make one ball:</p>
+    <div class="eq">cylinder = π·r²·L   = π·0.05²·1   = 0.007854 m³
+two caps = (4/3)·π·r³ = (4/3)·π·0.05³ = 0.000524 m³
+mass     = 1000 × (0.007854 + 0.000524) = 8.38 kg</div>
+    <p>Both match what MuJoCo computes (<code>model.body_mass</code>). A 1 m "rod" made of water-density material is surprisingly heavy!</p>
+  </div></details>
+
+  <details class="math"><summary>Counting rule: where nq and nv come from</summary><div>
+    <p><code>nq</code> and <code>nv</code> are the sums over all joints. Each joint type adds a fixed amount:</p>
+    <table><thead><tr><th>Joint type</th><th>adds to nq</th><th>adds to nv</th><th>Why</th></tr></thead><tbody>
+      <tr><td>hinge</td><td>1</td><td>1</td><td>one angle, one spin speed</td></tr>
+      <tr><td>slide</td><td>1</td><td>1</td><td>one distance, one speed</td></tr>
+      <tr><td>ball</td><td>4</td><td>3</td><td>rotation stored as 4 numbers (a "quaternion"), but only 3 ways to spin</td></tr>
+      <tr><td>free</td><td>7</td><td>6</td><td>3 for position + 4 for rotation; 3 + 3 speeds</td></tr>
+    </tbody></table>
+    <div class="eq">nq = Σ (nq of each joint)     your model: 1 hinge → nq = 1
+nv = Σ (nv of each joint)     your model: 1 hinge → nv = 1</div>
+    <p>Bodies and geoms add nothing. You will meet ball and free joints later; the point now is that <code>nq</code> and <code>nv</code> are not always equal.</p>
+  </div></details>
+
+  <details class="math"><summary>Why the angle fell by exactly 0.0000284 rad in one step</summary><div>
+    <p>Lesson 3 explains this fully. Short version: in one step, MuJoCo does two small updates, in this order.</p>
+    <div class="eq">new speed = old speed + timestep × acceleration
+new angle = old angle + timestep × new speed</div>
+    <p>At 0.7 rad, gravity gives this pendulum an angular acceleration of −7.097 rad/s² (MuJoCo works this out from the masses). The pendulum starts at rest (speed 0):</p>
+    <div class="eq">new speed = 0 + 0.002 × (−7.097)   = −0.014195 rad/s
+new angle = 0.7 + 0.002 × (−0.014195) = 0.6999716 rad  ✓</div>
+    <p>That matches your output: <code>0.69997161</code>.</p>
+  </div></details>
+</section>
+
+<!-- ============ 8 ============ -->
+<section class="step" id="s-check">
+  <span class="lvl lvl-plain">● Check yourself</span>
+  <h2>8. Three quick checks</h2>
+  <div class="predict">
+    <h4>Q1. You add a second hinge joint inside the bob body. What are nbody, njnt and nq now?</h4>
+    <textarea aria-label="Answer to question 1"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>nbody = 3</strong> (no new body), <strong>njnt = 2</strong>, <strong>nq = 2</strong>. Now the ball can swing on its own: it's a double pendulum!</p></div>
+  </div>
+  <div class="predict">
+    <h4>Q2. You delete the "weight" geom but keep the bob body. What do you see? Does nbody change?</h4>
+    <textarea aria-label="Answer to question 2"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>The ball disappears and its 7.24 kg disappears with it, so the pendulum is lighter. <strong>nbody stays 3</strong> — the invisible bob body is still there. Only <strong>ngeom drops to 1</strong>.</p></div>
+  </div>
+  <div class="predict">
+    <h4>Q3. You run <code>data.qpos[0] = 1.0</code>. Did you change the model or the data? What is model.nq afterwards?</h4>
+    <textarea aria-label="Answer to question 3"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>The <strong>data</strong>. You changed where the pendulum is right now. The design is untouched: <code>model.nq</code> is still 1.</p></div>
+  </div>
+
+  <h3>Glossary — every word from this page</h3>
+  <dl class="glossary">
+    <dt>MJCF</dt><dd>MuJoCo's XML text format for describing a model.</dd>
+    <dt>MjSpec</dt><dd>An editable model description inside Python; <code>spec.compile()</code> turns it into an MjModel.</dd>
+    <dt>MjModel</dt><dd>The fixed design: counts, sizes, masses, timestep, gravity.</dd>
+    <dt>MjData</dt><dd>The live state: time, qpos, qvel, and everything computed from them.</dd>
+    <dt>body</dt><dd>An invisible point with its own x/y/z directions (a frame). Holds geoms, joints and child bodies.</dd>
+    <dt>geom</dt><dd>A shape attached to a body. You see it, it collides, it adds mass.</dd>
+    <dt>joint / hinge</dt><dd>Lets a body move relative to its parent. A hinge rotates around one line.</dd>
+    <dt>world body</dt><dd>The fixed root of every model. Always body ID 0.</dd>
+    <dt>nq / qpos</dt><dd>How many position numbers there are / the list of them (angles in rad, distances in m).</dd>
+    <dt>nv / qvel</dt><dd>How many speed numbers there are / the list of them (rad/s, m/s).</dd>
+    <dt>mj_forward</dt><dd>Work out everything about the current moment. Time does not move.</dd>
+    <dt>mj_step</dt><dd>Move time forward by one timestep.</dd>
+  </dl>
+
+  <footer class="next">
+    <a href="../index.html">← Learning Lab</a>
+    <a href="../02-frames-and-axes/02-frames-and-axes-explained.html">Next: Lesson 02 explained — frames and axes →</a>
+  </footer>
+</section>
+</main>
+
+<script>
+// ---- shared helpers (theme, ladder, predictions, canvas) ----
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+(function theme(){
+  const root=document.documentElement, saved=localStorage.getItem('mjx-theme');
+  root.dataset.theme = saved || (matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');
+  const b=document.getElementById('themeBtn');
+  const label=()=>b.textContent = root.dataset.theme==='dark'?'☀ Light':'☾ Dark';
+  label();
+  b.addEventListener('click',()=>{root.dataset.theme=root.dataset.theme==='dark'?'light':'dark';localStorage.setItem('mjx-theme',root.dataset.theme);label();window.dispatchEvent(new Event('themechange'));});
+})();
+(function ladder(){
+  const links=[...document.querySelectorAll('.ladder a')];
+  const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){links.forEach(l=>l.classList.toggle('on',l.getAttribute('href')==='#'+e.target.id));}}),{rootMargin:'-40% 0px -55% 0px'});
+  document.querySelectorAll('section.step').forEach(s=>io.observe(s));
+})();
+document.querySelectorAll('.predict').forEach(p=>{
+  const ta=p.querySelector('textarea'), lock=p.querySelector('.lock'), skip=p.querySelector('.skip');
+  if(!ta||!lock)return;
+  const upd=()=>lock.disabled=!ta.value.trim();
+  ta.addEventListener('input',upd); upd();
+  lock.addEventListener('click',()=>{p.classList.add('revealed');lock.textContent='Guess locked ✓';lock.disabled=true;ta.readOnly=true;});
+  skip&&skip.addEventListener('click',()=>{p.classList.add('revealed');});
+});
+function css(name){return getComputedStyle(document.documentElement).getPropertyValue(name).trim();}
+function fit(canvas,aspect){
+  const dpr=Math.min(devicePixelRatio||1,2), w=canvas.clientWidth, h=Math.round(w*aspect);
+  canvas.style.height=h+'px'; canvas.width=w*dpr; canvas.height=h*dpr;
+  const ctx=canvas.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); return {ctx,w,h};
+}
+function arrow(ctx,x1,y1,x2,y2,color,width=2,head=8){
+  const a=Math.atan2(y2-y1,x2-x1); ctx.strokeStyle=color; ctx.fillStyle=color; ctx.lineWidth=width;
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(x2,y2);ctx.lineTo(x2-head*Math.cos(a-.4),y2-head*Math.sin(a-.4));ctx.lineTo(x2-head*Math.cos(a+.4),y2-head*Math.sin(a+.4));ctx.closePath();ctx.fill();
+}
+function text(ctx,s,x,y,color,size=12,align='left',weight=600){ctx.fillStyle=color;ctx.font=`${weight} ${size}px ui-monospace,Menlo,monospace`;ctx.textAlign=align;ctx.textBaseline='middle';ctx.fillText(s,x,y);}
+function flash(el){if(!el)return;el.classList.remove('flash');void el.offsetWidth;el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),600);}
+function fmt(v,d=3){return (v>=0?'+':'')+v.toFixed(d);}
+
+// ---------- Lesson 1 page logic ----------
+// Pendulum constants measured from the real lesson model with MuJoCo 3.x:
+// qacc = -K * sin(qpos), K = 11.017 1/s^2 (rod 8.38 kg + bob 7.24 kg, pivot at z = 1 m).
+const K1 = 11.0171, H = 0.002;
+
+// Rotate a local (x, z) offset by hinge angle th about +y.
+// +y points into the screen, so positive angles move "down" toward -x (left).
+function rotY(x, z, th) { return [x * Math.cos(th) + z * Math.sin(th), -x * Math.sin(th) + z * Math.cos(th)]; }
+
+function frameAxes(ctx, sx, sy, th, len, labels) {
+  // body x axis = rotY(1,0), z axis = rotY(0,1); screen y is flipped
+  const [xx, xz] = rotY(1, 0, th), [zx, zz] = rotY(0, 1, th);
+  arrow(ctx, sx, sy, sx + xx * len, sy - xz * len, css('--x'), 2, 6);
+  arrow(ctx, sx, sy, sx + zx * len, sy - zz * len, css('--z'), 2, 6);
+  if (labels) { text(ctx, 'x', sx + xx * (len + 9), sy - xz * (len + 9), css('--x'), 11, 'center'); text(ctx, 'z', sx + zx * (len + 9), sy - zz * (len + 9), css('--z'), 11, 'center'); }
+  ctx.fillStyle = css('--bright'); ctx.beginPath(); ctx.arc(sx, sy, 3, 0, 7); ctx.fill();
+}
+
+// Generic pendulum painter shared by all canvases on this page.
+function drawPend(ctx, w, h, o) {
+  const p = Object.assign({ pz: 1, L: 1, bz: -1, th: 0, geom: true, body: true, joint: true, rod: true, bob: true, bobBody: true, pend: true, scale: 0, zmin: -0.22, labels: true, ghost: null }, o);
+  const s = p.scale || Math.min(w, h) / 2.6, cx = w / 2, gy = h - 8 + p.zmin * s;
+  const W = (x, z) => [cx + x * s, gy - z * s];
+  ctx.clearRect(0, 0, w, h);
+  // floor + grid
+  ctx.strokeStyle = css('--grid'); ctx.lineWidth = 1;
+  for (let z = -2; z <= 3; z += 0.5) { const [, y] = W(0, z); ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+  // z = 0 reference line (this model has no floor — it is just the world origin height)
+  ctx.strokeStyle = css('--dim'); ctx.setLineDash([6, 5]); ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke(); ctx.setLineDash([]);
+  if (p.labels) text(ctx, 'z = 0 (no floor)', 8, gy - 9, css('--dim'), 10);
+  // world frame
+  const [wx, wy] = W(0, 0);
+  if (p.body) { frameAxes(ctx, wx, wy, 0, 26, p.labels); if (p.labels) text(ctx, 'world', wx + 8, wy + 10, css('--dim'), 10); }
+  if (!p.pend) return;
+  const [px, py] = W(0, p.pz);
+  const [ex, ez] = rotY(0, -p.L, p.th), [bx, bz] = rotY(0, p.bz, p.th);
+  const [rx, ry] = W(ex, p.pz + ez), [Bx, By] = W(bx, p.pz + bz);
+  if (p.ghost) { ctx.setLineDash([4, 4]); ctx.strokeStyle = css('--dim'); ctx.beginPath(); ctx.moveTo(wx, wy); ctx.lineTo(px, py); ctx.stroke(); ctx.setLineDash([]); }
+  if (p.geom && p.rod) { ctx.strokeStyle = css('--teal'); ctx.lineCap = 'round'; ctx.lineWidth = Math.max(6, 0.1 * s); ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(rx, ry); ctx.stroke(); }
+  if (p.geom && p.bob) { ctx.fillStyle = css('--orange'); ctx.beginPath(); ctx.arc(Bx, By, 0.12 * s, 0, 7); ctx.fill(); }
+  if (p.joint) {
+    ctx.strokeStyle = css('--purple'); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(px, py, 14, 0, 7); ctx.stroke();
+    ctx.fillStyle = css('--purple'); ctx.beginPath(); ctx.arc(px, py, 4, 0, 7); ctx.fill();
+    if (p.labels) text(ctx, 'hinge', px + 18, py - 14, css('--purple'), 10);
+  }
+  if (p.body) {
+    frameAxes(ctx, px, py, p.th, 22, false); if (p.labels) text(ctx, 'pendulum', px - 18, py - 18, css('--dim'), 10, 'right');
+    if (p.bobBody) { frameAxes(ctx, Bx, By, p.th, 18, false); if (p.labels) text(ctx, 'bob', Bx + (p.geom && p.bob ? 0.12 * s + 8 : 20), By + 4, css('--dim'), 10); }
+  }
+}
+
+/* ---------- Section 1: model vs data animation ---------- */
+(() => {
+  const cv = document.getElementById('cvA'); let g = fit(cv, 0.95);
+  const st = { q: 0.7, v: 0, t: 0, n: 0 }, el = id => document.querySelector('#' + id + ' .val');
+  let playing = false, last = 0, acc = 0;
+  function step() { const a = -K1 * Math.sin(st.q); st.v += H * a; st.q += H * st.v; st.t += H; st.n++; }
+  function show(fl) {
+    el('a-time').textContent = st.t.toFixed(3); el('a-qpos').textContent = st.q.toFixed(3);
+    el('a-qvel').textContent = st.v.toFixed(3); el('a-steps').textContent = st.n;
+    if (fl) ['a-time', 'a-qpos', 'a-qvel', 'a-steps'].forEach(i => flash(document.getElementById(i)));
+    drawPend(g.ctx, g.w, g.h, { th: st.q, labels: false, scale: g.h / 1.45 });
+  }
+  function loop(ts) {
+    if (!playing) return; const dt = Math.min(0.05, (ts - last) / 1000); last = ts; acc += dt;
+    while (acc >= H) { step(); acc -= H; } show(false); requestAnimationFrame(loop);
+  }
+  const pb = document.getElementById('aPlay');
+  pb.onclick = () => { playing = !playing; pb.textContent = playing ? '⏸ Pause' : '▶ Play'; if (playing) { last = performance.now(); requestAnimationFrame(loop); } };
+  document.getElementById('aStep').onclick = () => { step(); show(true); };
+  document.getElementById('aReset').onclick = () => { Object.assign(st, { q: 0.7, v: 0, t: 0, n: 0 }); show(true); };
+  addEventListener('resize', () => { g = fit(cv, 0.95); show(); }); addEventListener('themechange', () => show());
+  show();
+})();
+
+/* ---------- Section 3: x-ray toggles ---------- */
+(() => {
+  const cv = document.getElementById('cvX'); let g = fit(cv, 0.5), th = 0.35, anim = 0;
+  const box = id => document.getElementById(id).checked;
+  function draw() { drawPend(g.ctx, g.w, g.h, { th, geom: box('xGeom'), body: box('xBody'), joint: box('xJoint'), scale: g.h / 1.5 }); }
+  ['xGeom', 'xBody', 'xJoint'].forEach(i => document.getElementById(i).onchange = draw);
+  document.getElementById('xWiggle').onclick = () => {
+    cancelAnimationFrame(anim); const t0 = performance.now();
+    const f = ts => { const t = (ts - t0) / 1000; th = 0.35 + 0.6 * Math.sin(t * 4) * Math.exp(-t * 0.6); draw(); if (t < 4 && !RM) anim = requestAnimationFrame(f); };
+    anim = requestAnimationFrame(f);
+  };
+  addEventListener('resize', () => { g = fit(cv, 0.5); draw(); }); addEventListener('themechange', draw);
+  draw();
+})();
+
+/* ---------- Section 4: builder ---------- */
+(() => {
+  const L = {
+    open: '<span class="t">&lt;mujoco&gt;</span>', wb: '  <span class="t">&lt;worldbody&gt;</span>',
+    pend: '    <span class="t">&lt;body</span> <span class="a">name</span>=<span class="s">"pendulum"</span> <span class="a">pos</span>=<span class="s">"0 0 1"</span><span class="t">&gt;</span>',
+    joint: '      <span class="t">&lt;joint</span> <span class="a">name</span>=<span class="s">"hinge"</span> <span class="a">type</span>=<span class="s">"hinge"</span> <span class="a">axis</span>=<span class="s">"0 1 0"</span><span class="t">/&gt;</span>',
+    rod: '      <span class="t">&lt;geom</span> <span class="a">name</span>=<span class="s">"rod"</span> <span class="a">type</span>=<span class="s">"capsule"</span> <span class="a">fromto</span>=<span class="s">"0 0 0 0 0 -1"</span> <span class="a">size</span>=<span class="s">"0.05"</span><span class="t">/&gt;</span>',
+    bob: '      <span class="t">&lt;body</span> <span class="a">name</span>=<span class="s">"bob"</span> <span class="a">pos</span>=<span class="s">"0 0 -1"</span><span class="t">&gt;</span>',
+    wt: '        <span class="t">&lt;geom</span> <span class="a">name</span>=<span class="s">"weight"</span> <span class="a">type</span>=<span class="s">"sphere"</span> <span class="a">size</span>=<span class="s">"0.12"</span><span class="t">/&gt;</span>',
+    bobEnd: '      <span class="t">&lt;/body&gt;</span>', pendEnd: '    <span class="t">&lt;/body&gt;</span>', wbEnd: '  <span class="t">&lt;/worldbody&gt;</span>', close: '<span class="t">&lt;/mujoco&gt;</span>'
+  };
+  const steps = [
+    { lines: ['open', 'wb', 'wbEnd', 'close'], hl: [], c: [1, 0, 0, 0, 0], d: { pend: false },
+      tree: 'world  (body 0)',
+      q: 'The worldbody is empty. How many bodies does MuJoCo count?', opts: ['0', '1'], ans: '1',
+      why: 'MuJoCo always creates the fixed "world" body. It is body number 0, the ground everything hangs from.' },
+    { lines: ['open', 'wb', 'pend', 'pendEnd', 'wbEnd', 'close'], hl: ['pend'], c: [2, 0, 0, 0, 0], d: { rod: false, bob: false, joint: false, bobBody: false },
+      tree: 'world\n└── pendulum  (body 1, 1 m up)',
+      q: 'You add <body name="pendulum">. Which count changes?', opts: ['nbody', 'njnt', 'ngeom', 'nq'], ans: 'nbody',
+      why: 'A new body. Notice it is invisible — just a frame floating 1 m above the world origin.' },
+    { lines: ['open', 'wb', 'pend', 'joint', 'pendEnd', 'wbEnd', 'close'], hl: ['joint'], c: [2, 1, 0, 1, 1], d: { rod: false, bob: false, bobBody: false },
+      tree: 'world\n└── pendulum\n    └─ hinge  (joint 0 → qpos[0])',
+      q: 'You add a hinge joint. Which counts change?', opts: ['nbody', 'njnt only', 'njnt, nq and nv', 'ngeom'], ans: 'njnt, nq and nv',
+      why: 'A hinge adds one way to move. MuJoCo needs one number for the angle (nq = 1) and one for the spin speed (nv = 1).' },
+    { lines: ['open', 'wb', 'pend', 'joint', 'rod', 'pendEnd', 'wbEnd', 'close'], hl: ['rod'], c: [2, 1, 1, 1, 1], d: { bob: false, bobBody: false },
+      tree: 'world\n└── pendulum\n    ├─ hinge\n    └─ rod  (geom 0, capsule)',
+      q: 'You add the rod shape. Which count changes?', opts: ['nbody', 'njnt', 'ngeom', 'nq'], ans: 'ngeom',
+      why: 'A shape is a geom. Now there is something to see, and the pendulum body has mass (8.38 kg).' },
+    { lines: ['open', 'wb', 'pend', 'joint', 'rod', 'bob', 'bobEnd', 'pendEnd', 'wbEnd', 'close'], hl: ['bob', 'bobEnd'], c: [3, 1, 1, 1, 1], d: { bob: false },
+      tree: 'world\n└── pendulum\n    ├─ hinge\n    ├─ rod\n    └── bob  (body 2, child of pendulum)',
+      q: 'You add <body name="bob">. Which count changes?', opts: ['nbody', 'njnt', 'ngeom', 'nq'], ans: 'nbody',
+      why: 'It is a body, not a shape — still invisible. It has no joint, so it is glued to the pendulum body. nq does not change.' },
+    { lines: ['open', 'wb', 'pend', 'joint', 'rod', 'bob', 'wt', 'bobEnd', 'pendEnd', 'wbEnd', 'close'], hl: ['wt'], c: [3, 1, 2, 1, 1], d: {},
+      tree: 'world\n└── pendulum\n    ├─ hinge\n    ├─ rod\n    └── bob\n        └─ weight  (geom 1, sphere)',
+      q: 'Last line: the weight sphere. Which count changes?', opts: ['nbody', 'njnt', 'ngeom', 'nq'], ans: 'ngeom',
+      why: 'Done! 3 bodies, 1 joint, 2 geoms, nq = 1, nv = 1 — exactly what your script printed. Now try "Swing it".' }
+  ];
+  const keys = ['nbody', 'njnt', 'ngeom', 'nq', 'nv'];
+  const cv = document.getElementById('cvB'); let g = fit(cv, 0.75), i = 0, applied = -1, th = 0, anim = 0;
+  const xml = document.getElementById('bXml'), tree = document.getElementById('bTree'), Q = document.getElementById('bQ'),
+    opts = document.getElementById('bOpts'), fb = document.getElementById('bFeedback'), next = document.getElementById('bNext'), swing = document.getElementById('bSwing');
+  function render(k) {
+    const s = steps[k];
+    xml.innerHTML = '<code>' + s.lines.map(n => s.hl.includes(n) ? '<span class="hl">' + L[n] + '</span>' : L[n]).join('\n') + '</code>';
+    tree.textContent = s.tree;
+    keys.forEach((key, j) => { const e = document.getElementById('c-' + key), v = e.querySelector('.val'); if (v.textContent != s.c[j]) { v.textContent = s.c[j]; flash(e); } });
+    draw();
+  }
+  function draw() { const s = steps[Math.max(applied, 0)]; drawPend(g.ctx, g.w, g.h, Object.assign({ th, scale: g.h / 1.5 }, s.d)); }
+  function ask(k) {
+    const s = steps[k]; Q.textContent = (k === 0 ? 'Start: ' : 'Step ' + k + ': ') + s.q; fb.textContent = ''; opts.innerHTML = ''; next.disabled = true;
+    s.opts.forEach(o => {
+      const b = document.createElement('button'); b.type = 'button'; b.textContent = o;
+      b.onclick = () => {
+        const ok = o === s.ans; fb.innerHTML = (ok ? '✅ <strong>Yes.</strong> ' : '❌ <strong>Not quite — it\'s ' + s.ans + '.</strong> ') + s.why;
+        opts.querySelectorAll('button').forEach(x => { x.disabled = true; if (x.textContent === s.ans) x.style.borderColor = 'var(--teal)'; });
+        applied = k; render(k);
+        next.disabled = k === steps.length - 1; swing.hidden = k !== steps.length - 1;
+      };
+      opts.appendChild(b);
+    });
+  }
+  next.onclick = () => { i++; ask(i); };
+  document.getElementById('bRestart').onclick = () => { i = 0; applied = -1; th = 0; swing.hidden = true; xml.innerHTML = '<code>' + steps[0].lines.map(n => L[n]).join('\n') + '</code>'; tree.textContent = '(answer the question to begin)'; keys.forEach((k, j) => document.querySelector('#c-' + k + ' .val').textContent = [0, 0, 0, 0, 0][j]); drawPend(g.ctx, g.w, g.h, { pend: false, scale: g.h / 1.5 }); ask(0); };
+  swing.onclick = () => {
+    cancelAnimationFrame(anim); let q = 0.9, v = 0, lt = performance.now(), t = 0;
+    const f = ts => { const dt = Math.min(.05, (ts - lt) / 1000); lt = ts; t += dt; for (let n = 0; n < dt / H; n++) { v += H * -K1 * Math.sin(q); q += H * v; } th = q; draw(); fb.innerHTML = 'qpos[0] = <code>' + q.toFixed(3) + ' rad</code> is changing (data). The five counts above are not (model).'; if (t < 6 && !RM) anim = requestAnimationFrame(f); };
+    anim = requestAnimationFrame(f);
+  };
+  addEventListener('resize', () => { g = fit(cv, 0.75); draw(); }); addEventListener('themechange', draw);
+  document.getElementById('bRestart').click();
+})();
+
+/* ---------- Section 5: experiments ---------- */
+(() => {
+  const cv = document.getElementById('cvE'); let g = fit(cv, 1.05);
+  const $ = id => document.getElementById(id), D = { ePz: 1, eL: 1, eBz: -1, eTh: 0 };
+  const v = id => parseFloat($(id).value);
+  const mark = (val, def, txt) => Math.abs(val - def) > 1e-9 ? '<span class="n" style="color:var(--orange);font-weight:700">' + txt + '</span>' : '<span class="s">' + txt + '</span>';
+  function upd() {
+    const pz = v('ePz'), L = v('eL'), bz = v('eBz'), th = v('eTh');
+    $('oPz').textContent = pz.toFixed(2) + ' m'; $('oL').textContent = L.toFixed(2) + ' m'; $('oBz').textContent = bz.toFixed(2) + ' m'; $('oTh').textContent = th.toFixed(2) + ' rad';
+    const [bx, bzz] = rotY(0, bz, th);
+    $('rBx').textContent = fmt(bx, 2); $('rBz').textContent = fmt(pz + bzz, 2);
+    drawPend(g.ctx, g.w, g.h, { pz, L, bz, th, scale: (g.h - 16) / 4.2, zmin: -1.55, ghost: true });
+    const q = s => '<span class="s">"</span>' + s + '<span class="s">"</span>';
+    $('eXml').innerHTML = '<code>' +
+      '<span class="t">&lt;body</span> <span class="a">name</span>=<span class="s">"pendulum"</span> <span class="a">pos</span>=' + q('0 0 ' + mark(pz, 1, pz.toFixed(2))) + '<span class="t">&gt;</span>\n' +
+      '  <span class="t">&lt;joint</span> <span class="a">type</span>=<span class="s">"hinge"</span> <span class="a">axis</span>=<span class="s">"0 1 0"</span><span class="t">/&gt;</span>   <span class="c">&lt;!-- data.qpos[0] = ' + th.toFixed(2) + ' rad --&gt;</span>\n' +
+      '  <span class="t">&lt;geom</span> <span class="a">name</span>=<span class="s">"rod"</span> <span class="a">fromto</span>=' + q('0 0 0 0 0 ' + mark(L, 1, (-L).toFixed(2))) + ' <span class="a">size</span>=<span class="s">"0.05"</span><span class="t">/&gt;</span>\n' +
+      '  <span class="t">&lt;body</span> <span class="a">name</span>=<span class="s">"bob"</span> <span class="a">pos</span>=' + q('0 0 ' + mark(bz, -1, bz.toFixed(2))) + '<span class="t">&gt;</span>\n' +
+      '    <span class="t">&lt;geom</span> <span class="a">name</span>=<span class="s">"weight"</span> <span class="a">type</span>=<span class="s">"sphere"</span> <span class="a">size</span>=<span class="s">"0.12"</span><span class="t">/&gt;</span>\n' +
+      '  <span class="t">&lt;/body&gt;</span>\n<span class="t">&lt;/body&gt;</span></code>';
+  }
+  Object.keys(D).forEach(k => $(k).addEventListener('input', upd));
+  $('eReset').onclick = () => { Object.entries(D).forEach(([k, val]) => $(k).value = val); upd(); };
+  addEventListener('resize', () => { g = fit(cv, 1.05); upd(); }); addEventListener('themechange', upd);
+  upd();
+})();
+
+</script>
+</body>
+</html>

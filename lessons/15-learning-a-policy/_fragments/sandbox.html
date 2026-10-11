@@ -1,0 +1,66 @@
+<div class="sandbox-container" id="sandbox15">
+  <div class="sandbox-header">
+    <span class="sandbox-dot"></span>
+    <span>Training Sandbox</span>
+  </div>
+  <div class="sandbox-viz">
+    <svg viewBox="0 0 400 450" role="img" aria-labelledby="s15Title s15Desc">
+      <title id="s15Title">SAC learning curve and recorded pendulum replays</title>
+      <desc id="s15Desc">Top: the learning curve for the chosen reward, mean return over seeds 0 to 4 against env steps, with the PD plus gravity and random players as dashed reference lines. Bottom: the course pendulum replaying the seed 0 episode recorded from MuJoCo at the chosen checkpoint. The orange arrow is the motor torque; the dashed yellow line is the 1.0 rad target.</desc>
+      <defs>
+        <marker id="s15ArrowO" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="var(--orange)"/></marker>
+      </defs>
+      <text id="s15ChartTitle" x="20" y="16" fill="var(--text-dim)" font-size="11" font-family="var(--mono)">return (mean of seeds 0-4) vs env steps</text>
+      <g id="s15Chart"></g>
+      <line class="axis-line" x1="230" y1="240" x2="230" y2="395"></line>
+      <line x1="230" y1="240" x2="95.4" y2="326.4" stroke="var(--yellow)" stroke-width="1.5" stroke-dasharray="6 5"></line>
+      <text x="40" y="345" fill="var(--yellow)" font-size="11" font-family="var(--mono)">target 1.0 rad</text>
+      <g id="s15Pend">
+        <circle class="pivot-dot" cx="0" cy="0" r="7"></circle>
+        <line class="rod-line" x1="0" y1="0" x2="0" y2="140"></line>
+        <line id="s15Torque" x1="0" y1="140" x2="0" y2="140" stroke="var(--orange)" stroke-width="3" marker-end="url(#s15ArrowO)" style="display:none"></line>
+      </g>
+      <text id="s15TimeText" x="20" y="410" fill="var(--teal)" font-size="12" font-family="var(--mono)">time: 0.00 s</text>
+      <text id="s15PolText" x="20" y="425" fill="var(--text-dim)" font-size="11" font-family="var(--mono)">lesson 9 reward, 20,000 steps</text>
+      <text x="20" y="440" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">seed 0 replay; rod 1 m = 140 px; +angle swings left</text>
+    </svg>
+  </div>
+  <div class="sandbox-controls">
+    <div class="control-group">
+      <label>Reward the policy was trained on</label>
+      <div class="btn-row">
+        <button class="btn btn-sm btn-primary" type="button" data-s15var="base">lesson 9</button>
+        <button class="btn btn-sm" type="button" data-s15var="no_act">no action term</button>
+        <button class="btn btn-sm" type="button" data-s15var="big_act">action x100</button>
+        <button class="btn btn-sm" type="button" data-s15var="sparse">sparse</button>
+        <button class="btn btn-sm" type="button" data-s15var="approach">approach (loophole)</button>
+        <button class="btn btn-sm" type="button" data-s15var="signed">signed (fix)</button>
+      </div>
+    </div>
+    <div class="control-group">
+      <label>Checkpoint (env steps of training)</label>
+      <div class="btn-row">
+        <button class="btn btn-sm" type="button" data-s15ck="0">0</button>
+        <button class="btn btn-sm" type="button" data-s15ck="1">1k</button>
+        <button class="btn btn-sm" type="button" data-s15ck="2">2k</button>
+        <button class="btn btn-sm" type="button" data-s15ck="3">5k</button>
+        <button class="btn btn-sm" type="button" data-s15ck="4">10k</button>
+        <button class="btn btn-sm btn-primary" type="button" data-s15ck="5">20k</button>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary btn-sm" type="button" id="s15Play">Replay 5 s</button>
+      <button class="btn btn-sm" type="button" id="s15End">Jump to end</button>
+    </div>
+    <div class="readout" id="s15Readout">
+      <span class="rk">trained for:</span> <span class="rv" id="s15Steps">20000</span> <span class="rk">env steps</span><br>
+      <span class="rk">return, its own reward:</span> <span class="rv" id="s15Ret">-</span><br>
+      <span class="rk">return, lesson 9 reward:</span> <span class="rv" id="s15Base">-</span><br>
+      <span class="rk">mean |action|:</span> <span class="rv-o" id="s15Act">-</span> <span class="rk">(1 = 100 N*m)</span><br>
+      <span class="rk">final angle error:</span> <span class="rv" id="s15Err">-</span> <span class="rk">rad</span><br>
+      <span class="rk">swings through target band:</span> <span class="rv" id="s15Pass">-</span><br>
+      <span class="rk">replay qpos[0], ctrl:</span> <span class="rv" id="s15Q">-</span>
+    </div>
+    <p class="sidebar-hint" style="margin-top:10px;">This sandbox replays rollouts recorded from MuJoCo by 15_train.py (no physics runs in the page). Summary numbers are means over seeds 0 to 4; the replay is seed 0, kept every 0.04 s.</p>
+  </div>
+</div>

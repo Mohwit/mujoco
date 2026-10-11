@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MuJoCo Frames and Axes Explorer</title>
+  <style>
+    :root { color-scheme: light; font-family: system-ui, sans-serif; color: #172033; background: #f8fafc; }
+    body { max-width: 1050px; margin: 0 auto; padding: 2rem; }
+    h1 { margin: 0 0 .4rem; } h2 { margin-top: 0; }
+    .intro { color: #475569; max-width: 70ch; }
+    .layout { display: grid; grid-template-columns: minmax(220px, .75fr) minmax(360px, 1.25fr); gap: 1rem; }
+    .card { background: white; border: 1px solid #dbe3ef; border-radius: 14px; padding: 1.25rem; box-shadow: 0 4px 18px #17203312; }
+    label { display: grid; grid-template-columns: 7rem minmax(0, 1fr) 4.5rem; gap: .7rem; align-items: center; margin: 1.1rem 0; color: #334155; }
+    label span { font-size: .9rem; } input { width: 100%; accent-color: #087f72; } output { text-align: right; color: #087f72; font-weight: 700; font-variant-numeric: tabular-nums; }
+    button { border: 1px solid #087f72; border-radius: 8px; background: #087f72; color: white; padding: .65rem .9rem; cursor: pointer; font-weight: 700; }
+    svg { display: block; width: 100%; background: #f8fafc; border-radius: 10px; border: 1px solid #dbe3ef; }
+    .world-axis { stroke: #94a3b8; stroke-dasharray: 5 5; } .local-axis { stroke: #ef4444; stroke-width: 3; } .base { fill: #dbeafe; stroke: #2563eb; stroke-width: 2; } .link { stroke: #087f72; stroke-width: 12; stroke-linecap: round; } .joint { fill: #172033; } .bob { fill: #f59e0b; stroke: #92400e; stroke-width: 2; }
+    .legend { display: flex; flex-wrap: wrap; gap: .8rem 1.2rem; color: #475569; font-size: .85rem; margin-top: .8rem; } .legend span::before { content: ''; display: inline-block; width: 1.2rem; border-top: 3px solid currentColor; margin: 0 .35rem .2rem 0; } .legend .world::before { border-top-style: dashed; }
+    code { background: #eef2ff; padding: .1rem .3rem; border-radius: 4px; }
+    @media (max-width: 700px) { body { padding: 1rem; } .layout { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <h1>Frames and joint axes</h1>
+  <p class="intro">Move the body frame and joint angle. The red dashed line is the world z axis. The red arrow is the link body's local axis.</p>
+  <div class="layout">
+    <section class="card">
+      <h2>Parameters</h2>
+      <label for="baseHeight"><span>Base height</span><input id="baseHeight" type="range" min="0.5" max="2.5" step="0.1" value="1"><output id="baseHeightValue">1.0</output></label>
+      <label for="linkOffset"><span>Link offset</span><input id="linkOffset" type="range" min="0.2" max="1.2" step="0.1" value="0.6"><output id="linkOffsetValue">0.6</output></label>
+      <label for="angle"><span>Hinge angle</span><input id="angle" type="range" min="-1.2" max="1.2" step="0.05" value="0"><output id="angleValue">0.00 rad</output></label>
+      <button id="reset" type="button">Reset values</button>
+      <p><code>pos</code> values are local to the parent frame. MuJoCo computes world positions after combining the hierarchy.</p>
+    </section>
+    <section class="card">
+      <h2>Interactive view</h2>
+      <svg viewBox="0 0 560 560" role="img" aria-labelledby="title desc">
+        <title id="title">Nested body frames</title>
+        <desc id="desc">A base body contains a link body. Sliders change the base height, link offset, and hinge angle.</desc>
+        <line class="world-axis" x1="280" y1="25" x2="280" y2="530"></line>
+        <g id="scene" transform="translate(280 350)"><rect class="base" x="-38" y="-10" width="76" height="20" rx="4"></rect><circle class="joint" cx="0" cy="0" r="9"></circle><line id="link" class="link" x1="0" y1="0" x2="0" y2="-180"></line><circle id="bob" class="bob" cx="0" cy="-200" r="21"></circle><line id="localAxis" class="local-axis" x1="0" y1="-18" x2="0" y2="-72"></line></g>
+        <text x="280" y="548" text-anchor="middle" fill="#475569">world z axis</text>
+      </svg>
+      <div class="legend"><span class="world">world frame</span><span style="color:#ef4444">local link axis</span><span style="color:#087f72">link geom</span></div>
+    </section>
+  </div>
+  <script>
+    const defaults = { baseHeight: 1, linkOffset: .6, angle: 0 };
+    const $ = id => document.getElementById(id);
+    function update() {
+      const baseHeight = Number($('baseHeight').value), linkOffset = Number($('linkOffset').value), angle = Number($('angle').value);
+      $('baseHeightValue').value = baseHeight.toFixed(1); $('linkOffsetValue').value = linkOffset.toFixed(1); $('angleValue').value = `${angle.toFixed(2)} rad`;
+      const originY = 380 - baseHeight * 90 - linkOffset * 45, length = 150;
+      $('scene').setAttribute('transform', `translate(280 ${originY}) rotate(${angle * 180 / Math.PI})`);
+      $('link').setAttribute('y2', -length); $('bob').setAttribute('cy', -length - 20); $('localAxis').setAttribute('y2', -72);
+      $('desc').textContent = `Base height ${baseHeight.toFixed(1)}, link offset ${linkOffset.toFixed(1)}, and hinge angle ${angle.toFixed(2)} radians.`;
+    }
+    ['baseHeight', 'linkOffset', 'angle'].forEach(id => $(id).addEventListener('input', update));
+    $('reset').addEventListener('click', () => { Object.entries(defaults).forEach(([id, value]) => $(id).value = value); update(); });
+    update();
+  </script>
+</body>
+</html>

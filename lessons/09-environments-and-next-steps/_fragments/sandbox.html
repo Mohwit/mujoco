@@ -1,0 +1,62 @@
+<div class="sandbox-container" id="sandbox9">
+  <div class="sandbox-header">
+    <span class="sandbox-dot"></span>
+    <span>Episode Sandbox</span>
+  </div>
+  <div class="sandbox-viz">
+    <svg viewBox="0 0 400 450" role="img" aria-labelledby="s9Title s9Desc">
+      <title id="s9Title">Pendulum environment episode player</title>
+      <desc id="s9Desc">The course pendulum inside PendulumHoldEnv. Pick a player and a seed, reset, then step or run a 250-step episode. The orange arrow shows the motor torque; the dashed yellow line is the 1.0 rad target.</desc>
+      <defs>
+        <marker id="s9ArrowO" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="var(--orange)"/></marker>
+      </defs>
+      <line class="axis-line" x1="200" y1="20" x2="200" y2="430"></line>
+      <line x1="200" y1="120" x2="48.5" y2="217.3" stroke="var(--yellow)" stroke-width="1.5" stroke-dasharray="6 5"></line>
+      <text x="20" y="240" fill="var(--yellow)" font-size="11" font-family="var(--mono)">target 1.0 rad</text>
+      <g id="s9Pend">
+        <circle class="pivot-dot" cx="0" cy="0" r="7"></circle>
+        <line class="rod-line" x1="0" y1="0" x2="0" y2="160"></line>
+        <line id="s9Torque" x1="0" y1="160" x2="0" y2="160" stroke="var(--orange)" stroke-width="3" marker-end="url(#s9ArrowO)" style="display:none"></line>
+      </g>
+      <text id="s9TimeText" x="20" y="30" fill="var(--teal)" font-size="12" font-family="var(--mono)">time: 0.000 s</text>
+      <text id="s9StepText" x="20" y="46" fill="var(--text-dim)" font-size="11" font-family="var(--mono)">env step: 0 / 250</text>
+      <text id="s9PolText" x="20" y="62" fill="var(--text-dim)" font-size="11" font-family="var(--mono)">policy: PD + gravity, seed 0</text>
+      <text x="20" y="440" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">rod 1 m drawn as 160 px; +angle swings the tip left (-x)</text>
+    </svg>
+  </div>
+  <div class="sandbox-controls">
+    <div class="control-group">
+      <label>Player (policy)</label>
+      <div class="btn-row">
+        <button class="btn btn-sm" type="button" data-s9pol="zero">zero</button>
+        <button class="btn btn-sm" type="button" data-s9pol="random">random</button>
+        <button class="btn btn-sm" type="button" data-s9pol="pd">PD</button>
+        <button class="btn btn-sm btn-primary" type="button" data-s9pol="pdg">PD + gravity</button>
+      </div>
+    </div>
+    <div class="control-group">
+      <label>Seed (start angle recorded from the script)</label>
+      <div class="btn-row">
+        <button class="btn btn-sm btn-primary" type="button" data-s9seed="0">0</button>
+        <button class="btn btn-sm" type="button" data-s9seed="1">1</button>
+        <button class="btn btn-sm" type="button" data-s9seed="2">2</button>
+        <button class="btn btn-sm" type="button" data-s9seed="3">3</button>
+        <button class="btn btn-sm" type="button" data-s9seed="4">4</button>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-sm" type="button" id="s9Reset">Reset</button>
+      <button class="btn btn-primary btn-sm" type="button" id="s9Step">Step</button>
+      <button class="btn btn-sm" type="button" id="s9Run">Run episode</button>
+    </div>
+    <div class="readout" id="s9Readout">
+      <span class="rk">env step:</span> <span class="rv" id="s9Steps">0</span> <span class="rk">of 250 (x10 physics ticks)</span><br>
+      <span class="rk">data.time:</span> <span class="rv" id="s9Time">0.000</span> <span class="rk">s</span><br>
+      <span class="rk">obs [cos q, sin q, qvel]:</span> <span class="rv" id="s9Obs">-</span><br>
+      <span class="rk">action ctrl[0]:</span> <span class="rv-o" id="s9Act">0</span> <span class="rk">= torque</span> <span class="rv-o" id="s9Tau">0</span> <span class="rk">N*m</span><br>
+      <span class="rk">reward:</span> <span class="rv" id="s9Rew">0</span> <span class="rk">return:</span> <span class="rv" id="s9Ret">0</span><br>
+      <span class="rk">terminated / truncated:</span> <span class="rv" id="s9Done">false / false</span>
+    </div>
+    <p class="sidebar-hint" style="margin-top:10px;">Zero, PD and PD + gravity reproduce MuJoCo to better than 4 decimals (checked by 09_check_browser_physics.py). The random player uses this page's own seeded random numbers, not numpy's, so its returns differ from the script.</p>
+  </div>
+</div>

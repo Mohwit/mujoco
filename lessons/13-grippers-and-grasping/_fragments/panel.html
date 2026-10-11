@@ -1,0 +1,449 @@
+<div class="lesson-content xp" id="lesson13">
+  <header class="lesson-header-block">
+    <p class="lesson-num-label">Lesson 13</p>
+    <h1 class="lesson-title">Grippers and Grasping</h1>
+    <p class="lesson-subtitle">Build a two-finger gripper, close it on a box and lift. You will see that the box is held up by grip along the finger faces, not by the squeeze itself. Then you will predict how hard to squeeze, and test the prediction against MuJoCo.</p>
+    <p class="lesson-legend"><dfn class="term" tabindex="0" data-def="Technical words look like this. Hover or focus one to read a plain-English definition.">Dotted words</dfn> show a definition on hover. <span class="lg-math">Maths boxes</span> are optional. <span class="lg-pred">Predict boxes</span> hide the answer until you guess.</p>
+  </header>
+  <nav class="lesson-toc" aria-label="Sections in lesson 13"><a href="#l13-s-idea">Two fingers</a><a href="#l13-s-model">The model</a><a href="#l13-s-couple">Coupling</a><a href="#l13-s-squeeze">The squeeze</a><a href="#l13-s-slip">Hold or slip</a><a href="#l13-s-touch">Feel vs touch</a><a href="#l13-s-code">The script</a><a href="#l13-s-check">Check yourself</a><a href="#l13-recap">Recap</a></nav>
+
+<section class="step" id="l13-s-idea">
+  <span class="lvl lvl-plain">Plain words</span> <span class="lvl lvl-pic">Picture</span>
+  <h2>1. Friction holds the glass up, not the squeeze</h2>
+  <p>Pick up a glass with your thumb and one finger. You squeeze it from the sides. But the glass is heavy downwards, and your squeeze points sideways.</p>
+  <p>So what stops it falling? The grip along your skin. That grip is <strong>friction</strong>, the same sideways grip as lesson 7.</p>
+  <p>Friction has a limit, and the limit grows with the squeeze. Squeeze harder and the grip limit rises. Wet hands lower the limit, so you squeeze harder.</p>
+  <div class="card analogy"><strong>Analogy: a wet glass.</strong> With dry fingers a gentle pinch is enough. With soapy fingers the same pinch lets the glass slide out. You did not get weaker. The grip number got smaller, so you need more squeeze for the same weight.</div>
+  <div class="grid3">
+    <div class="card"><span class="callout-title" style="color:var(--orange)">Weight pulls down</span>The box weighs m g newtons, straight down. For the 0.25 kg box: 0.25 × 9.81 = 2.4525 N.</div>
+    <div class="card"><span class="callout-title" style="color:var(--blue)">Each finger squeezes N</span>The <dfn class="term" tabindex="0" data-def="The push of a surface straight out of itself, perpendicular to the surface, in newtons. Here: how hard one finger squeezes the box.">normal force</dfn> N points sideways into the box. Left and right squeezes cancel, so they never lift anything.</div>
+    <div class="card"><span class="callout-title" style="color:var(--teal)">Two frictions push up</span>Each finger face can grip upwards with at most μ × N. Two fingers give at most 2 μ N. That must cover m g.</div>
+  </div>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">The holding rule</span>The box stays in the fingers if <strong>2 μ N ≥ m g</strong>. N is the squeeze of <em>one</em> finger. μ is the grip number of the finger-box contact.</div>
+  <div class="predict">
+    <h3>Predict: the 0.25 kg box, grip number μ = 2.0. What is the smallest squeeze per finger that holds it?</h3>
+    <textarea aria-label="Your prediction for the smallest squeeze"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p><strong>About 0.613 N per finger.</strong> Solve 2 μ N = m g for N: N = m g / (2 μ) = 2.4525 / 4.0 = 0.6131 N. That is about the weight of a 62.5 g egg. A grippy surface needs only a gentle squeeze.</p>
+      <p>Section 5 tests this in MuJoCo. A measured squeeze of 0.5850 N drops the box, 0.6742 N holds it.</p>
+    </div>
+  </div>
+  <h3>Try it: the free-body diagram</h3>
+  <p>Change one slider at a time. Watch the two teal arrows: they are the grip each finger must give. The dashed outline is the most each finger <em>could</em> give.</p>
+  <div class="card">
+    <canvas id="l13cvA" role="img" aria-label="Front view of a box between two fingers with weight, squeeze and friction arrows"></canvas>
+    <div class="grid3">
+      <label class="slider"><span>Squeeze per finger N</span> <output id="l13aNo">1.00 N</output><input type="range" id="l13aN" min="0" max="8" step="0.05" value="1"></label>
+      <label class="slider"><span>Box mass m</span> <output id="l13aMo">0.25 kg</output><input type="range" id="l13aM" min="0.1" max="1" step="0.05" value="0.25"></label>
+      <label class="slider"><span>Grip number μ</span> <output id="l13aUo">2.00</output><input type="range" id="l13aU" min="0.2" max="2" step="0.1" value="2"></label>
+    </div>
+    <div class="readouts">
+      <div class="ro" id="l13aW"><span class="lab">weight m g</span><span class="val">2.4525</span> <span class="unit">N</span></div>
+      <div class="ro" id="l13aF"><span class="lab">grip needed per finger</span><span class="val">1.2263</span> <span class="unit">N</span></div>
+      <div class="ro" id="l13aL"><span class="lab">grip limit per finger μ N</span><span class="val">2.0000</span> <span class="unit">N</span></div>
+      <div class="ro" id="l13aV"><span class="lab">the rule says</span><span class="val">holds</span></div>
+    </div>
+    <p class="caption">Front view, looking from +x: world y to the right, z up. Orange = weight, blue = squeeze N, teal = grip each finger must give, dashed = the grip limit μ N. Red = the part of the weight the grip cannot carry. This picture uses the textbook rule only, no simulation.</p>
+  </div>
+  <p class="newwords">New words: <span class="chip">normal force</span><span class="chip">grip limit μ N</span><span class="chip">holding rule</span></p>
+</section>
+
+<section class="step" id="l13-s-model">
+  <span class="lvl lvl-words">MuJoCo words</span>
+  <h2>2. The gripper model, borrowed from the warehouse robot</h2>
+  <p>Capstone 2 has a robot with a two-finger hand. This lesson cuts that hand off and puts it on a simple lift. Everything marked "warehouse" below comes from <code>warehouse_robot.xml</code>.</p>
+  <div class="card">
+    <canvas id="l13cvB" role="img" aria-label="Labelled front view of the gripper model: palm on a lift joint, two sliding fingers with touch sites, and a box on the floor"></canvas>
+    <p class="caption">Front view, looking from +x: world y to the right, z up. Drawn to scale from the XML: the box is a 7 cm cube, each finger is 1 cm thick and 7 cm tall. Orange outlines are the touch sites. The fingers are open 0.040 m each, the start keyframe.</p>
+  </div>
+  <table>
+    <thead><tr><th>Part</th><th>What it is</th><th>Value and where it comes from</th></tr></thead>
+    <tbody>
+      <tr><td><code>hand</code> + joint <code>lift</code></td><td>A palm on a <dfn class="term" tabindex="0" data-def="A joint that lets a body move along one straight line (one number in qpos, in metres).">slide joint</dfn> pointing straight up</td><td>Palm 0.5 kg, never collides. Lift actuator kp 3000 N/m (this lesson)</td></tr>
+      <tr><td><code>grip_L</code>, <code>grip_R</code></td><td>Two slide joints, one per finger. 0 = closed, 0.05 = wide open</td><td>Range 0 to 0.05 m, damping 10 (warehouse)</td></tr>
+      <tr><td>class <code>finger</code></td><td>Very grippy finger pads</td><td>friction 2.0 0.05 0.01, condim 4 (warehouse)</td></tr>
+      <tr><td>class <code>object</code>, <code>box</code></td><td>The box, on a <code>freejoint</code></td><td>7 cm cube, 0.25 kg, friction 0.6 0.01 0.001, condim 3 (warehouse)</td></tr>
+      <tr><td><dfn class="term" tabindex="0" data-def="A MuJoCo element that computes a 'length' from joints. A fixed tendon is a weighted sum of joint positions: length = sum of coef x qpos.">fixed tendon</dfn> + <dfn class="term" tabindex="0" data-def="A rule MuJoCo enforces with forces, for example 'these two joints must stay equal'. Like contacts, it is slightly soft.">equality</dfn></td><td>Ties the two fingers together (section 3)</td><td>Same XML as the warehouse</td></tr>
+      <tr><td><code>gripper_pos</code></td><td>One <code>position</code> actuator, on <code>grip_L</code> only</td><td>kp 600 N/m, ctrlrange 0 to 0.05 m (warehouse)</td></tr>
+      <tr><td><code>touch_L</code>, <code>touch_R</code></td><td><dfn class="term" tabindex="0" data-def="A sensor that adds up the normal forces of all contacts whose contact point lies inside its site volume. One number, in newtons.">touch sensors</dfn> on thin box sites covering each inner face</td><td>Same site sizes as the warehouse</td></tr>
+      <tr><td><code>&lt;option&gt;</code></td><td>Implicit integrator, elliptic friction cone, <dfn class="term" tabindex="0" data-def="Ratio of how firmly friction is enforced compared with the normal push, for elliptic cones. Larger values reduce slow creeping slip. Default 1.">impratio</dfn> 10, timestep 0.002 s</td><td>Warehouse settings</td></tr>
+    </tbody>
+  </table>
+  <h3>XML next to the Python that reads it</h3>
+  <div class="grid2">
+<pre><code>&lt;<span class="t">body</span> <span class="a">name</span>=<span class="s">"finger_L"</span> <span class="a">pos</span>=<span class="s">"0 -0.01 -0.07"</span>
+      <span class="a">childclass</span>=<span class="s">"finger"</span>&gt;
+  &lt;<span class="t">joint</span> <span class="a">name</span>=<span class="s">"grip_L"</span> <span class="a">type</span>=<span class="s">"slide"</span>
+         <span class="a">axis</span>=<span class="s">"0 -1 0"</span> <span class="a">range</span>=<span class="s">"0 0.05"</span>/&gt;
+  &lt;<span class="t">geom</span> <span class="a">name</span>=<span class="s">"finger_L_geom"</span> <span class="a">type</span>=<span class="s">"box"</span>
+        <span class="a">size</span>=<span class="s">"0.008 0.005 0.035"</span> <span class="a">mass</span>=<span class="s">"0.05"</span>/&gt;
+  &lt;<span class="t">site</span> <span class="a">name</span>=<span class="s">"touch_L_site"</span> <span class="a">type</span>=<span class="s">"box"</span>
+        <span class="a">pos</span>=<span class="s">"0 0.005 0"</span> <span class="a">size</span>=<span class="s">"0.009 0.003 0.036"</span>/&gt;
+&lt;/<span class="t">body</span>&gt;
+<span class="c">&lt;!-- ... finger_R mirrors it ... --&gt;</span>
+&lt;<span class="t">position</span> <span class="a">name</span>=<span class="s">"gripper_pos"</span> <span class="a">joint</span>=<span class="s">"grip_L"</span>
+          <span class="a">kp</span>=<span class="s">"600"</span> <span class="a">ctrlrange</span>=<span class="s">"0 0.05"</span>/&gt;
+&lt;<span class="t">touch</span> <span class="a">name</span>=<span class="s">"touch_L"</span> <span class="a">site</span>=<span class="s">"touch_L_site"</span>/&gt;</code></pre>
+<pre><code>model.nq, model.nv   <span class="c"># 10, 9</span>
+model.jnt_qposadr    <span class="c"># lift 0, grip_L 1, grip_R 2, box_free 3</span>
+data.qpos[1]         <span class="c"># grip_L opening, m (joint frame)</span>
+data.qpos[2]         <span class="c"># grip_R opening, m</span>
+data.qpos[3:6]       <span class="c"># box position, m, world frame</span>
+model.actuator_gainprm[1, 0]   <span class="c"># 600  (kp)</span>
+model.actuator_biasprm[1, :3]  <span class="c"># [0, -600, 0]</span>
+data.ctrl[1]         <span class="c"># gripper target opening, m</span>
+data.actuator_force[1]  <span class="c"># kp (ctrl - qpos[1]), N</span>
+model.sensor_adr     <span class="c"># touch_L 0, touch_R 1</span>
+data.sensordata[0]   <span class="c"># touch_L, N</span>
+model.geom_friction[2]  <span class="c"># finger_L_geom: [2. 0.05 0.01]</span></code></pre>
+  </div>
+  <p>The joints are listed in XML order, so <code>lift</code> is joint 0 and owns <code>qpos[0]</code>. The box's free joint comes last and owns 7 numbers, <code>qpos[3:10]</code>: position then quaternion. That is why <code>nq = 10</code> but <code>nv = 9</code> (a free joint has 6 speeds). The gripper actuator is the second <code>&lt;position&gt;</code>, so it is actuator 1.</p>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">Model or data?</span>kp, friction, condim and the box mass live in the <strong>model</strong>. The finger openings, the target <code>ctrl</code>, the actuator force and the touch readings live in <strong>data</strong>. The script changes the box mass by editing <code>model.body_mass</code> between runs: that is a design change, like swapping the box.</div>
+  <p class="newwords">New words: <span class="chip">slide joint</span><span class="chip">fixed tendon</span><span class="chip">equality</span><span class="chip">touch sensor</span><span class="chip">impratio</span></p>
+</section>
+
+<section class="step" id="l13-s-couple">
+  <span class="lvl lvl-pic">Picture</span> <span class="lvl lvl-words">MuJoCo words</span>
+  <h2>3. One motor, two fingers: tie them together</h2>
+  <p>The gripper has two finger joints but only one actuator. Without help, only the left finger would move. We need the right finger to copy the left one.</p>
+  <div class="card analogy"><strong>Analogy: kitchen tongs.</strong> Squeeze one arm of a pair of tongs and the other arm closes too, because they are joined. In MuJoCo, the join is a rule: "the right opening must equal the left opening". MuJoCo enforces the rule with small forces every step.</div>
+  <p>The warehouse robot builds that rule in two parts.</p>
+  <div class="grid2">
+<pre><code>&lt;<span class="t">tendon</span>&gt;
+  &lt;<span class="t">fixed</span> <span class="a">name</span>=<span class="s">"gripper_couple"</span>&gt;
+    &lt;<span class="t">joint</span> <span class="a">joint</span>=<span class="s">"grip_L"</span> <span class="a">coef</span>=<span class="s">"1"</span>/&gt;
+    &lt;<span class="t">joint</span> <span class="a">joint</span>=<span class="s">"grip_R"</span> <span class="a">coef</span>=<span class="s">"-1"</span>/&gt;
+  &lt;/<span class="t">fixed</span>&gt;
+&lt;/<span class="t">tendon</span>&gt;
+&lt;<span class="t">equality</span>&gt;
+  &lt;<span class="t">tendon</span> <span class="a">tendon1</span>=<span class="s">"gripper_couple"</span>
+          <span class="a">polycoef</span>=<span class="s">"0 0 0 0 0"</span>/&gt;
+&lt;/<span class="t">equality</span>&gt;</code></pre>
+    <div>
+      <p><strong>The fixed tendon only measures.</strong> Its length is 1 × <code>grip_L</code> + (-1) × <code>grip_R</code>. MuJoCo stores it in <code>data.ten_length[0]</code>. A tendon on its own pushes nothing.</p>
+      <p><strong>The equality makes it a rule.</strong> <code>polycoef="0 0 0 0 0"</code> means "this length must be 0". So <code>grip_L - grip_R = 0</code>, and the fingers mirror each other.</p>
+      <p><strong>A shorter way, same result.</strong> A joint equality ties two joints directly: <code>&lt;joint joint1="grip_R" joint2="grip_L" polycoef="0 1 0 0 0"/&gt;</code> means grip_R = 0 + 1 × grip_L.</p>
+    </div>
+  </div>
+  <div class="predict">
+    <h3>Predict: remove the equality, keep the actuator on grip_L. Set the target to 0.020 m. Where are the two fingers after 0.5 s?</h3>
+    <textarea aria-label="Your prediction for the uncoupled gripper"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer"><p><strong>grip_L reaches 0.020000 m. grip_R stays at 0.040000 m.</strong> Nothing pushes the right finger, so it stays where it started. The tendon length becomes -2.00e-02 m: the "rule" is broken by 2 cm because there is no rule.</p></div>
+  </div>
+  <div class="card">
+    <div class="grid2">
+      <canvas id="l13cvC" role="img" aria-label="Front view of the empty gripper closing from 0.040 m to 0.020 m with three coupling choices"></canvas>
+      <div>
+        <div class="btnrow">
+          <button type="button" class="l13cv primary" data-k="0">tendon + equality</button>
+          <button type="button" class="l13cv" data-k="1">joint equality</button>
+          <button type="button" class="l13cv" data-k="2">no coupling</button>
+        </div>
+        <div class="btnrow">
+          <button type="button" class="l13ct primary" data-t="0">start</button>
+          <button type="button" class="l13ct" data-t="1">after 1 step</button>
+          <button type="button" class="l13ct" data-t="2">after 0.5 s</button>
+        </div>
+        <div class="readouts" style="grid-template-columns:1fr 1fr">
+          <div class="ro" id="l13cL"><span class="lab">qpos[1] grip_L</span><span class="val">0.040000</span> <span class="unit">m</span></div>
+          <div class="ro" id="l13cR"><span class="lab">qpos[2] grip_R</span><span class="val">0.040000</span> <span class="unit">m</span></div>
+          <div class="ro" id="l13cT"><span class="lab">ten_length[0]</span><span class="val">0</span> <span class="unit">m</span></div>
+          <div class="ro frozen"><span class="lab">ctrl[1] target</span><span class="val">0.020</span> <span class="unit">m</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="caption">The box is moved 0.5 m away so the fingers close on nothing. Numbers are from part B of <code>13_grippers_and_grasping.py</code>. Openings are in the joint frame: metres each finger has moved out from closed.</p>
+  </div>
+  <p>After a single step the coupled fingers already agree to 0.07 mm (0.039623 m and 0.039691 m, tendon length -6.86e-05 m). After 0.5 s they agree to better than 1 micrometre. The tendon form and the joint form give identical numbers here.</p>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">Prevention rule (lesson 3 again)</span><code>ten_length</code> is computed at the <em>start</em> of each <code>mj_step</code>, from the old <code>qpos</code>. Read straight after one step it still says 0. Call <code>mj_forward</code> first, as the script does.</div>
+  <div class="card warn"><span class="callout-title" style="color:var(--orange)">Honest fine print: the equality is soft</span>MuJoCo enforces an equality the way it enforces contacts: with a stiff but slightly soft spring (lesson 7's <code>solref</code>). With nothing to carry, the violation is tiny, -8.35e-07 m. While the fingers squeeze a box, the equality must carry the squeeze to the right finger, and it gives way. Held in the air: -7.66e-04 m at 0.85 N, and -5.59e-03 m at 6.99 N per finger. A stiffer equality, <code>solref="0.005 1"</code>, cuts the 6.99 N case to -5.60e-04 m.</div>
+  <p class="newwords">New words: <span class="chip">ten_length</span><span class="chip">polycoef</span><span class="chip">joint equality</span><span class="chip">constraint violation</span></p>
+</section>
+
+<section class="step" id="l13-s-squeeze">
+  <span class="lvl lvl-pic">Picture</span> <span class="lvl lvl-math">simple arithmetic</span>
+  <h2>4. A position actuator is a spring: aim inside the box to squeeze</h2>
+  <p>Lesson 5 showed that a <code>position</code> actuator behaves like a spring pulling towards a target. Its force is kp × (target - position).</p>
+  <p>Now aim the target <em>inside</em> the box. The finger hits the box face and stops. The spring stays stretched, so it keeps pushing. That push is the squeeze.</p>
+  <ul>
+    <li>The finger faces just touch the 7 cm box at an opening of 0.030 m.</li>
+    <li>Aim at 0.026667 m and the spring is stretched 3.333 mm: 600 × 0.003333 = 2.0 N.</li>
+    <li>The equality hands half of it to the other finger, so each finger squeezes about 1.0 N. The script calls this the <strong>setting</strong>.</li>
+  </ul>
+  <div class="predict">
+    <h3>Predict: setting 1.0 N per finger. What will each touch sensor read once the box is lifted and held?</h3>
+    <textarea aria-label="Your prediction for the touch readings"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer"><p><strong>0.8533 N and 0.8535 N, not 1.0.</strong> The left finger ends up at 0.029512 m, a little further in than 0.030 m. The right finger lags because the equality is soft, so the box sits slightly off centre. The spring is stretched only 2.845 mm: 600 × 0.002845 = 1.707 N, half each. <code>mj_contactForce</code> agrees: 0.8533 N and 0.8535 N summed over each finger's 4 contacts.</p></div>
+  </div>
+  <div class="card">
+    <div class="grid2">
+      <canvas id="l13cvD" role="img" aria-label="Box between two fingers showing measured squeeze and friction forces, on the floor or held in the air"></canvas>
+      <div>
+        <div class="btnrow">
+          <button type="button" class="l13dw primary" data-k="0">on the floor (t = 0.5 s)</button>
+          <button type="button" class="l13dw" data-k="1">held in the air (t = 2.0 s)</button>
+        </div>
+        <div class="readouts" style="grid-template-columns:1fr 1fr">
+          <div class="ro" id="l13dTL"><span class="lab">sensordata[0] touch_L</span><span class="val">1.5629</span> <span class="unit">N</span></div>
+          <div class="ro" id="l13dTR"><span class="lab">sensordata[1] touch_R</span><span class="val">0.2607</span> <span class="unit">N</span></div>
+          <div class="ro" id="l13dA"><span class="lab">actuator_force[1]</span><span class="val">-1.8227</span> <span class="unit">N</span></div>
+          <div class="ro" id="l13dQ"><span class="lab">grip_L - grip_R</span><span class="val">-3.74e-04</span> <span class="unit">m</span></div>
+        </div>
+        <p id="l13dTxt" style="font-size:14px"></p>
+      </div>
+    </div>
+    <p class="caption">Front view, world y to the right, z up. Setting 1.0 N, box 0.25 kg, finger μ 2.0. Blue = squeeze from each finger, teal = vertical grip from each finger on the box, purple = the floor's push, orange = weight. Arrow lengths are to scale with each other. Numbers are from part C of the script.</p>
+  </div>
+  <p>On the floor the squeeze is lopsided: 1.5629 N on the left, 0.2607 N on the right. The floor's friction holds the box sideways, and the soft equality lets the right finger lag. Once the box is in the air, nothing else holds it, and the two squeezes become equal.</p>
+  <p>Held in the air, the two fingers grip upwards with 1.2463 N and 1.2062 N. Together that is 2.4525 N, exactly the weight. Each finger could give up to μ N = 2.0 × 0.8533 = 1.7066 N, so there is room to spare.</p>
+  <h3>Which μ does MuJoCo use when two geoms meet?</h3>
+  <p>The finger says 2.0 and the box says 0.6. By default MuJoCo uses the <strong>larger</strong> of the two, for each friction number. It also uses the larger <code>condim</code>. The script checks this by reading <code>data.contact[i].friction</code> and <code>.dim</code>.</p>
+  <table>
+    <thead><tr><th>finger friction</th><th>box friction</th><th>contact.friction[0]</th><th>contact.dim</th></tr></thead>
+    <tbody>
+      <tr><td>2.0</td><td>0.6</td><td>2.0</td><td>4</td></tr>
+      <tr><td>0.3</td><td>0.6</td><td>0.6</td><td>4</td></tr>
+    </tbody>
+  </table>
+  <div class="card warn"><span class="callout-title" style="color:var(--orange)">Common mistake</span>Lowering only the finger friction below 0.6 changes nothing here, because the box's 0.6 wins. To make the contact slippery, lower both geoms. You can also set <code>priority</code> or the <code>&lt;pair&gt;</code> element to choose the contact friction yourself.</div>
+
+  <details class="math"><summary>Step 1: why each finger gets half the actuator force</summary><div>
+    <p>Look at each finger along its slide axis, when the box is held still. Let N be the squeeze and λ the equality's force.</p>
+    <div class="eq">left finger:   actuator 1.707 N  =  box pushes back N  +  equality λ
+right finger:  box pushes it out N  =  equality pulls it in λ
+so λ = N, and 1.707 = 2 N,  N = 0.8535 N   matches touch: 0.8533 and 0.8535</div>
+    <p>The equality is the rope between the tongs. It carries half the actuator's push over to the other finger.</p>
+  </div></details>
+  <details class="math"><summary>Step 2: why the setting is 1.0 N but the squeeze is 0.8535 N</summary><div>
+    <div class="eq">target:  ctrl = 0.030 - 2 × 1.0 / 600 = 0.026667 m
+aimed stretch:   0.030000 - 0.026667 = 3.333 mm  →  600 × 0.003333 / 2 = 1.0000 N
+real stretch:    0.029512 - 0.026667 = 2.845 mm  →  600 × 0.002845 / 2 = 0.8535 N   matches the script</div>
+    <p>The left finger stops 0.49 mm past 0.030 m. Soft contacts let it sink in a little, and the soft equality lets the box sit off centre. A position actuator's force depends on where the finger <em>really</em> stops. So always measure the squeeze; do not trust the setting.</p>
+  </div></details>
+  <p class="newwords">New words: <span class="chip">setting vs measured squeeze</span><span class="chip">contact.friction</span><span class="chip">contact.dim</span><span class="chip">priority</span></p>
+</section>
+
+<section class="step" id="l13-s-slip">
+  <span class="lvl lvl-pic">Picture</span> <span class="lvl lvl-math">simple arithmetic</span>
+  <h2>5. Experiment: hold or slip?</h2>
+  <p>Now test the rule. Each run closes the fingers for 0.5 s, lifts the hand 10 cm in 1.0 s, then holds still for 0.5 s. The script measures the <dfn class="term" tabindex="0" data-def="How far the box sank relative to the hand during the lift, in millimetres: hand rise minus box rise (world z).">slip</dfn>: how far the box sank relative to the hand. A run counts as <strong>held</strong> if the slip stayed under 10 mm.</p>
+  <p>The rule uses the <strong>measured</strong> squeeze per finger, read from the touch sensors while a light box is held. It depends on the setting only.</p>
+  <table>
+    <thead><tr><th>setting (N)</th><th>0.5</th><th>1.0</th><th>2.0</th><th>4.0</th><th>8.0</th></tr></thead>
+    <tbody><tr><td>measured squeeze per finger (N)</td><td>0.4083</td><td>0.8535</td><td>1.7307</td><td>3.4735</td><td>6.9918</td></tr></tbody>
+  </table>
+  <div class="predict">
+    <h3>Predict: you double the box to 0.5 kg and keep μ = 2.0. What must change so it is still held?</h3>
+    <textarea aria-label="Your prediction for the doubled mass"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer"><p><strong>Double the squeeze, or double the grip number.</strong> The weight is now 4.905 N, so each finger must grip 2.4525 N upwards. With μ = 2.0 that needs N ≥ 1.2263 N per finger. In MuJoCo, setting 1.0 (measured 0.8535 N) holds the 0.25 kg box but drops the 0.5 kg box. Setting 2.0 (measured 1.7307 N) holds the 0.5 kg box with 0.97 mm of slip.</p></div>
+  </div>
+  <p>The script runs 30 combinations, one variable at a time. Columns are the setting; the cell shows the MuJoCo slip in mm, and "R" where the rule says hold.</p>
+  <table>
+    <thead><tr><th>box, μ</th><th>0.5</th><th>1.0</th><th>2.0</th><th>4.0</th><th>8.0</th></tr></thead>
+    <tbody>
+      <tr><td>0.25 kg, μ 0.6</td><td>99.88</td><td>99.77</td><td>99.56</td><td>0.43 R</td><td>0.33 R</td></tr>
+      <tr><td>0.25 kg, μ 2.0</td><td>99.84</td><td>0.51 R</td><td>0.49 R</td><td>0.43 R</td><td>0.33 R</td></tr>
+      <tr><td>0.5 kg, μ 0.6</td><td>99.88</td><td>99.76</td><td>99.54</td><td>99.19</td><td>0.66 R</td></tr>
+      <tr><td>0.5 kg, μ 2.0</td><td>99.83</td><td>99.69</td><td>0.97 R</td><td>0.86 R</td><td>0.66 R</td></tr>
+      <tr><td>1.0 kg, μ 0.6</td><td>99.89</td><td>99.77</td><td>99.53</td><td>99.11</td><td>98.74</td></tr>
+      <tr><td>1.0 kg, μ 2.0</td><td>99.82</td><td>99.66</td><td>99.40</td><td>1.70 R</td><td>1.32 R</td></tr>
+    </tbody>
+  </table>
+  <p>Every "R" cell held and every other cell dropped the box (about 100 mm of slip: the box stayed on the floor while the hand rose). The rule and MuJoCo agree in <strong>30 of 30</strong> runs.</p>
+  <div class="card">
+    <canvas id="l13cvE" role="img" aria-label="Grid of 50 recorded runs for one grip number: squeeze setting across, box mass down, coloured held or slipped, marked where the rule disagrees"></canvas>
+    <div class="btnrow" id="l13eBtns">
+      <button type="button" class="l13em" data-k="0">μ 0.6</button><button type="button" class="l13em" data-k="1">μ 0.8</button><button type="button" class="l13em" data-k="2">μ 1.0</button><button type="button" class="l13em" data-k="3">μ 1.5</button><button type="button" class="l13em primary" data-k="4">μ 2.0</button>
+    </div>
+    <div class="readouts">
+      <div class="ro" id="l13eH"><span class="lab">held (MuJoCo)</span><span class="val">-</span> <span class="unit">of 50</span></div>
+      <div class="ro" id="l13eA"><span class="lab">rule agrees</span><span class="val">-</span> <span class="unit">of 50</span></div>
+    </div>
+    <p class="caption">This picture replays numbers recorded from MuJoCo by <code>record_grip_grid.py</code>: 250 runs (10 settings × 5 masses × 5 grip numbers). Teal = held, orange = slipped. The solid line is the rule's edge, 2 μ N = m g: the rule says hold to its right. A cross marks a run where the rule and MuJoCo disagree.</p>
+  </div>
+  <div class="card warn"><span class="callout-title" style="color:var(--orange)">Honest fine print: the rule is about a box standing still</span>Over all 250 runs, the rule agrees with MuJoCo in <strong>247</strong>. The 3 misses all sit within 5% of the edge, where the rule says "just holds" but MuJoCo slips. The reason: the lift accelerates the box upwards, by up to 0.493 m/s². During the lift the grip must carry m (g + a), not just m g. With that extra term the rule agrees in 249 of 250 runs. Near the edge for the 0.25 kg box at μ 2.0, the needed squeeze rises from 0.6131 N to 0.6440 N. Measured 0.6296 N slips 32.55 mm; 0.6742 N holds with 0.54 mm.</div>
+
+  <h3>impratio and condim: one variable at a time</h3>
+  <p>Even a held box creeps down a little: MuJoCo's friction is soft too. Two settings might matter, so change one at a time.</p>
+  <table>
+    <thead><tr><th>run</th><th>warehouse settings (impratio 10, condim 4)</th><th>impratio 1</th><th>finger condim 3</th></tr></thead>
+    <tbody>
+      <tr><td>0.25 kg, setting 1.0</td><td>0.51 mm</td><td>5.18 mm</td><td>0.51 mm</td></tr>
+      <tr><td>1.0 kg, setting 4.0</td><td>1.70 mm</td><td>17.30 mm</td><td>1.70 mm</td></tr>
+    </tbody>
+  </table>
+  <p><strong>impratio matters a lot.</strong> With impratio 1 the box creeps ten times further, and the 1.0 kg run slips 17.30 mm: past our 10 mm line. That is why the warehouse robot sets <code>impratio="10"</code>. <strong>condim makes no measurable difference here.</strong> condim 4 adds twisting grip, and nothing tries to twist this box.</p>
+
+  <details class="math"><summary>Step 1: the rule with the lesson's numbers</summary><div>
+    <div class="eq">weight:              m g = 0.25 × 9.81 = 2.4525 N
+grip needed per finger:  m g / 2 = 1.2263 N
+grip limit per finger:   μ N = 2.0 × 0.8533 = 1.7066 N  ≥ 1.2263   → held, slip 0.51 mm
+smallest squeeze:    N = m g / (2 μ) = 2.4525 / 4.0 = 0.6131 N</div>
+  </div></details>
+  <details class="math"><summary>Step 2: adding the lift's acceleration</summary><div>
+    <p>The hand follows half a cosine: z = 0.05 (1 - cos(π t / 1.0)). Its biggest acceleration is</p>
+    <div class="eq">a = 0.05 × (π / 1.0)² = 0.493 m/s²
+needed squeeze:  N = m (g + a) / (2 μ) = 0.25 × 10.303 / 4.0 = 0.6440 N</div>
+    <p>That is 5% more than the standing-still answer. A faster lift would need a bigger margin.</p>
+  </div></details>
+  <p class="newwords">New words: <span class="chip">slip</span><span class="chip">creep</span><span class="chip">impratio</span><span class="chip">condim 4</span></p>
+</section>
+
+<section class="step" id="l13-s-touch">
+  <span class="lvl lvl-pic">Picture</span> <span class="lvl lvl-words">MuJoCo words</span>
+  <h2>6. Feeling something is not the same as holding the box</h2>
+  <p>A touch sensor is like the skin on your fingertip. It tells you <em>that</em> something presses, and how hard. It does not tell you <em>what</em> presses.</p>
+  <p>In MuJoCo a touch sensor adds up the normal force of <strong>every</strong> contact whose point lies inside its site. Floor, table, the other finger: all count.</p>
+  <div class="predict">
+    <h3>Predict: the touch sensors both read about 5 N. Is the box held?</h3>
+    <textarea aria-label="Your prediction about the touch reading"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer"><p><strong>You cannot tell from the touch sensors alone.</strong> If the 5 N came from the box, then yes: 2 × 2.0 × 5 = 20 N of grip is plenty for 2.4525 N. But the fingers might be pressing on the floor instead. The script below shows both readings at over 12 N with no box contact at all. To know what you hold, read the contact pairs.</p></div>
+  </div>
+  <div class="card">
+    <div class="grid2">
+      <canvas id="l13cvF" role="img" aria-label="Two scenes: fingers pressed on the floor around the box, and a real grasp, with contact points marked"></canvas>
+      <div>
+        <div class="btnrow">
+          <button type="button" class="l13fs primary" data-k="0">fingers pressed on the floor</button>
+          <button type="button" class="l13fs" data-k="1">real grasp, lifted</button>
+        </div>
+        <div class="readouts" style="grid-template-columns:1fr 1fr">
+          <div class="ro" id="l13fTL"><span class="lab">touch_L</span><span class="val">12.052</span> <span class="unit">N</span></div>
+          <div class="ro" id="l13fTR"><span class="lab">touch_R</span><span class="val">12.052</span> <span class="unit">N</span></div>
+        </div>
+        <pre id="l13fOut" style="font-size:12px" aria-live="polite"></pre>
+      </div>
+    </div>
+    <p class="caption">Front view, world y to the right, z up. Dots mark contact points; orange outlines are the touch sites. Numbers are from part E of the script. In the first scene the lift target is 3 cm below the start, with the fingers open 0.040 m around the box. The floor stops the hand after 1.59 cm.</p>
+  </div>
+  <p>Look closely at the first scene. Each finger presses the floor with 24.104 N over 4 corner contacts, but its sensor reads 12.052 N. Only the two corners on the inner side lie inside the touch site, so only they count.</p>
+  <h3>Check the pairs, not the sensor</h3>
+<pre><code><span class="k">def</span> touching(model, data, geom_a, geom_b):
+    <span class="k">for</span> i <span class="k">in</span> range(data.ncon):
+        c = data.contact[i]
+        <span class="k">if</span> {c.geom1, c.geom2} == {geom_a, geom_b}:
+            <span class="k">return</span> True
+    <span class="k">return</span> False
+
+held = touching(model, data, FL, BOX) <span class="k">and</span> touching(model, data, FR, BOX)</code></pre>
+  <div class="card warn"><span class="callout-title" style="color:var(--orange)">A true story: the robot that learned to cheat</span>The warehouse robot learns to grasp with reinforcement learning (lesson 15). Its first reward paid a bonus whenever both touch sensors read a force. The learner found a shortcut. It pressed its <em>open</em> fingers onto the shelf top, collected the bonus forever, and never touched the box. This is called <dfn class="term" tabindex="0" data-def="When a learning agent finds a way to earn reward that the designer did not intend, without doing the real task.">reward hacking</dfn>. The fix was exactly the check above: pay the bonus only when the finger geoms touch the box geom in <code>data.contact</code>, and penalise touching the shelf. The story is in the docstring of <code>warehouse_grasp_env.py</code>, and Capstone 2 tells it in full.</div>
+  <p class="newwords">New words: <span class="chip">touch site</span><span class="chip">contact pair</span><span class="chip">reward hacking</span></p>
+</section>
+
+<section class="step" id="l13-s-code">
+  <span class="lvl lvl-code">Code</span>
+  <h2>7. Your script, line by line</h2>
+  <table>
+    <thead><tr><th style="width:44%">Code in <code>13_grippers_and_grasping.py</code></th><th>Physical meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>mujoco.mj_resetDataKeyframe(self.model, self.data, 0)</code></td><td>Start every run from the "open" keyframe: hand at rest, fingers open 0.040 m, box on the floor.</td></tr>
+      <tr><td><code>d.ctrl[1] = ctrl_for(n_set)</code></td><td>Aim the gripper spring inside the box: target = 0.030 - 2 × setting / 600 m. The deeper the aim, the harder the squeeze.</td></tr>
+      <tr><td><code>for _ in range(round(T_CLOSE / m.opt.timestep)): mujoco.mj_step(m, d)</code></td><td>Let the fingers close and settle for 0.5 s (250 × 0.002 s).</td></tr>
+      <tr><td><code>d.ctrl[0] = lift_target(k * m.opt.timestep)</code></td><td>Raise the lift target 10 cm along a smooth half cosine over 1.0 s, then hold it.</td></tr>
+      <tr><td><code>mujoco.mj_contactForce(m, d, i, f6)</code></td><td>The force of contact i in its contact frame: <code>f6[0]</code> is the squeeze, in N (lesson 7).</td></tr>
+      <tr><td><code>c.frame.reshape(3, 3).T @ f6[:3]</code></td><td>Turn that force into the world frame, so <code>[2]</code> is the upward grip on the box.</td></tr>
+      <tr><td><code>d.sensordata.copy()</code></td><td>The two touch readings, N: every contact inside each site, whatever it touches.</td></tr>
+      <tr><td><code>(d.xpos[rig.hand][2] - zh0) - (d.xpos[rig.box][2] - zb0)</code></td><td>The slip: hand rise minus box rise, in m, from world z of the body positions <code>xpos</code>.</td></tr>
+      <tr><td><code>self.model.body_mass[self.box] = mass</code></td><td>Swap in a heavier box between runs (a model change), scaling its inertia too.</td></tr>
+    </tbody>
+  </table>
+<pre><code><span class="c"># Part B: close the empty gripper to 0.020 m (openings in m)</span>
+tendon + equality (warehouse)  after 1 step: grip_L=0.039623 grip_R=0.039691 ten_length=-6.86e-05   after 0.5 s: grip_L=0.020000 grip_R=0.020001 m   ten_length=-8.35e-07 m
+no coupling                    after 1 step: grip_L=0.039314 grip_R=0.040000 ten_length=-6.86e-04   after 0.5 s: grip_L=0.020000 grip_R=0.040000 m   ten_length=-2.00e-02 m  <span class="c"># right finger never moves</span>
+
+<span class="c"># Part C: setting 1.0 N per finger, 0.25 kg box</span>
+-- held in the air (t=2.0 s)
+   qpos grip_L=0.029512 grip_R=0.030278 m   equality violation grip_L-grip_R=-7.66e-04 m  <span class="c"># soft equality</span>
+   actuator_force = kp (ctrl - grip_L) = -1.7070 N  -> half of it per finger 0.8535 N
+   touch_L=0.8533 N  touch_R=0.8535 N  (sensordata, mean of the last 0.25 s)
+   pair finger_L_geom&lt;-&gt;box_geom      contacts=4  normal sum=0.8533 N  vertical force=+1.2463 N  mu=2.0 condim=4
+   pair finger_R_geom&lt;-&gt;box_geom      contacts=4  normal sum=0.8535 N  vertical force=+1.2062 N  mu=2.0 condim=4
+friction carried by both fingers = 2.4525 N   weight m g = 2.4525 N  <span class="c"># grip exactly balances weight</span>
+lift: hand rose 98.93 mm, box slipped 0.51 mm relative to the hand
+
+<span class="c"># Part D: hold or slip</span>
+rule and MuJoCo agree in 30 of 30 runs
+   impratio= 1 finger condim=4: slip 5.18 mm  <span class="c"># 10x the creep of impratio 10</span>
+
+<span class="c"># Part E: fingers open around the box, pushed onto the floor</span>
+   touch_L=12.052 N  touch_R=12.052 N  <span class="c"># the sensors feel a lot...</span>
+   pair floor        &lt;-&gt;finger_L_geom contacts=4  normal sum=24.104 N
+   both fingers touch the box (from data.contact)? False  <span class="c"># ...but nothing is held</span></code></pre>
+  <p>The hand rose 98.93 mm, not 100: the lift is a spring too (kp 3000 N/m), and it sags a little under the extra weight. The slip is measured relative to the hand, so the sag does not count as slip.</p>
+</section>
+
+<section class="step" id="l13-s-check">
+  <span class="lvl lvl-plain">Check yourself</span>
+  <h2>8. Your lesson's questions</h2>
+  <p>These are the Lesson 13 checkpoint questions. Answer them here, then tell me your answers in the chat so I can update your progress.</p>
+  <div class="predict">
+    <h3>Q1. A 1.0 kg box, contact μ = 2.0. What is the smallest squeeze per finger, and which setting in the table first holds it?</h3>
+    <textarea aria-label="Answer to question 1"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>N = m g / (2 μ) = 9.81 / 4.0 = <strong>2.4525 N</strong>. Setting 2.0 gives only 1.7307 N and drops the box (99.40 mm). Setting 4.0 gives 3.4735 N and holds it, with 1.70 mm of slip.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q2. You set the finger friction to 0.3. The box's friction is 0.6. Which μ goes into the rule?</h3>
+    <textarea aria-label="Answer to question 2"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>0.6.</strong> By default MuJoCo uses the larger of the two geoms' friction values. The script reads <code>contact.friction[0] = 0.6</code> for that run.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q3. You delete the &lt;equality&gt; but keep the &lt;tendon&gt;. Do the fingers still mirror each other?</h3>
+    <textarea aria-label="Answer to question 3"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>No.</strong> A fixed tendon only measures grip_L - grip_R. The equality is what turns "length = 0" into forces. Without it the right finger stays at 0.040 m.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q4. Your reward pays a bonus when touch_L and touch_R are both above 1 N. What could a learning agent do to cheat, and how do you stop it?</h3>
+    <textarea aria-label="Answer to question 4"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>Press the fingers on the floor or a shelf: the sensors read 12.052 N each with no box contact. Pay the bonus only when <code>data.contact</code> lists both finger-box pairs, and penalise finger-shelf contacts. That is the warehouse fix.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q5. A held box creeps 5.18 mm during the lift. Which one setting would you change first?</h3>
+    <textarea aria-label="Answer to question 5"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>Raise impratio</strong> (with <code>cone="elliptic"</code>). Going from 1 to 10 cut the creep from 5.18 mm to 0.51 mm. Changing condim from 4 to 3 made no difference.</p></div>
+  </div>
+
+  <h3>Glossary: new words from this lesson</h3>
+  <dl class="glossary">
+    <dt>normal force N</dt><dd>The squeeze of one finger, straight into the box face, in newtons.</dd>
+    <dt>holding rule</dt><dd>2 μ N ≥ m g: two fingers' grip limits must cover the weight. Add m a when the box accelerates.</dd>
+    <dt>slide joint</dt><dd>A joint that moves along one straight line; one <code>qpos</code> number in metres.</dd>
+    <dt>fixed tendon, ten_length</dt><dd>A weighted sum of joint positions (here grip_L - grip_R), stored in <code>data.ten_length</code>. It measures; it does not push.</dd>
+    <dt>equality, polycoef</dt><dd>A rule MuJoCo enforces with forces, such as "tendon length = 0" or "grip_R = 1 × grip_L". It is slightly soft.</dd>
+    <dt>constraint violation</dt><dd>How far a soft rule is from being exactly true, here grip_L - grip_R in metres.</dd>
+    <dt>setting vs measured squeeze</dt><dd>What the position target aims for (kp × gap / 2) versus the force the touch sensor and <code>mj_contactForce</code> really report.</dd>
+    <dt>contact.friction, contact.dim</dt><dd>The friction and condim MuJoCo actually uses for one contact: by default the larger of the two geoms' values.</dd>
+    <dt>touch sensor, touch site</dt><dd>Adds the normal forces of all contacts whose point lies inside the site volume, whatever they touch.</dd>
+    <dt>contact pair</dt><dd>The two geom ids <code>geom1</code>, <code>geom2</code> of one entry of <code>data.contact</code>: what is touching what.</dd>
+    <dt>slip, creep</dt><dd>How far the box sinks relative to the hand; a slow slip of a box that should be stuck.</dd>
+    <dt>impratio</dt><dd>With elliptic cones, how firmly friction is enforced compared with the push. Larger means less creep.</dd>
+    <dt>reward hacking</dt><dd>A learner earning reward by a shortcut the designer did not intend.</dd>
+  </dl>
+</section>
+
+<section class="step recap" id="l13-recap">
+  <h2>Recap: the lesson in one minute</h2>
+  <div class="mental-model">
+    <p>A parallel-jaw gripper is two <strong>slide joints</strong> (<code>grip_L</code>, <code>grip_R</code>) tied by a <strong>fixed tendon</strong> (length = grip_L - grip_R) and a <strong>tendon equality</strong> with <code>polycoef="0 0 0 0 0"</code>. One <strong>position actuator</strong> (kp 600 N/m) on grip_L drives both. The equality is soft: it gave way 0.77 mm while carrying 0.85 N and 5.59 mm while carrying 6.99 N, unless you stiffen its <code>solref</code>.</p>
+    <p>Aiming the target inside the box makes the actuator a squeezing spring: <code>actuator_force = kp (ctrl - qpos)</code>, and each finger gets half. Measure the real squeeze with <code>mj_contactForce</code> or the touch sensors: setting 1.0 N gave 0.8535 N.</p>
+    <p>The box is held up by friction: <strong>2 μ N ≥ m g</strong>, plus m a while it accelerates. MuJoCo uses the larger friction of the two geoms. The rule matched MuJoCo in 247 of 250 recorded runs (249 with the lift's acceleration). <code>impratio</code> 10 with an elliptic cone cuts creep tenfold; condim 3 vs 4 made no difference here.</p>
+    <p>A <strong>touch sensor</strong> reports every contact inside its site, including the floor. To know what you hold, check <code>data.contact</code> for finger-box geom pairs. Rewarding touch readings taught the warehouse RL agent to press the shelf instead.</p>
+  </div>
+  <div class="checkpoint">
+    <p>In the grasp sandbox, find the smallest squeeze that lifts a 1.0 kg box at μ 2.0, then lower μ and watch it slip.</p>
+    <div class="btn-row">
+      <button class="btn btn-primary btn-sm" type="button" onclick="markComplete(13)">Mark lesson complete</button>
+      <button class="btn btn-sm" type="button" onclick="switchLesson(14)">Next: Mobile Bases</button>
+    </div>
+  </div>
+</section>
+</div>

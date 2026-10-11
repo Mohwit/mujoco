@@ -1,0 +1,91 @@
+<div class="sandbox-container" id="sandbox10">
+  <div class="sandbox-header">
+    <span class="sandbox-dot"></span>
+    <span>Cart-Pole Balance Lab</span>
+  </div>
+  <div class="sandbox-viz">
+    <svg viewBox="0 0 400 450" role="img" aria-labelledby="s10Title s10Desc">
+      <title id="s10Title">Cart-pole balance sandbox</title>
+      <desc id="s10Desc">A cart on a 2 m rail with a 0.6 m pole hinged on top, seen from the side. Four knob sliders set the controller, the orange arrow is the motor force on the cart, the purple arrow is a push on the pole. Below: the lean and the cart position over the last 6 seconds.</desc>
+      <defs>
+        <marker id="s10ArrO" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="var(--orange)"/></marker>
+        <marker id="s10ArrP" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="var(--purple)"/></marker>
+      </defs>
+      <text id="s10Clock" x="20" y="30" fill="var(--teal)" font-size="12" font-family="var(--mono)">t = 0.000 s</text>
+      <text id="s10Status" x="20" y="48" fill="var(--text-dim)" font-size="11" font-family="var(--mono)">ready: press Play</text>
+      <text x="380" y="30" text-anchor="end" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">side view, +x right</text>
+      <!-- rail: 160 px per metre, centre x = 200, height y = 200; stops at +-1 m -->
+      <line x1="8" y1="200" x2="392" y2="200" stroke="var(--border)" stroke-width="4"></line>
+      <line x1="40" y1="190" x2="40" y2="210" stroke="var(--red)" stroke-width="3"></line>
+      <line x1="360" y1="190" x2="360" y2="210" stroke="var(--red)" stroke-width="3"></line>
+      <text x="40" y="226" text-anchor="middle" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">-1 m</text>
+      <text x="200" y="226" text-anchor="middle" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">0</text>
+      <text x="360" y="226" text-anchor="middle" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">+1 m</text>
+      <g id="s10Cart" transform="translate(200, 200)">
+        <rect x="-16" y="-8" width="32" height="16" rx="2" fill="var(--blue)" opacity="0.85"></rect>
+        <line x1="0" y1="0" x2="0" y2="-104" stroke="var(--text-dim)" stroke-width="1" stroke-dasharray="3 5"></line>
+        <g id="s10Pole">
+          <line class="rod-line" x1="0" y1="0" x2="0" y2="-96" style="stroke-width:7"></line>
+          <line id="s10PushArrow" x1="-30" y1="-96" x2="-6" y2="-96" stroke="var(--purple)" stroke-width="3" marker-end="url(#s10ArrP)" style="display:none"></line>
+        </g>
+        <circle class="pivot-dot" cx="0" cy="0" r="5"></circle>
+        <line id="s10Force" x1="0" y1="0" x2="0" y2="0" stroke="var(--orange)" stroke-width="3" marker-end="url(#s10ArrO)" style="display:none"></line>
+      </g>
+      <!-- plot: x 40..385 = last 6 s; teal = lean (+-0.3 rad full height), orange = cart x (+-1 m) -->
+      <rect x="40" y="268" width="345" height="150" fill="none" stroke="var(--border)"></rect>
+      <line x1="40" y1="343" x2="385" y2="343" stroke="var(--border)" stroke-dasharray="3 3"></line>
+      <polyline id="s10TrX" points="" fill="none" stroke="var(--orange)" stroke-width="2"></polyline>
+      <polyline id="s10TrTh" points="" fill="none" stroke="var(--teal)" stroke-width="2"></polyline>
+      <text x="36" y="272" text-anchor="end" fill="var(--text-dim)" font-size="9" font-family="var(--mono)">+</text>
+      <text x="36" y="420" text-anchor="end" fill="var(--text-dim)" font-size="9" font-family="var(--mono)">-</text>
+      <text id="s10TLeft" x="40" y="432" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">0.0 s</text>
+      <text id="s10TRight" x="385" y="432" text-anchor="end" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">6.0 s</text>
+      <text x="212" y="446" text-anchor="middle" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">teal: lean, full height 0.3 rad; orange: cart x, full height 1 m</text>
+    </svg>
+  </div>
+  <div class="sandbox-controls">
+    <div class="control-group">
+      <label for="s10KLean">Lean knob (ctrl per rad) <span class="control-val" id="s10KLeanVal">4.1404</span></label>
+      <input type="range" id="s10KLean" min="0" max="10" step="0.01" value="4.14">
+    </div>
+    <div class="control-group">
+      <label for="s10KSpin">Lean speed knob (ctrl per rad/s) <span class="control-val" id="s10KSpinVal">0.7561</span></label>
+      <input type="range" id="s10KSpin" min="0" max="2" step="0.01" value="0.76">
+    </div>
+    <div class="control-group">
+      <label for="s10KPos">Cart offset knob (ctrl per m) <span class="control-val" id="s10KPosVal">0.9827</span></label>
+      <input type="range" id="s10KPos" min="0" max="3" step="0.01" value="0.98">
+    </div>
+    <div class="control-group">
+      <label for="s10KVel">Cart speed knob (ctrl per m/s) <span class="control-val" id="s10KVelVal">0.8076</span></label>
+      <input type="range" id="s10KVel" min="0" max="3" step="0.01" value="0.81">
+    </div>
+    <div class="control-group">
+      <label for="s10Tilt">Start lean (rad) <span class="control-val" id="s10TiltVal">0.10</span></label>
+      <input type="range" id="s10Tilt" min="-0.4" max="0.4" step="0.01" value="0.1">
+    </div>
+    <div class="control-group">
+      <label for="s10On"><input type="checkbox" id="s10On" checked> Controller on (ctrl = knobs . [x, lean, x speed, lean speed])</label>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary btn-sm" type="button" id="s10Play">Play</button>
+      <button class="btn btn-sm" type="button" id="s10Step">Step</button>
+      <button class="btn btn-sm" type="button" id="s10Reset">Reset</button>
+      <button class="btn btn-sm" type="button" id="s10Gains">Reset gains (LQR)</button>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-sm" type="button" id="s10PushL">Push left</button>
+      <button class="btn btn-sm" type="button" id="s10PushR">Push right</button>
+    </div>
+    <div class="readout" id="s10Readout">
+      <span class="rk">time:</span> <span class="rv" id="s10T">0.000</span> <span class="rk">s</span><br>
+      <span class="rk">x = qpos[0]:</span> <span class="rv" id="s10X">0.0000</span> <span class="rk">m (cart, along the rail)</span><br>
+      <span class="rk">lean = qpos[1]:</span> <span class="rv" id="s10Th">0.1000</span> <span class="rk">rad (+ = top towards +x)</span><br>
+      <span class="rk">x speed = qvel[0]:</span> <span class="rv" id="s10Xd">0.0000</span> <span class="rk">m/s</span><br>
+      <span class="rk">lean speed = qvel[1]:</span> <span class="rv" id="s10Thd">0.0000</span> <span class="rk">rad/s</span><br>
+      <span class="rk">ctrl asked:</span> <span class="rv-o" id="s10U">0.0000</span> <span class="rk">(force = 20 x ctrl N, clipped to -1..1)</span><br>
+      <span class="rk">state:</span> <span class="rv" id="s10State">ready</span>
+    </div>
+    <p class="sidebar-hint" style="margin-top:8px;">Same model and maths as 10_capstone_cart_pole.py: masses from mj_fullM, semi-implicit Euler, ctrl computed from the state before each step and clipped, push = qfrc_applied[1] = 1.0 N m on the hinge for 0.1 s. Checked against MuJoCo with 10_check_browser_copy.py: six runs (two knob sets, a push, a clipped start, lean-only, no control) agree to better than 1e-15. The rail stop is not simulated: the page stops when the cart reaches 1 m, where MuJoCo's joint limit would start pushing back.</p>
+  </div>
+</div>

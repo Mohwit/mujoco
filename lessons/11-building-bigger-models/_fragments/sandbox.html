@@ -1,0 +1,63 @@
+<div class="sandbox-container" id="sandbox11">
+  <div class="sandbox-header">
+    <span class="sandbox-dot"></span>
+    <span>Style Sheet Sandbox</span>
+  </div>
+  <div class="sandbox-viz">
+    <svg viewBox="0 0 400 450" role="img" aria-labelledby="s11Title s11Desc">
+      <title id="s11Title">Default-class resolver and keyframe picker</title>
+      <desc id="s11Desc">The lesson 11 model drawn at an angle: the two-link arm, a shelf with four boxes and a loose red box. Pick a keyframe to pose the arm. Click a geom to see where each of its attributes comes from. Change a class setting and every geom that uses it is outlined.</desc>
+      <g id="s11Scene"></g>
+      <text id="s11KeyText" x="14" y="22" fill="var(--teal)" font-size="12" font-family="var(--mono)">key: reach</text>
+      <text id="s11SelText" x="14" y="38" fill="var(--text-dim)" font-size="11" font-family="var(--mono)">geom: weight</text>
+      <text x="386" y="22" text-anchor="end" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">x right, z up, +y drawn up-right</text>
+      <text x="386" y="36" text-anchor="end" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">dashed = picked, thick = just changed</text>
+      <text x="14" y="442" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">floor, world z = 0. Colours stand in for each geom's rgba.</text>
+    </svg>
+  </div>
+  <div class="sandbox-controls">
+    <div class="control-group">
+      <label>Keyframe: mj_resetDataKeyframe(model, data, key)</label>
+      <div class="btn-row" role="group" aria-label="Pick a keyframe">
+        <button class="btn btn-sm" type="button" data-s11key="qpos0" aria-pressed="false">mj_resetData</button>
+        <button class="btn btn-sm" type="button" data-s11key="home" aria-pressed="false">home</button>
+        <button class="btn btn-sm" type="button" data-s11key="lesson4" aria-pressed="false">lesson4</button>
+        <button class="btn btn-sm btn-primary" type="button" data-s11key="reach" aria-pressed="true">reach</button>
+        <button class="btn btn-sm" type="button" data-s11key="swing" aria-pressed="false">swing</button>
+      </div>
+    </div>
+    <div class="readout" id="s11KeyOut" aria-live="polite">
+      <span class="rk">qpos[0:2] shoulder, elbow:</span> <span class="rv" id="s11Q">-</span> <span class="rk">rad</span><br>
+      <span class="rk">hand site_xpos (world):</span> <span class="rv-o" id="s11Hand">-</span> <span class="rk">m</span><br>
+      <span class="rk">qvel[0]:</span> <span class="rv" id="s11V">-</span> <span class="rk">rad/s</span> <span class="rk">time:</span> <span class="rv" id="s11T">-</span> <span class="rk">s</span><br>
+      <span class="rk">qpos[2:5] red box (world):</span> <span class="rv" id="s11Box">-</span> <span class="rk">m</span>
+    </div>
+    <div class="control-group" style="margin-top:14px">
+      <label>Pick a geom (or click one in the picture)</label>
+      <div class="btn-row" role="group" aria-label="Pick a geom">
+        <button class="btn btn-sm" type="button" data-s11geom="floor" aria-pressed="false">floor</button>
+        <button class="btn btn-sm" type="button" data-s11geom="upper_geom" aria-pressed="false">upper_geom</button>
+        <button class="btn btn-sm" type="button" data-s11geom="forearm_geom" aria-pressed="false">forearm_geom</button>
+        <button class="btn btn-sm btn-primary" type="button" data-s11geom="weight" aria-pressed="true">weight</button>
+        <button class="btn btn-sm" type="button" data-s11geom="board" aria-pressed="false">board</button>
+        <button class="btn btn-sm" type="button" data-s11geom="box_b" aria-pressed="false">box_b</button>
+        <button class="btn btn-sm" type="button" data-s11geom="red_box_geom" aria-pressed="false">red_box_geom</button>
+      </div>
+    </div>
+    <div class="readout" id="s11GeomOut" aria-live="polite"></div>
+    <div class="control-group" style="margin-top:14px">
+      <label>Change one class setting (press again to undo)</label>
+      <div class="btn-row" role="group" aria-label="Class settings to change">
+        <button class="btn btn-sm" type="button" data-s11tog="0" aria-pressed="false">main rgba</button>
+        <button class="btn btn-sm" type="button" data-s11tog="1" aria-pressed="false">robot rgba</button>
+        <button class="btn btn-sm" type="button" data-s11tog="2" aria-pressed="false">robot contype</button>
+        <button class="btn btn-sm" type="button" data-s11tog="3" aria-pressed="false">finger friction</button>
+        <button class="btn btn-sm" type="button" data-s11tog="4" aria-pressed="false">furniture friction</button>
+        <button class="btn btn-sm" type="button" data-s11tog="5" aria-pressed="false">object friction</button>
+      </div>
+    </div>
+    <div class="readout" id="s11ChangeOut" aria-live="polite"><span class="rk">No class setting changed yet. The values above are the ones MuJoCo compiles from the lesson XML.</span></div>
+    <div class="readout" id="s11TreeOut" style="margin-top:10px"></div>
+    <p class="sidebar-hint" style="margin-top:10px;">Every value shown here, for the lesson XML and for all 64 on/off combinations of the six buttons, matches the compiled MjModel (checked by 11_check_browser.py). The arm pose matches MuJoCo's site_xpos and xpos to better than 1e-6 m.</p>
+  </div>
+</div>

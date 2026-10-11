@@ -1,0 +1,1354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MuJoCo Learning Lab - Split-Screen Simulator</title>
+<style>
+/* ── Reset & Base ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-deep: #0c1410;
+  --bg-left: #111c16;
+  --bg-right: #0e1812;
+  --bg-card: #152019;
+  --bg-code: #0f1f16;
+  --border: #1e332a;
+  --border-bright: #264d3a;
+  --text: #d1ddd6;
+  --text-dim: #7a9488;
+  --text-bright: #e8f0eb;
+  --accent: #34d399;
+  --accent-dim: #1a6b4d;
+  --accent-glow: rgba(52, 211, 153, 0.12);
+  --amber: #f59e0b;
+  --amber-dim: #92610d;
+  --amber-glow: rgba(245, 158, 11, 0.10);
+  --red: #f87171;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SF Mono", "Cascadia Code", "Fira Code", "JetBrains Mono", Consolas, monospace;
+  --divider-width: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+
+html { font-size: 15px; }
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-deep);
+  color: var(--text);
+  line-height: 1.65;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── Layout: Split Screen ── */
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.split {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.pane-left {
+  width: 50%;
+  min-width: 0;
+  background: var(--bg-left);
+  border-right: var(--divider-width) solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.pane-right {
+  width: 50%;
+  min-width: 0;
+  background: var(--bg-right);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Tab Bar ── */
+.tab-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: var(--bg-deep);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+
+.tab-bar-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  margin-right: 8px;
+  white-space: nowrap;
+}
+
+.tab-btn {
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 5px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.tab-btn:hover {
+  border-color: var(--border-bright);
+  color: var(--text);
+  background: var(--bg-card);
+}
+
+.tab-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.tab-btn[aria-selected="true"] {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.progress-dots {
+  margin-left: auto;
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.progress-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: background 0.2s ease;
+}
+
+.progress-dot.active {
+  background: var(--accent);
+}
+
+/* ── Left Pane Scroll Area ── */
+.lesson-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px 28px 60px;
+  scroll-behavior: smooth;
+}
+
+.lesson-scroll::-webkit-scrollbar { width: 6px; }
+.lesson-scroll::-webkit-scrollbar-track { background: transparent; }
+.lesson-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+.lesson-panel { display: none; }
+.lesson-panel.active { display: block; }
+
+/* ── Typography ── */
+.lesson-number {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-bottom: 4px;
+}
+
+.lesson-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-bright);
+  margin-bottom: 6px;
+  line-height: 1.3;
+}
+
+.lesson-subtitle {
+  font-size: 0.9rem;
+  color: var(--text-dim);
+  margin-bottom: 28px;
+}
+
+h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-bright);
+  margin: 28px 0 12px;
+}
+
+p { margin-bottom: 14px; }
+
+/* ── Content Blocks ── */
+.mental-model {
+  background: var(--accent-glow);
+  border: 1px solid var(--accent-dim);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  padding: 16px 18px;
+  margin: 18px 0;
+}
+
+.mental-model-label {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.code-block {
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin: 18px 0;
+  overflow: hidden;
+}
+
+.code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 14px;
+  background: rgba(0,0,0,0.2);
+  border-bottom: 1px solid var(--border);
+}
+
+.code-lang {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+
+.code-block pre {
+  padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: var(--text);
+  tab-size: 2;
+}
+
+.code-block pre::-webkit-scrollbar { height: 4px; }
+.code-block pre::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.kw { color: var(--accent); }
+.str { color: var(--amber); }
+.cmt { color: var(--text-dim); font-style: italic; }
+.num { color: #c084fc; }
+.tag { color: var(--accent); }
+.attr { color: var(--amber); }
+.val { color: #c084fc; }
+
+.prediction {
+  background: var(--amber-glow);
+  border: 1px solid var(--amber-dim);
+  border-left: 3px solid var(--amber);
+  border-radius: 6px;
+  padding: 16px 18px;
+  margin: 18px 0;
+}
+
+.prediction-label {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--amber);
+  margin-bottom: 8px;
+}
+
+.checkpoint {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 18px;
+  margin: 24px 0;
+}
+
+.checkpoint-label {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+
+.checkpoint ul {
+  list-style: none;
+  padding: 0;
+}
+
+.checkpoint li {
+  padding: 5px 0;
+  padding-left: 22px;
+  position: relative;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+
+.checkpoint li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 10px;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid var(--border-bright);
+  background: transparent;
+}
+
+/* ── Right Pane ── */
+.sim-header {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.sim-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-bright);
+  margin-bottom: 2px;
+}
+
+.sim-values {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+.sim-canvas {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  min-height: 0;
+}
+
+.sim-canvas svg {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.sim-controls {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.control-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.control-label {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  min-width: 90px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.control-value {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--accent);
+  min-width: 48px;
+  text-align: right;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg-deep);
+  cursor: pointer;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg-deep);
+  cursor: pointer;
+}
+
+input[type="range"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.btn-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.sim-btn {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  padding: 6px 16px;
+  border-radius: 5px;
+  border: 1px solid var(--border-bright);
+  background: var(--bg-card);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sim-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.sim-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.sim-btn.primary {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.sim-btn.primary:hover {
+  background: var(--accent);
+  color: var(--bg-deep);
+}
+
+/* ── Sim panels ── */
+.sim-panel { display: none; flex-direction: column; flex: 1; min-height: 0; }
+.sim-panel.active { display: flex; }
+
+/* ── Mobile ── */
+@media (max-width: 800px) {
+  .split {
+    flex-direction: column;
+  }
+
+  .pane-left {
+    width: 100%;
+    border-right: none;
+    border-bottom: var(--divider-width) solid var(--border);
+  }
+
+  .pane-right {
+    width: 100%;
+    height: 50vh;
+    position: sticky;
+    bottom: 0;
+    top: auto;
+  }
+
+  .lesson-scroll {
+    padding: 20px 16px 40px;
+  }
+
+  .sim-controls {
+    padding: 12px 14px;
+  }
+
+  .control-label {
+    min-width: 70px;
+    font-size: 0.65rem;
+  }
+}
+
+/* ── Inline emphasis ── */
+code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--accent);
+}
+
+strong { color: var(--text-bright); font-weight: 600; }
+
+/* ── Grid lines in SVG ── */
+.grid-line { stroke: var(--border); stroke-width: 0.5; }
+.axis-line { stroke: var(--text-dim); stroke-width: 1; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="split">
+
+    <!-- ════════ LEFT PANE ════════ -->
+    <div class="pane-left">
+      <div class="tab-bar" role="tablist" aria-label="Lessons">
+        <span class="tab-bar-label">Lessons</span>
+        <button class="tab-btn" role="tab" aria-selected="true" aria-controls="lesson-1" id="tab-1" tabindex="0" onclick="switchLesson(0)">01 MJCF</button>
+        <button class="tab-btn" role="tab" aria-selected="false" aria-controls="lesson-2" id="tab-2" tabindex="-1" onclick="switchLesson(1)">02 Frames</button>
+        <button class="tab-btn" role="tab" aria-selected="false" aria-controls="lesson-3" id="tab-3" tabindex="-1" onclick="switchLesson(2)">03 State</button>
+        <div class="progress-dots">
+          <div class="progress-dot active" id="pdot-0"></div>
+          <div class="progress-dot" id="pdot-1"></div>
+          <div class="progress-dot" id="pdot-2"></div>
+        </div>
+      </div>
+
+      <div class="lesson-scroll">
+
+        <!-- ──── Lesson 01 ──── -->
+        <div class="lesson-panel active" id="lesson-1" role="tabpanel" aria-labelledby="tab-1">
+          <div class="lesson-number">Lesson 01</div>
+          <h2 class="lesson-title">MJCF Hierarchy</h2>
+          <p class="lesson-subtitle">How XML becomes a physics model. Bodies, geoms, joints.</p>
+
+          <div class="mental-model">
+            <div class="mental-model-label">Mental Model</div>
+            <p>Think of an MJCF file as a family tree. The <code>&lt;worldbody&gt;</code> is the root. Each <code>&lt;body&gt;</code> is a node that can hold geometry (<code>&lt;geom&gt;</code>) for collision and appearance, plus joints (<code>&lt;joint&gt;</code>) that define how it moves relative to its parent. When MuJoCo loads this tree, it compiles it into a flat array structure optimized for simulation.</p>
+            <p style="margin-bottom:0">Look at the pendulum in the simulation pane. The anchor point is the world body. The rod and bob are children, connected by a hinge joint. Drag the sliders to see how changing the hierarchy's parameters reshapes the physical model.</p>
+          </div>
+
+          <h3>The Nesting Rule</h3>
+          <p>Every <code>&lt;body&gt;</code> lives inside another body or inside <code>&lt;worldbody&gt;</code>. Joints belong to the body they are defined in, and they constrain that body relative to its parent. Geoms give bodies shape, mass, and collision surfaces.</p>
+          <p>A single body can hold multiple geoms (compound shapes) and multiple joints (combined degrees of freedom). The order matters: MuJoCo processes joints in definition order when computing forward kinematics.</p>
+
+          <div class="code-block">
+            <div class="code-header"><span class="code-lang">MJCF / XML</span></div>
+<pre><span class="tag">&lt;mujoco</span> <span class="attr">model</span>=<span class="val">"pendulum"</span><span class="tag">&gt;</span>
+  <span class="tag">&lt;worldbody&gt;</span>
+    <span class="cmt">&lt;!-- Anchor: fixed in world frame --&gt;</span>
+    <span class="tag">&lt;body</span> <span class="attr">name</span>=<span class="val">"anchor"</span> <span class="attr">pos</span>=<span class="val">"0 0 2"</span><span class="tag">&gt;</span>
+      <span class="tag">&lt;geom</span> <span class="attr">type</span>=<span class="val">"sphere"</span> <span class="attr">size</span>=<span class="val">"0.05"</span><span class="tag">/&gt;</span>
+
+      <span class="cmt">&lt;!-- Pendulum arm: child of anchor --&gt;</span>
+      <span class="tag">&lt;body</span> <span class="attr">name</span>=<span class="val">"arm"</span> <span class="attr">pos</span>=<span class="val">"0 0 0"</span><span class="tag">&gt;</span>
+        <span class="tag">&lt;joint</span> <span class="attr">type</span>=<span class="val">"hinge"</span> <span class="attr">axis</span>=<span class="val">"0 1 0"</span><span class="tag">/&gt;</span>
+        <span class="tag">&lt;geom</span> <span class="attr">type</span>=<span class="val">"capsule"</span>
+              <span class="attr">fromto</span>=<span class="val">"0 0 0  0 0 -1"</span>
+              <span class="attr">size</span>=<span class="val">"0.02"</span><span class="tag">/&gt;</span>
+        <span class="tag">&lt;geom</span> <span class="attr">type</span>=<span class="val">"sphere"</span>
+              <span class="attr">pos</span>=<span class="val">"0 0 -1"</span> <span class="attr">size</span>=<span class="val">"0.08"</span><span class="tag">/&gt;</span>
+      <span class="tag">&lt;/body&gt;</span>
+    <span class="tag">&lt;/body&gt;</span>
+  <span class="tag">&lt;/worldbody&gt;</span>
+<span class="tag">&lt;/mujoco&gt;</span></pre>
+          </div>
+
+          <h3>Compilation: Tree to Arrays</h3>
+          <p>When you call <code>mj_loadXML</code>, the tree is flattened into <code>mjModel</code>. Body 0 is always the world. Each body gets an index, and joint/geom indices follow body order. The <code>body_parentid</code> array preserves the tree structure so the engine can walk it during forward kinematics.</p>
+          <p>Try adjusting the <strong>rod length</strong> slider in the simulation. In the compiled model, this changes <code>model.geom_size</code> for the capsule and <code>model.geom_pos</code> for the bob. The hierarchy stays the same; only the numeric parameters change.</p>
+
+          <div class="prediction">
+            <div class="prediction-label">Prediction Exercise</div>
+            <p>Set the angle to about 45 degrees and the rod length to maximum. Before looking at the simulation, predict: will the bob be higher or lower than the anchor point?</p>
+            <p style="margin-bottom:0">Now check the simulation pane. The bob position depends on both the rod length and the angle. At 45 degrees, the vertical drop is <code>length * cos(45) = length * 0.707</code>, so the bob is always below the anchor for angles less than 90 degrees.</p>
+          </div>
+
+          <div class="checkpoint">
+            <div class="checkpoint-label">Checkpoint</div>
+            <ul>
+              <li>You can identify the parent-child relationship in an MJCF body tree</li>
+              <li>You understand that joints connect a body to its parent, not to its children</li>
+              <li>You know that geoms provide shape and mass, not connectivity</li>
+              <li>You can trace how XML nesting maps to <code>body_parentid</code> arrays</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- ──── Lesson 02 ──── -->
+        <div class="lesson-panel" id="lesson-2" role="tabpanel" aria-labelledby="tab-2">
+          <div class="lesson-number">Lesson 02</div>
+          <h2 class="lesson-title">Frames & Axes</h2>
+          <p class="lesson-subtitle">Local vs world coordinates. Where things actually are.</p>
+
+          <div class="mental-model">
+            <div class="mental-model-label">Mental Model</div>
+            <p>Every body in MuJoCo carries its own coordinate frame: an origin and three axes (x, y, z). When a body's <code>pos</code> says <code>"0 0 1"</code>, that means 1 unit along the parent's z-axis, not the world's. Frames compose: a child's world position is its local offset transformed through every ancestor's frame, all the way up to worldbody.</p>
+            <p style="margin-bottom:0">The simulation pane shows a two-link arm with visible coordinate frames. The red/green/blue lines at each joint are the local x/y/z axes. Watch how rotating one joint moves the second link's entire frame.</p>
+          </div>
+
+          <h3>Coordinate Composition</h3>
+          <p>If body A is at position <code>p_A</code> in the world, and body B is defined at local offset <code>p_B_local</code> inside A, then B's world position is:</p>
+
+          <div class="code-block">
+            <div class="code-header"><span class="code-lang">Math / Pseudocode</span></div>
+<pre><span class="cmt"># World position of child B</span>
+<span class="kw">p_B_world</span> = p_A_world + R_A @ p_B_local
+
+<span class="cmt"># R_A is the 3x3 rotation matrix of body A</span>
+<span class="cmt"># @ is matrix multiplication</span>
+<span class="cmt"># The rotation "re-interprets" the local offset</span>
+<span class="cmt"># in world coordinates</span></pre>
+          </div>
+
+          <p>This is why joints matter so much for frames. A hinge joint changes the rotation matrix <code>R</code> of its body. When a parent rotates, all descendants rotate with it, because their world positions depend on the parent's <code>R</code>.</p>
+
+          <h3>Reading Frames in Code</h3>
+          <div class="code-block">
+            <div class="code-header"><span class="code-lang">Python</span></div>
+<pre><span class="kw">import</span> mujoco
+
+model = mujoco.MjModel.from_xml_path(<span class="str">"arm.xml"</span>)
+data  = mujoco.MjData(model)
+
+<span class="cmt"># Set joint angles</span>
+data.qpos[<span class="num">0</span>] = <span class="num">0.5</span>   <span class="cmt"># base hinge: 0.5 rad</span>
+data.qpos[<span class="num">1</span>] = <span class="num">-0.3</span>  <span class="cmt"># elbow hinge: -0.3 rad</span>
+
+<span class="cmt"># Compute kinematics (no dynamics)</span>
+mujoco.mj_forward(model, data)
+
+<span class="cmt"># World position of the end effector body</span>
+body_id = model.body(<span class="str">"end_effector"</span>).id
+world_pos = data.xpos[body_id]
+<span class="kw">print</span>(<span class="str">f"End effector at: </span>{world_pos}<span class="str">"</span>)</pre>
+          </div>
+
+          <p>In the simulation, adjust the <strong>hinge angle</strong> slider. Notice how the second link's frame (shown at its base) rotates relative to the first link. The world-frame grid stays fixed. This is the core of forward kinematics: joint angles determine body frames, which determine world positions.</p>
+
+          <div class="prediction">
+            <div class="prediction-label">Prediction Exercise</div>
+            <p>Set the base height to maximum and the link offset to about halfway. Now move the hinge angle. Does the tip of the second link trace a circle or an arc?</p>
+            <p style="margin-bottom:0">It traces a perfect circle. The hinge constrains motion to rotation around a single axis. The radius of that circle equals the link offset distance. The center of the circle is at the hinge location in world coordinates.</p>
+          </div>
+
+          <div class="checkpoint">
+            <div class="checkpoint-label">Checkpoint</div>
+            <ul>
+              <li>You can distinguish local-frame coordinates from world-frame coordinates</li>
+              <li>You understand that <code>data.xpos</code> gives world positions after <code>mj_forward</code></li>
+              <li>You know that rotating a parent rotates all of its descendants</li>
+              <li>You can predict how changing a joint angle affects downstream body positions</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- ──── Lesson 03 ──── -->
+        <div class="lesson-panel" id="lesson-3" role="tabpanel" aria-labelledby="tab-3">
+          <div class="lesson-number">Lesson 03</div>
+          <h2 class="lesson-title">State & Stepping</h2>
+          <p class="lesson-subtitle">mj_forward vs mj_step. How simulation advances.</p>
+
+          <div class="mental-model">
+            <div class="mental-model-label">Mental Model</div>
+            <p>The simulation state lives in <code>mjData</code>. The two most important arrays are <code>qpos</code> (generalized positions) and <code>qvel</code> (generalized velocities). Together, they fully describe the mechanical state of every joint in the system.</p>
+            <p><code>mj_forward</code> computes everything (positions, velocities, forces) from the current state without advancing time. It answers: "Given this state, what does the world look like?"</p>
+            <p style="margin-bottom:0"><code>mj_step</code> does everything <code>mj_forward</code> does, then integrates forward by one timestep. It answers: "Given this state, what happens next?" Look at the sandbox in the simulation pane. Setting angle and velocity, then pressing Step, shows exactly one timestep of physics.</p>
+          </div>
+
+          <h3>The State Vector</h3>
+          <p>For a single hinge joint, <code>qpos</code> has one entry (the angle in radians) and <code>qvel</code> has one entry (angular velocity in rad/s). For a free-floating body, <code>qpos</code> has 7 entries (3 position + 4 quaternion) and <code>qvel</code> has 6 (3 linear + 3 angular). The sizes differ because quaternions have 4 components but only 3 degrees of freedom.</p>
+
+          <div class="code-block">
+            <div class="code-header"><span class="code-lang">Python</span></div>
+<pre><span class="kw">import</span> mujoco
+
+model = mujoco.MjModel.from_xml_path(<span class="str">"pendulum.xml"</span>)
+data  = mujoco.MjData(model)
+
+<span class="cmt"># Set initial state</span>
+data.qpos[<span class="num">0</span>] = <span class="num">1.0</span>   <span class="cmt"># angle: 1 radian</span>
+data.qvel[<span class="num">0</span>] = <span class="num">0.0</span>   <span class="cmt"># velocity: at rest</span>
+
+<span class="cmt"># Compute derived quantities (no time advance)</span>
+mujoco.mj_forward(model, data)
+<span class="kw">print</span>(<span class="str">"Before step:"</span>, data.qpos[<span class="num">0</span>])
+
+<span class="cmt"># Advance one timestep (default 0.002s)</span>
+mujoco.mj_step(model, data)
+<span class="kw">print</span>(<span class="str">"After step: "</span>, data.qpos[<span class="num">0</span>])
+<span class="kw">print</span>(<span class="str">"Velocity:   "</span>, data.qvel[<span class="num">0</span>])</pre>
+          </div>
+
+          <h3>Forward vs Step</h3>
+          <p>A common mistake: calling <code>mj_forward</code> in a loop and wondering why nothing moves. <code>mj_forward</code> is a pure function of state. It never modifies <code>qpos</code> or <code>qvel</code>. Only <code>mj_step</code> integrates the equations of motion and updates the state.</p>
+          <p>Use the simulation pane to test this. Set an angle and velocity, then press <strong>Step</strong>. The angle changes based on the velocity. Press Step again and observe how gravity causes the velocity to change, which then changes the angle by a different amount. Press <strong>Reset</strong> to restore your initial values and try again.</p>
+
+          <div class="code-block">
+            <div class="code-header"><span class="code-lang">Python</span></div>
+<pre><span class="cmt"># Simulate 1 second at default timestep</span>
+n_steps = <span class="kw">int</span>(<span class="num">1.0</span> / model.opt.timestep)
+
+<span class="kw">for</span> i <span class="kw">in</span> <span class="kw">range</span>(n_steps):
+    mujoco.mj_step(model, data)
+
+<span class="cmt"># After 500 steps of 0.002s each:</span>
+<span class="cmt"># data.time == 1.0</span>
+<span class="cmt"># data.qpos and data.qvel reflect</span>
+<span class="cmt"># the accumulated physics</span></pre>
+          </div>
+
+          <div class="prediction">
+            <div class="prediction-label">Prediction Exercise</div>
+            <p>In the sandbox, set the angle to 0 (straight down) and velocity to 0. Press Step several times. What happens?</p>
+            <p style="margin-bottom:0">Nothing changes. At angle 0 with zero velocity, the pendulum hangs at equilibrium. Gravity pulls straight down along the rod, producing zero torque. The state remains constant. Now set a small velocity and step: the angle changes because velocity is nonzero, and gravity gradually slows or accelerates the motion.</p>
+          </div>
+
+          <div class="checkpoint">
+            <div class="checkpoint-label">Checkpoint</div>
+            <ul>
+              <li>You understand that <code>qpos</code> and <code>qvel</code> together define the full state</li>
+              <li>You know <code>mj_forward</code> computes derived quantities without advancing time</li>
+              <li>You know <code>mj_step</code> integrates forward by one timestep</li>
+              <li>You can predict how gravity affects a pendulum's velocity over successive steps</li>
+            </ul>
+          </div>
+        </div>
+
+      </div><!-- /lesson-scroll -->
+    </div><!-- /pane-left -->
+
+    <!-- ════════ RIGHT PANE ════════ -->
+    <div class="pane-right">
+
+      <!-- Sim 01: Pendulum -->
+      <div class="sim-panel active" id="sim-1">
+        <div class="sim-header">
+          <div class="sim-title">Interactive Pendulum</div>
+          <div class="sim-values" id="sim1-values">height: 2.0 | rod: 1.0 | angle: 30.0deg</div>
+        </div>
+        <div class="sim-canvas">
+          <svg id="svg1" viewBox="0 0 400 400" width="400" height="400" aria-label="Pendulum simulation">
+            <!-- grid -->
+            <defs>
+              <pattern id="grid1" width="40" height="40" patternUnits="userSpaceOnUse">
+                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e332a" stroke-width="0.5"/>
+              </pattern>
+            </defs>
+            <rect width="400" height="400" fill="url(#grid1)"/>
+            <!-- pendulum drawn by JS -->
+            <g id="pendulum-group"></g>
+          </svg>
+        </div>
+        <div class="sim-controls">
+          <div class="control-row">
+            <span class="control-label">Height</span>
+            <input type="range" id="s1-height" min="1" max="3" step="0.1" value="2" aria-label="Anchor height">
+            <span class="control-value" id="s1-height-v">2.0</span>
+          </div>
+          <div class="control-row">
+            <span class="control-label">Rod Length</span>
+            <input type="range" id="s1-rod" min="0.4" max="2.0" step="0.1" value="1.0" aria-label="Rod length">
+            <span class="control-value" id="s1-rod-v">1.0</span>
+          </div>
+          <div class="control-row">
+            <span class="control-label">Angle</span>
+            <input type="range" id="s1-angle" min="-180" max="180" step="1" value="30" aria-label="Pendulum angle in degrees">
+            <span class="control-value" id="s1-angle-v">30&deg;</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sim 02: Frame Explorer -->
+      <div class="sim-panel" id="sim-2">
+        <div class="sim-header">
+          <div class="sim-title">Frame Explorer</div>
+          <div class="sim-values" id="sim2-values">base: 1.5 | offset: 1.0 | hinge: 0.0deg</div>
+        </div>
+        <div class="sim-canvas">
+          <svg id="svg2" viewBox="0 0 400 400" width="400" height="400" aria-label="Coordinate frame simulation">
+            <defs>
+              <pattern id="grid2" width="40" height="40" patternUnits="userSpaceOnUse">
+                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e332a" stroke-width="0.5"/>
+              </pattern>
+            </defs>
+            <rect width="400" height="400" fill="url(#grid2)"/>
+            <g id="frame-group"></g>
+          </svg>
+        </div>
+        <div class="sim-controls">
+          <div class="control-row">
+            <span class="control-label">Base Height</span>
+            <input type="range" id="s2-base" min="0.5" max="2.5" step="0.1" value="1.5" aria-label="Base height">
+            <span class="control-value" id="s2-base-v">1.5</span>
+          </div>
+          <div class="control-row">
+            <span class="control-label">Link Offset</span>
+            <input type="range" id="s2-offset" min="0.3" max="2.0" step="0.1" value="1.0" aria-label="Link offset">
+            <span class="control-value" id="s2-offset-v">1.0</span>
+          </div>
+          <div class="control-row">
+            <span class="control-label">Hinge Angle</span>
+            <input type="range" id="s2-hinge" min="-180" max="180" step="1" value="0" aria-label="Hinge angle in degrees">
+            <span class="control-value" id="s2-hinge-v">0&deg;</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sim 03: State Sandbox -->
+      <div class="sim-panel" id="sim-3">
+        <div class="sim-header">
+          <div class="sim-title">State Sandbox</div>
+          <div class="sim-values" id="sim3-values">angle: 0.50rad | vel: 0.00rad/s | t: 0.000s</div>
+        </div>
+        <div class="sim-canvas">
+          <svg id="svg3" viewBox="0 0 400 400" width="400" height="400" aria-label="State stepping simulation">
+            <defs>
+              <pattern id="grid3" width="40" height="40" patternUnits="userSpaceOnUse">
+                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e332a" stroke-width="0.5"/>
+              </pattern>
+            </defs>
+            <rect width="400" height="400" fill="url(#grid3)"/>
+            <g id="state-group"></g>
+          </svg>
+        </div>
+        <div class="sim-controls">
+          <div class="control-row">
+            <span class="control-label">Angle (rad)</span>
+            <input type="range" id="s3-angle" min="-3.14" max="3.14" step="0.01" value="0.50" aria-label="Initial angle in radians">
+            <span class="control-value" id="s3-angle-v">0.50</span>
+          </div>
+          <div class="control-row">
+            <span class="control-label">Velocity</span>
+            <input type="range" id="s3-vel" min="-6" max="6" step="0.1" value="0" aria-label="Initial angular velocity">
+            <span class="control-value" id="s3-vel-v">0.00</span>
+          </div>
+          <div class="btn-row">
+            <button class="sim-btn primary" id="s3-step" aria-label="Step simulation forward">Step (0.05s)</button>
+            <button class="sim-btn" id="s3-step10" aria-label="Step 10 times">Step x10</button>
+            <button class="sim-btn" id="s3-reset" aria-label="Reset simulation state">Reset</button>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /pane-right -->
+
+  </div><!-- /split -->
+</div><!-- /shell -->
+
+<script>
+// ── Lesson / Tab Switching ──
+let currentLesson = 0;
+const lessonPanels = [
+  document.getElementById('lesson-1'),
+  document.getElementById('lesson-2'),
+  document.getElementById('lesson-3')
+];
+const simPanels = [
+  document.getElementById('sim-1'),
+  document.getElementById('sim-2'),
+  document.getElementById('sim-3')
+];
+const tabs = [
+  document.getElementById('tab-1'),
+  document.getElementById('tab-2'),
+  document.getElementById('tab-3')
+];
+const dots = [
+  document.getElementById('pdot-0'),
+  document.getElementById('pdot-1'),
+  document.getElementById('pdot-2')
+];
+
+function switchLesson(idx) {
+  currentLesson = idx;
+  lessonPanels.forEach((p, i) => p.classList.toggle('active', i === idx));
+  simPanels.forEach((p, i) => p.classList.toggle('active', i === idx));
+  tabs.forEach((t, i) => {
+    t.setAttribute('aria-selected', i === idx ? 'true' : 'false');
+    t.setAttribute('tabindex', i === idx ? '0' : '-1');
+  });
+  dots.forEach((d, i) => d.classList.toggle('active', i <= idx));
+  // scroll lesson content to top
+  document.querySelector('.lesson-scroll').scrollTop = 0;
+  // redraw the active sim
+  if (idx === 0) drawPendulum();
+  else if (idx === 1) drawFrames();
+  else drawState();
+}
+
+// Keyboard nav for tabs
+document.querySelector('.tab-bar').addEventListener('keydown', function(e) {
+  if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+    e.preventDefault();
+    let next = currentLesson + (e.key === 'ArrowRight' ? 1 : -1);
+    next = Math.max(0, Math.min(2, next));
+    switchLesson(next);
+    tabs[next].focus();
+  }
+});
+
+// ── SVG Helpers ──
+function svgEl(tag, attrs) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  return el;
+}
+
+function clearGroup(id) {
+  const g = document.getElementById(id);
+  while (g.firstChild) g.removeChild(g.firstChild);
+  return g;
+}
+
+// Coordinate transform: world y-up to SVG y-down
+// world range roughly [-2, 4] mapped to [0, 400]
+const S = 80; // pixels per world-unit
+const CX = 200; // center x
+const CY = 320; // ground y in SVG (world y=0)
+
+function wx(x) { return CX + x * S; }
+function wy(y) { return CY - y * S; }
+
+function drawAxis(g, x, y, dx, dy, len, color) {
+  const px = wx(x); const py = wy(y);
+  const ex = px + dx * len; const ey = py - dy * len;
+  g.appendChild(svgEl('line', {
+    x1: px, y1: py, x2: ex, y2: ey,
+    stroke: color, 'stroke-width': '2', 'stroke-linecap': 'round'
+  }));
+  // arrowhead
+  const angle = Math.atan2(-(ey - py), ex - px);
+  const a1 = angle + 2.6; const a2 = angle - 2.6;
+  const alen = 7;
+  g.appendChild(svgEl('polygon', {
+    points: `${ex},${ey} ${ex + Math.cos(a1)*alen},${ey - Math.sin(a1)*alen} ${ex + Math.cos(a2)*alen},${ey - Math.sin(a2)*alen}`,
+    fill: color
+  }));
+}
+
+// ── Sim 01: Pendulum ──
+const s1H = document.getElementById('s1-height');
+const s1R = document.getElementById('s1-rod');
+const s1A = document.getElementById('s1-angle');
+
+function drawPendulum() {
+  const g = clearGroup('pendulum-group');
+  const h = parseFloat(s1H.value);
+  const r = parseFloat(s1R.value);
+  const aDeg = parseFloat(s1A.value);
+  const aRad = aDeg * Math.PI / 180;
+
+  // update displays
+  document.getElementById('s1-height-v').textContent = h.toFixed(1);
+  document.getElementById('s1-rod-v').textContent = r.toFixed(1);
+  document.getElementById('s1-angle-v').innerHTML = aDeg + '&deg;';
+  document.getElementById('sim1-values').textContent =
+    `height: ${h.toFixed(1)} | rod: ${r.toFixed(1)} | angle: ${aDeg.toFixed(1)}deg`;
+
+  const anchorX = 0;
+  const anchorY = h;
+  const bobX = anchorX + r * Math.sin(aRad);
+  const bobY = anchorY - r * Math.cos(aRad);
+
+  // ground line
+  g.appendChild(svgEl('line', {
+    x1: 0, y1: CY, x2: 400, y2: CY,
+    stroke: '#264d3a', 'stroke-width': '1'
+  }));
+
+  // support (vertical line from ground to anchor)
+  g.appendChild(svgEl('line', {
+    x1: wx(anchorX), y1: CY, x2: wx(anchorX), y2: wy(anchorY),
+    stroke: '#3a5c4e', 'stroke-width': '2', 'stroke-dasharray': '4,4'
+  }));
+
+  // ceiling bracket
+  g.appendChild(svgEl('rect', {
+    x: wx(anchorX) - 20, y: wy(anchorY) - 4, width: 40, height: 8,
+    rx: 2, fill: '#3a5c4e'
+  }));
+
+  // rod
+  g.appendChild(svgEl('line', {
+    x1: wx(anchorX), y1: wy(anchorY),
+    x2: wx(bobX), y2: wy(bobY),
+    stroke: '#7a9488', 'stroke-width': '3', 'stroke-linecap': 'round'
+  }));
+
+  // angle arc
+  if (Math.abs(aDeg) > 2) {
+    const arcR = 25;
+    const startA = -Math.PI / 2; // straight down in SVG
+    const endA = -Math.PI / 2 + aRad;
+    const sa = Math.min(startA, endA);
+    const ea = Math.max(startA, endA);
+    const sweep = ea - sa;
+    const largeArc = sweep > Math.PI ? 1 : 0;
+    const sx = wx(anchorX) + arcR * Math.cos(sa);
+    const sy = wy(anchorY) - arcR * Math.sin(sa);
+    const ex = wx(anchorX) + arcR * Math.cos(ea);
+    const ey2 = wy(anchorY) - arcR * Math.sin(ea);
+    g.appendChild(svgEl('path', {
+      d: `M ${sx} ${sy} A ${arcR} ${arcR} 0 ${largeArc} 0 ${ex} ${ey2}`,
+      fill: 'none', stroke: '#f59e0b', 'stroke-width': '1.5', opacity: '0.6'
+    }));
+  }
+
+  // bob
+  g.appendChild(svgEl('circle', {
+    cx: wx(bobX), cy: wy(bobY), r: 12,
+    fill: '#34d399', opacity: '0.9'
+  }));
+  g.appendChild(svgEl('circle', {
+    cx: wx(bobX), cy: wy(bobY), r: 12,
+    fill: 'none', stroke: '#34d399', 'stroke-width': '2'
+  }));
+
+  // anchor dot
+  g.appendChild(svgEl('circle', {
+    cx: wx(anchorX), cy: wy(anchorY), r: 5,
+    fill: '#f59e0b'
+  }));
+
+  // labels
+  const label = svgEl('text', {
+    x: wx(bobX) + 16, y: wy(bobY) + 4,
+    fill: '#7a9488', 'font-size': '11', 'font-family': 'monospace'
+  });
+  label.textContent = `(${bobX.toFixed(2)}, ${bobY.toFixed(2)})`;
+  g.appendChild(label);
+
+  const anchorLabel = svgEl('text', {
+    x: wx(anchorX) + 10, y: wy(anchorY) - 10,
+    fill: '#7a9488', 'font-size': '10', 'font-family': 'monospace'
+  });
+  anchorLabel.textContent = 'anchor';
+  g.appendChild(anchorLabel);
+}
+
+s1H.addEventListener('input', drawPendulum);
+s1R.addEventListener('input', drawPendulum);
+s1A.addEventListener('input', drawPendulum);
+
+
+// ── Sim 02: Frame Explorer ──
+const s2B = document.getElementById('s2-base');
+const s2O = document.getElementById('s2-offset');
+const s2H = document.getElementById('s2-hinge');
+
+function drawFrames() {
+  const g = clearGroup('frame-group');
+  const baseH = parseFloat(s2B.value);
+  const offset = parseFloat(s2O.value);
+  const hingeDeg = parseFloat(s2H.value);
+  const hingeRad = hingeDeg * Math.PI / 180;
+
+  document.getElementById('s2-base-v').textContent = baseH.toFixed(1);
+  document.getElementById('s2-offset-v').textContent = offset.toFixed(1);
+  document.getElementById('s2-hinge-v').innerHTML = hingeDeg + '&deg;';
+  document.getElementById('sim2-values').textContent =
+    `base: ${baseH.toFixed(1)} | offset: ${offset.toFixed(1)} | hinge: ${hingeDeg.toFixed(0)}deg`;
+
+  // ground
+  g.appendChild(svgEl('line', {
+    x1: 0, y1: CY, x2: 400, y2: CY,
+    stroke: '#264d3a', 'stroke-width': '1'
+  }));
+
+  // World frame at origin
+  drawAxis(g, -1.8, 0, 1, 0, 30, '#f87171'); // x red
+  drawAxis(g, -1.8, 0, 0, 1, 30, '#34d399'); // y green (up)
+  const wlabel = svgEl('text', {
+    x: wx(-1.8) - 4, y: CY + 16,
+    fill: '#7a9488', 'font-size': '9', 'font-family': 'monospace'
+  });
+  wlabel.textContent = 'world';
+  g.appendChild(wlabel);
+
+  // Base body: vertical bar from ground to baseH
+  const bx = 0;
+  const by = baseH;
+  g.appendChild(svgEl('line', {
+    x1: wx(bx), y1: CY, x2: wx(bx), y2: wy(by),
+    stroke: '#5a7a6d', 'stroke-width': '6', 'stroke-linecap': 'round'
+  }));
+
+  // Base frame at top
+  drawAxis(g, bx, by, 1, 0, 24, '#f87171');
+  drawAxis(g, bx, by, 0, 1, 24, '#34d399');
+  const blabel = svgEl('text', {
+    x: wx(bx) + 6, y: wy(by) - 28,
+    fill: '#f59e0b', 'font-size': '9', 'font-family': 'monospace'
+  });
+  blabel.textContent = 'body_0';
+  g.appendChild(blabel);
+
+  // Hinge joint indicator
+  g.appendChild(svgEl('circle', {
+    cx: wx(bx), cy: wy(by), r: 7,
+    fill: 'none', stroke: '#f59e0b', 'stroke-width': '2'
+  }));
+  g.appendChild(svgEl('circle', {
+    cx: wx(bx), cy: wy(by), r: 2.5,
+    fill: '#f59e0b'
+  }));
+
+  // Second link: rotated by hinge
+  const ex = bx + offset * Math.sin(hingeRad);
+  const ey = by + offset * Math.cos(hingeRad);
+
+  g.appendChild(svgEl('line', {
+    x1: wx(bx), y1: wy(by), x2: wx(ex), y2: wy(ey),
+    stroke: '#34d399', 'stroke-width': '5', 'stroke-linecap': 'round', opacity: '0.8'
+  }));
+
+  // Frame at end of second link (rotated)
+  const cosA = Math.cos(hingeRad);
+  const sinA = Math.sin(hingeRad);
+  // local x-axis rotated: (cos, sin) in world
+  drawAxis(g, ex, ey, cosA, -sinA, 22, '#f87171');
+  // local y-axis rotated: (-sin, cos) in world
+  drawAxis(g, ex, ey, sinA, cosA, 22, '#34d399');
+
+  const elabel = svgEl('text', {
+    x: wx(ex) + 8, y: wy(ey) - 6,
+    fill: '#f59e0b', 'font-size': '9', 'font-family': 'monospace'
+  });
+  elabel.textContent = 'body_1';
+  g.appendChild(elabel);
+
+  // End effector dot
+  g.appendChild(svgEl('circle', {
+    cx: wx(ex), cy: wy(ey), r: 5,
+    fill: '#34d399'
+  }));
+
+  // Coordinate readout
+  const readout = svgEl('text', {
+    x: wx(ex) + 12, y: wy(ey) + 12,
+    fill: '#7a9488', 'font-size': '10', 'font-family': 'monospace'
+  });
+  readout.textContent = `world: (${ex.toFixed(2)}, ${ey.toFixed(2)})`;
+  g.appendChild(readout);
+
+  const localReadout = svgEl('text', {
+    x: wx(ex) + 12, y: wy(ey) + 24,
+    fill: '#5a7a6d', 'font-size': '10', 'font-family': 'monospace'
+  });
+  localReadout.textContent = `local: (0.00, ${offset.toFixed(2)})`;
+  g.appendChild(localReadout);
+
+  // trace circle (ghosted)
+  if (Math.abs(hingeDeg) > 2) {
+    g.appendChild(svgEl('circle', {
+      cx: wx(bx), cy: wy(by), r: offset * S,
+      fill: 'none', stroke: '#34d399', 'stroke-width': '0.7',
+      'stroke-dasharray': '3,5', opacity: '0.3'
+    }));
+  }
+}
+
+s2B.addEventListener('input', drawFrames);
+s2O.addEventListener('input', drawFrames);
+s2H.addEventListener('input', drawFrames);
+
+
+// ── Sim 03: State Sandbox ──
+const s3A = document.getElementById('s3-angle');
+const s3V = document.getElementById('s3-vel');
+const s3Step = document.getElementById('s3-step');
+const s3Step10 = document.getElementById('s3-step10');
+const s3Reset = document.getElementById('s3-reset');
+
+let stateAngle = 0.5;
+let stateVel = 0.0;
+let stateTime = 0.0;
+let stateInitAngle = 0.5;
+let stateInitVel = 0.0;
+const DT = 0.05;
+const GRAVITY = 9.81;
+const ROD_LEN = 1.2;
+
+function physicsStep() {
+  // Simple pendulum: d2theta/dt2 = -(g/L)*sin(theta)
+  const accel = -(GRAVITY / ROD_LEN) * Math.sin(stateAngle);
+  stateVel += accel * DT;
+  stateAngle += stateVel * DT;
+  stateTime += DT;
+  // wrap angle to [-pi, pi]
+  while (stateAngle > Math.PI) stateAngle -= 2 * Math.PI;
+  while (stateAngle < -Math.PI) stateAngle += 2 * Math.PI;
+}
+
+function drawState() {
+  const g = clearGroup('state-group');
+
+  document.getElementById('s3-angle-v').textContent = stateAngle.toFixed(2);
+  document.getElementById('s3-vel-v').textContent = stateVel.toFixed(2);
+  document.getElementById('sim3-values').textContent =
+    `angle: ${stateAngle.toFixed(2)}rad | vel: ${stateVel.toFixed(2)}rad/s | t: ${stateTime.toFixed(3)}s`;
+
+  const anchorX = 0;
+  const anchorY = 2.5;
+  const bobX = anchorX + ROD_LEN * Math.sin(stateAngle);
+  const bobY = anchorY - ROD_LEN * Math.cos(stateAngle);
+
+  // ground
+  g.appendChild(svgEl('line', {
+    x1: 0, y1: CY, x2: 400, y2: CY,
+    stroke: '#264d3a', 'stroke-width': '1'
+  }));
+
+  // support
+  g.appendChild(svgEl('line', {
+    x1: wx(anchorX), y1: CY, x2: wx(anchorX), y2: wy(anchorY),
+    stroke: '#3a5c4e', 'stroke-width': '2', 'stroke-dasharray': '4,4'
+  }));
+
+  g.appendChild(svgEl('rect', {
+    x: wx(anchorX) - 20, y: wy(anchorY) - 4, width: 40, height: 8,
+    rx: 2, fill: '#3a5c4e'
+  }));
+
+  // Velocity arrow on bob
+  if (Math.abs(stateVel) > 0.05) {
+    const tangentX = Math.cos(stateAngle);
+    const tangentY = Math.sin(stateAngle);
+    const vScale = stateVel * ROD_LEN * 12; // visual scale
+    const arrowEx = wx(bobX) + tangentX * vScale;
+    const arrowEy = wy(bobY) + tangentY * vScale;
+    g.appendChild(svgEl('line', {
+      x1: wx(bobX), y1: wy(bobY),
+      x2: arrowEx, y2: arrowEy,
+      stroke: '#f59e0b', 'stroke-width': '2', 'stroke-linecap': 'round'
+    }));
+    // arrowhead
+    const aa = Math.atan2(-(arrowEy - wy(bobY)), arrowEx - wx(bobX));
+    const a1 = aa + 2.6; const a2 = aa - 2.6;
+    g.appendChild(svgEl('polygon', {
+      points: `${arrowEx},${arrowEy} ${arrowEx + Math.cos(a1)*6},${arrowEy - Math.sin(a1)*6} ${arrowEx + Math.cos(a2)*6},${arrowEy - Math.sin(a2)*6}`,
+      fill: '#f59e0b'
+    }));
+    const vlabel = svgEl('text', {
+      x: arrowEx + 6, y: arrowEy,
+      fill: '#f59e0b', 'font-size': '9', 'font-family': 'monospace'
+    });
+    vlabel.textContent = `v=${stateVel.toFixed(2)}`;
+    g.appendChild(vlabel);
+  }
+
+  // rod
+  g.appendChild(svgEl('line', {
+    x1: wx(anchorX), y1: wy(anchorY),
+    x2: wx(bobX), y2: wy(bobY),
+    stroke: '#7a9488', 'stroke-width': '3', 'stroke-linecap': 'round'
+  }));
+
+  // bob
+  g.appendChild(svgEl('circle', {
+    cx: wx(bobX), cy: wy(bobY), r: 12,
+    fill: '#34d399', opacity: '0.9'
+  }));
+  g.appendChild(svgEl('circle', {
+    cx: wx(bobX), cy: wy(bobY), r: 12,
+    fill: 'none', stroke: '#34d399', 'stroke-width': '2'
+  }));
+
+  // anchor
+  g.appendChild(svgEl('circle', {
+    cx: wx(anchorX), cy: wy(anchorY), r: 5,
+    fill: '#f59e0b'
+  }));
+
+  // State readout in SVG
+  const stateLabel = svgEl('text', {
+    x: 12, y: 24,
+    fill: '#7a9488', 'font-size': '11', 'font-family': 'monospace'
+  });
+  stateLabel.textContent = `qpos[0] = ${stateAngle.toFixed(4)}`;
+  g.appendChild(stateLabel);
+
+  const velLabel = svgEl('text', {
+    x: 12, y: 40,
+    fill: '#7a9488', 'font-size': '11', 'font-family': 'monospace'
+  });
+  velLabel.textContent = `qvel[0] = ${stateVel.toFixed(4)}`;
+  g.appendChild(velLabel);
+
+  const timeLabel = svgEl('text', {
+    x: 12, y: 56,
+    fill: '#5a7a6d', 'font-size': '10', 'font-family': 'monospace'
+  });
+  timeLabel.textContent = `time = ${stateTime.toFixed(3)}s`;
+  g.appendChild(timeLabel);
+}
+
+// When user drags angle/vel sliders, set state directly
+s3A.addEventListener('input', function() {
+  stateAngle = parseFloat(this.value);
+  stateInitAngle = stateAngle;
+  stateVel = parseFloat(s3V.value);
+  stateInitVel = stateVel;
+  stateTime = 0;
+  drawState();
+});
+
+s3V.addEventListener('input', function() {
+  stateVel = parseFloat(this.value);
+  stateInitVel = stateVel;
+  stateAngle = parseFloat(s3A.value);
+  stateInitAngle = stateAngle;
+  stateTime = 0;
+  drawState();
+});
+
+s3Step.addEventListener('click', function() {
+  physicsStep();
+  drawState();
+});
+
+s3Step10.addEventListener('click', function() {
+  for (let i = 0; i < 10; i++) physicsStep();
+  drawState();
+});
+
+s3Reset.addEventListener('click', function() {
+  stateAngle = parseFloat(s3A.value);
+  stateVel = parseFloat(s3V.value);
+  stateTime = 0;
+  drawState();
+});
+
+// ── Initial Draw ──
+drawPendulum();
+drawFrames();
+drawState();
+</script>
+</body>
+</html>

@@ -1,0 +1,73 @@
+<div class="sandbox-container" id="sandbox14">
+  <div class="sandbox-header">
+    <span class="sandbox-dot"></span>
+    <span>Waypoint Driving Sandbox</span>
+  </div>
+  <div class="sandbox-viz">
+    <svg id="s14Svg" viewBox="0 0 400 450" role="img" aria-labelledby="s14Title s14Desc" style="cursor:crosshair">
+      <title id="s14Title">Top-down floor with the mobile base</title>
+      <desc id="s14Desc">The floor seen from above with a 0.5 m grid, world x to the right and world y up. The base is a rectangle with a heading arrow and leaves a trail. Yellow circles are the goals. Click the floor to set a goal. A wall stands at x = 2.95 m.</desc>
+      <g id="s14Grid"></g>
+      <rect id="s14Wall" x="0" y="0" width="0" height="0" fill="var(--text-dim)" opacity="0.45"></rect>
+      <line id="s14WorldX" stroke="var(--x)" stroke-width="2"></line>
+      <line id="s14WorldY" stroke="var(--y)" stroke-width="2"></line>
+      <polyline id="s14RecOpen" points="" fill="none" stroke="var(--orange)" stroke-width="1.5" stroke-dasharray="5 4"></polyline>
+      <polyline id="s14RecClosed" points="" fill="none" stroke="var(--purple)" stroke-width="1.5" stroke-dasharray="2 3"></polyline>
+      <g id="s14Wps"></g>
+      <polyline id="s14Trail" points="" fill="none" stroke="var(--teal)" stroke-width="2"></polyline>
+      <g id="s14Robot">
+        <rect x="11.52" y="-18.72" width="11.52" height="4.8" fill="var(--text-dim)"></rect>
+        <rect x="11.52" y="13.92" width="11.52" height="4.8" fill="var(--text-dim)"></rect>
+        <rect x="-23.04" y="-18.72" width="11.52" height="4.8" fill="var(--text-dim)"></rect>
+        <rect x="-23.04" y="13.92" width="11.52" height="4.8" fill="var(--text-dim)"></rect>
+        <rect x="-24" y="-14.4" width="48" height="28.8" fill="none" stroke="var(--teal)" stroke-width="2"></rect>
+        <line x1="0" y1="0" x2="34" y2="0" stroke="var(--teal)" stroke-width="2.5"></line>
+        <path d="M34,0 L27,-4 L27,4 Z" fill="var(--teal)"></path>
+      </g>
+      <text id="s14Clock" x="20" y="20" fill="var(--teal)" font-size="12" font-family="var(--mono)">t = 0.00 s</text>
+      <text id="s14RecNote" x="20" y="36" fill="var(--text-dim)" font-size="10" font-family="var(--mono)"></text>
+      <text x="20" y="428" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">world frame, top view: red = +x, green = +y, 0.5 m grid</text>
+      <text x="20" y="442" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">click the floor to set a goal; robot always starts at (0, 0) facing +x</text>
+    </svg>
+  </div>
+  <div class="sandbox-controls">
+    <div class="control-group">
+      <label for="s14Gx">Goal x (m, world) <span class="control-val" id="s14GxVal">1.50</span></label>
+      <input type="range" id="s14Gx" min="-0.5" max="2.8" step="0.05" value="1.5">
+    </div>
+    <div class="control-group">
+      <label for="s14Gy">Goal y (m, world) <span class="control-val" id="s14GyVal">1.00</span></label>
+      <input type="range" id="s14Gy" min="-0.9" max="2.6" step="0.05" value="1">
+    </div>
+    <div class="control-group">
+      <label for="s14Bias">Disturbance: right motors run fast or slow (%) <span class="control-val" id="s14BiasVal">0</span></label>
+      <input type="range" id="s14Bias" min="-30" max="30" step="1" value="0">
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-sm" type="button" id="s14Open">Open loop</button>
+      <button class="btn btn-primary btn-sm" type="button" id="s14Closed">Closed loop</button>
+      <button class="btn btn-sm" type="button" id="s14Reset">Reset</button>
+      <button class="btn btn-sm" type="button" id="s14Route">Script route W1, W2</button>
+    </div>
+    <div class="readout" id="s14Readout">
+      <span class="rk">x, y:</span> <span class="rv" id="s14X">0.000</span><span class="rk">,</span> <span class="rv" id="s14Y">0.000</span> <span class="rk">m (world, chassis centre)</span><br>
+      <span class="rk">yaw:</span> <span class="rv" id="s14Yaw">0.0</span> <span class="rk">deg (from world +x, + = turning left)</span><br>
+      <span class="rk">gyro-like turn rate:</span> <span class="rv" id="s14Wz">0.000</span> <span class="rk">rad/s (z)</span><br>
+      <span class="rk">wheel commands left / right:</span> <span class="rv-o" id="s14Cmd">0.00 / 0.00</span> <span class="rk">rad/s</span><br>
+      <span class="rk">distance to last goal:</span> <span class="rv" id="s14Dist">0.000</span> <span class="rk">m</span><br>
+      <span class="rk">rangefinder-like:</span> <span class="rv" id="s14Range">2.690</span> <span class="rk">m (to the wall ahead)</span><br>
+      <span class="rk" id="s14Status">Pick a goal, then press Open loop or Closed loop.</span>
+    </div>
+    <div class="control-group" style="margin-top:12px">
+      <label>Recorded MuJoCo runs on the script route (overlay the paths)</label>
+      <div class="btn-row">
+        <button class="btn btn-sm" type="button" data-case="nominal">Normal</button>
+        <button class="btn btn-sm" type="button" data-case="slippery">Slippery</button>
+        <button class="btn btn-sm" type="button" data-case="heavy">+5 kg</button>
+        <button class="btn btn-sm" type="button" data-case="slowright">Slow right</button>
+      </div>
+    </div>
+    <div class="readout" id="s14RecTable"></div>
+    <p class="sidebar-hint" style="margin-top:8px;">This sandbox is NOT MuJoCo physics: the browser cannot run the contact solver. It moves the base with a kinematic unicycle: v = 0.9776 r (wL + wR)/2 and w = r (wR - wL)/B_eff with B_eff = 1.4314 m (geometric 0.34 m), both fitted to MuJoCo by 14_mobile_bases.py. Same controller and gains as the script, dt 0.01 s; 14_check_browser_copy.py shows it matches its Python copy to 4e-16. Its planner uses the same formulas as its world, so open loop is perfect until you move the disturbance slider. The dashed paths and the numbers above replay runs recorded from real MuJoCo.</p>
+  </div>
+</div>

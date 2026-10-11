@@ -1,0 +1,416 @@
+<div class="lesson-content xp" id="lesson8">
+  <header class="lesson-header-block">
+    <p class="lesson-num-label">Lesson 08</p>
+    <h1 class="lesson-title">Controllers and Experiments</h1>
+    <p class="lesson-subtitle">Goal: write a PD controller from scratch, tune its two numbers by experiment, see why too big a timestep breaks it, and save a run so anyone can repeat it. You will drive the motor from Lesson 5, reading the angle and speed you met in Lesson 6.</p>
+    <p class="lesson-legend"><dfn class="term" tabindex="0" data-def="Technical words look like this. Hover or focus one to read a plain-English definition.">Dotted words</dfn> show a definition on hover. <span class="lg-math">Maths boxes</span> are optional. <span class="lg-pred">Predict boxes</span> hide the answer until you guess.</p>
+  </header>
+  <nav class="lesson-toc" aria-label="Sections in lesson 8"><a href="#l8-s-idea">Big idea</a><a href="#l8-s-loop">The loop</a><a href="#l8-s-tune">Tune kp, kd</a><a href="#l8-s-gravity">Gravity error</a><a href="#l8-s-dt">Timestep</a><a href="#l8-s-math">Maths</a><a href="#l8-s-code">The script</a><a href="#l8-s-check">Check yourself</a><a href="#l8-recap">Recap</a></nav>
+
+<section class="step" id="l8-s-idea">
+  <span class="lvl lvl-plain">Plain words</span> <span class="lvl lvl-pic">Picture</span>
+  <h2>1. A controller is a rule that turns "how far off am I" into "how hard to push"</h2>
+  <p>Think of a shower tap. The water is too cold, so you turn the tap towards hot. The colder it is, the more you turn. That is the first half of a controller.</p>
+  <p>As the water warms up quickly, you ease off before it gets too hot. You react to how fast it is changing, not only to where it is. That is the second half.</p>
+  <p>A <dfn class="term" tabindex="0" data-def="A rule, run again and again, that looks at the current state and decides the motor command.">controller</dfn> does exactly this for the pendulum, 500 times a second. It looks at the angle, compares it with the angle we want, and decides how hard the motor pushes.</p>
+  <div class="grid3">
+    <div class="card"><span class="callout-title" style="color:var(--teal)">P = the spring</span>Push in proportion to the <dfn class="term" tabindex="0" data-def="How far you are from where you want to be: target angle minus current angle, in rad.">error</dfn>. Far from the target: push hard. At the target: stop pushing. On its own it acts like a spring, so it bounces.</div>
+    <div class="card"><span class="callout-title" style="color:var(--orange)">D = the shock absorber</span>Push against the speed. Moving fast: brake hard. Still: no braking. It soaks up the bouncing, like a car's shock absorber.</div>
+    <div class="card"><span class="callout-title" style="color:var(--purple)">Gravity help</span>You already know gravity pulls the rod down. So add exactly that much push on top. It is like setting the tap to "warm" before you start fine-tuning.</div>
+  </div>
+  <div class="card analogy"><strong>Analogy: a car's spring and shock absorber.</strong> A car with springs but no shock absorbers bounces down the road forever. With shock absorbers that are too stiff, the ride is slow and hard. A good car sits in between: it settles after one small dip. You will tune the pendulum to the same sweet spot.</div>
+  <h3>Try it: three controllers chase the same target</h3>
+  <p>Each button lets one controller drive the pendulum from hanging down (0 rad) to the yellow target line (1.0 rad) for 3 s. Watch the angle trace on the right.</p>
+  <div class="card">
+    <canvas id="l8cvIdea" role="img" aria-label="Pendulum moving towards a 1.0 rad target, with its angle plotted against time"></canvas>
+    <div class="btnrow">
+      <button id="l8IdeaP" type="button" class="primary">P only</button>
+      <button id="l8IdeaPD" type="button">P + D</button>
+      <button id="l8IdeaPDG" type="button">P + D + gravity help</button>
+    </div>
+    <p class="caption">P only bounces forever around the wrong angle. P + D settles, but below the target, because gravity keeps pulling down. P + D + gravity help lands on the target. This page runs its own small copy of the pendulum maths; it matches real MuJoCo (see the note in section 3).</p>
+  </div>
+  <p class="newwords">New words: <span class="chip">controller</span><span class="chip">error</span><span class="chip">P (proportional)</span><span class="chip">D (derivative)</span><span class="chip">gravity help</span></p>
+</section>
+
+<section class="step" id="l8-s-loop">
+  <span class="lvl lvl-words">MuJoCo words</span>
+  <h2>2. The control loop: read the state, compute ctrl, step</h2>
+  <p>Now the official names. The controller's output goes into <dfn class="term" tabindex="0" data-def="MjData array of actuator commands, shape (nu,). You write it before each mj_step. For the course motor, torque = 100 x ctrl N m, and ctrl must stay in [-1, 1].">data.ctrl</dfn>, the same array you set by hand in Lesson 5. The only new thing is that Python now writes it fresh before <em>every</em> step.</p>
+  <p>The model is the course pendulum with the Lesson 5 motor and the Lesson 6 joint sensors. Left: the XML. Right: the Python that reads each part.</p>
+  <div class="grid2">
+<pre><code><span class="t">&lt;actuator&gt;</span>
+  <span class="t">&lt;motor</span> <span class="a">name</span>=<span class="s">"motor"</span> <span class="a">joint</span>=<span class="s">"hinge"</span> <span class="a">gear</span>=<span class="s">"100"</span>
+         <span class="a">ctrlrange</span>=<span class="s">"-1 1"</span> <span class="a">ctrllimited</span>=<span class="s">"true"</span><span class="t">/&gt;</span>
+<span class="t">&lt;/actuator&gt;</span>
+<span class="t">&lt;sensor&gt;</span>
+  <span class="t">&lt;jointpos</span> <span class="a">name</span>=<span class="s">"angle"</span> <span class="a">joint</span>=<span class="s">"hinge"</span><span class="t">/&gt;</span>
+  <span class="t">&lt;jointvel</span> <span class="a">name</span>=<span class="s">"spin"</span>  <span class="a">joint</span>=<span class="s">"hinge"</span><span class="t">/&gt;</span>
+<span class="t">&lt;/sensor&gt;</span></code></pre>
+<pre><code><span class="c"># actuator 0 -> index 0 of ctrl</span>
+model.actuator_gear[<span class="n">0</span>][<span class="n">0</span>]    <span class="c"># 100 N m per unit ctrl</span>
+model.actuator_ctrlrange[<span class="n">0</span>]  <span class="c"># [-1. 1.]</span>
+data.ctrl[<span class="n">0</span>] = np.clip(tau / <span class="n">100</span>, -<span class="n">1</span>, <span class="n">1</span>)
+data.qfrc_actuator[<span class="n">0</span>]       <span class="c"># torque applied, N m</span>
+
+<span class="c"># sensor 0 -> sensordata[0], sensor 1 -> [1]</span>
+data.sensordata[<span class="n">0</span>]  <span class="c"># angle, rad</span>
+data.sensordata[<span class="n">1</span>]  <span class="c"># spin, rad/s</span>
+data.qpos[<span class="n">0</span>], data.qvel[<span class="n">0</span>]  <span class="c"># same state</span></code></pre>
+  </div>
+  <table>
+    <thead><tr><th>Name</th><th>Plain meaning</th><th>Shape</th><th>Unit and frame</th><th>Who sets it?</th></tr></thead>
+    <tbody>
+      <tr><td><code>data.qpos[0]</code></td><td>Hinge angle, from hanging straight down</td><td>(nq,) = (1,)</td><td>rad, joint frame, + about +y</td><td>MuJoCo, each step</td></tr>
+      <tr><td><code>data.qvel[0]</code></td><td>Hinge spin speed</td><td>(nv,) = (1,)</td><td>rad/s, joint frame</td><td>MuJoCo, each step</td></tr>
+      <tr><td><code>data.ctrl[0]</code></td><td>The controller's output: how hard to drive the motor</td><td>(nu,) = (1,)</td><td>no unit, -1 to 1; torque = 100 × ctrl N m</td><td><strong>You</strong>, before each step</td></tr>
+      <tr><td><code>model.actuator_ctrlrange[0]</code></td><td>The allowed ctrl range</td><td>(nu, 2)</td><td>[-1, 1], so ±100 N m</td><td>Fixed in the model</td></tr>
+      <tr><td><code>data.actuator_force[0]</code></td><td>The actuator's output after clipping, before the gear</td><td>(nu,) = (1,)</td><td>ctrl units (-1 to 1)</td><td>MuJoCo, each step</td></tr>
+      <tr><td><code>data.qfrc_actuator[0]</code></td><td>The torque the motor really puts on the hinge</td><td>(nv,) = (1,)</td><td>N m, joint frame</td><td>MuJoCo, each step</td></tr>
+      <tr><td><code>I</code> from <code>mj_fullM</code></td><td>How hard the rod is to spin about the hinge</td><td>(nv, nv) = (1, 1)</td><td>7.8764 kg m²</td><td>Computed from the model</td></tr>
+    </tbody>
+  </table>
+  <div class="grid2">
+    <div class="card rule"><span class="callout-title" style="color:var(--teal)">From torque to ctrl: divide by the gear</span>A PD controller thinks in torque, N m. The motor wants ctrl, a number from -1 to 1, and gives 100 N m per unit. So every turn does <code>ctrl = clip(tau / 100, -1, 1)</code>. A tau of 50 N m becomes ctrl 0.5. A tau of 400 N m would be ctrl 4.0, so it is clipped to 1.0: only 100 N m.</div>
+    <div class="card rule"><span class="callout-title" style="color:var(--teal)">Is the motor strong enough?</span>Holding the rod still at 1.0 rad takes m g d sin(1) = <strong>91.839 N m</strong>, ctrl 0.91839. That is 92 % of the limit, with 8.161 N m to spare. The highest angle it can hold at all is 1.1586 rad. So yes, but only just: you will see the motor hit its limit often in this lesson.</div>
+  </div>
+  <h3>Step through three turns of the loop</h3>
+  <p>Every turn does three jobs in this order. The numbers are real (kp = 400, kd = 40). They reproduce the first lines your script prints. Notice that the controller asks for about 400 N m, so the motor is clipped at 100 N m from the very first step.</p>
+  <div class="card">
+    <ol id="l8LoopList" style="padding-left:20px;margin-top:0">
+      <li><strong>Read the state.</strong> Angle <code>qpos[0]</code> and speed <code>qvel[0]</code>.</li>
+      <li><strong>Compute ctrl.</strong> <code>tau = kp × (target - angle) - kd × speed</code> in N m, then <code>data.ctrl[0] = clip(tau / 100, -1, 1)</code>.</li>
+      <li><strong>Call <code>mj_step</code>.</strong> MuJoCo applies torque = 100 × ctrl, updates speed then angle, and moves time 0.002 s forward.</li>
+    </ol>
+    <div class="eq" id="l8LoopEq" aria-live="polite" style="min-height:150px;white-space:pre-wrap;font-size:13px"></div>
+    <div class="btnrow"><button id="l8LoopNext" type="button" class="primary">Next stage</button><button id="l8LoopReset" type="button">Back to turn 0</button></div>
+  </div>
+  <div class="grid2">
+    <div class="card warn"><span class="callout-title" style="color:var(--orange)">Common mistake: sensors lag by one step</span>Sensors are computed at the <em>start</em> of <code>mj_step</code>, before the state moves. So right after turn 1, <code>qpos[0]</code> is 0.000152 rad but <code>sensordata[0]</code> still says 0.000051 rad. Either read <code>qpos</code>/<code>qvel</code> directly (this lesson does), or call <code>mj_forward</code> first to refresh the sensors. Both give the same angle once fresh.</div>
+    <div class="card warn"><span class="callout-title" style="color:var(--orange)">Clipping, also called saturation</span>If you skip the clip and write <code>data.ctrl[0] = 8.0</code> (tau 800 / 100), MuJoCo leaves 8.0 in <code>ctrl</code> but uses 1.0: <code>actuator_force[0]</code> = 1.0 and the torque <code>qfrc_actuator[0]</code> = <strong>100.0 N m</strong>. Clipping yourself just makes your logs honest. When gains ask for more than the motor has, the motor is <dfn class="term" tabindex="0" data-def="Asked for more than its limit, so it gives its maximum instead. The controller loses control of how hard it pushes.">saturated</dfn>.</div>
+  </div>
+  <p class="newwords">New words: <span class="chip">data.ctrl</span><span class="chip">control loop</span><span class="chip">gear</span><span class="chip">ctrlrange</span><span class="chip">actuator_force</span><span class="chip">qfrc_actuator</span><span class="chip">saturation</span><span class="chip">mj_fullM</span></p>
+</section>
+
+<section class="step" id="l8-s-tune">
+  <span class="lvl lvl-pic">Picture</span> <span class="lvl lvl-words">Experiment</span>
+  <h2>3. Tune the two numbers by experiment, one at a time</h2>
+  <p>Our controller has two knobs. <dfn class="term" tabindex="0" data-def="Proportional gain: how many N m of push per rad of error. Bigger kp = stiffer spring.">kp</dfn> is the spring strength (N m per rad of error). <dfn class="term" tabindex="0" data-def="Derivative gain: how many N m of braking per rad/s of speed. Bigger kd = stiffer shock absorber.">kd</dfn> is the shock absorber strength (N m per rad/s of speed). Every run starts hanging still at 0 rad, asks for 1.0 rad, and lasts 3 s.</p>
+  <div class="predict">
+    <h3>Predict first: kd = 0 (no shock absorber). What does the pendulum do?</h3>
+    <textarea aria-label="Your prediction for kd equal to zero"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p>It <strong>never settles</strong>. It swings up past the target, falls back to where it started, and repeats. Nothing removes energy, so the bounce never dies. Bigger kp only makes it bounce faster. Real MuJoCo, 3 s each:</p>
+      <table>
+        <thead><tr><th>kp (N m/rad)</th><th>balance angle q* (rad)</th><th>lowest (rad)</th><th>highest (rad)</th><th>swing at 2-3 s (rad, peak to peak)</th><th>peak tau asked / torque applied (N m)</th><th>settled?</th></tr></thead>
+        <tbody>
+          <tr><td>100</td><td>0.4881</td><td>-0.0000</td><td>0.9981</td><td>0.9457</td><td>100.0 / 100.0</td><td>no</td></tr>
+          <tr><td>400</td><td>0.8036</td><td>0.0000</td><td>1.2513</td><td>1.2513</td><td>400.0 / 100.0</td><td>no</td></tr>
+          <tr><td>1600</td><td>0.9447</td><td>0.0000</td><td>1.2513</td><td>1.2512</td><td>1600.0 / 100.0</td><td>no</td></tr>
+        </tbody>
+      </table>
+      <p>The pendulum swings around q*, the angle where the spring's pull balances gravity (section 4 explains why q* is below 1.0). Look at kp = 400 and kp = 1600: the same highest swing, 1.2513 rad. Both ask for far more than 100 N m, so the motor gives its full 100 N m either way. Past the limit, a bigger gain changes nothing.</p>
+    </div>
+  </div>
+  <p>Now add the shock absorber. Four words describe a step response. <dfn class="term" tabindex="0" data-def="Time until the angle first reaches 90 % of where it finally settles.">Rise time</dfn>: how quickly it gets there. <dfn class="term" tabindex="0" data-def="How far past the final angle it swings, as a percentage of the move.">Overshoot</dfn>: how far it swings past. <dfn class="term" tabindex="0" data-def="Time after which the angle stays within 0.02 rad of where it finally settles.">Settling time</dfn>: when it stays within 0.02 rad. <dfn class="term" tabindex="0" data-def="Target minus the angle at the end (t = 3 s), in rad. The gap that never closes.">Steady-state error</dfn>: the gap left at the end. All four are measured from the balance angle q*, where the response really ends up.</p>
+  <div class="card">
+    <canvas id="l8cvStep" role="img" aria-label="Angle against time for the chosen kp and kd, with target line, overshoot marker and settling marker"></canvas>
+    <label class="slider"><span>Spring <code>kp</code></span> <output id="l8oKp">400 N m/rad</output><input type="range" id="l8Kp" min="50" max="1600" step="10" value="400"></label>
+    <label class="slider"><span>Shock absorber <code>kd</code></span> <output id="l8oKd">40 N m s/rad</output><input type="range" id="l8Kd" min="0" max="500" step="1" value="40"></label>
+    <div class="btnrow"><span style="align-self:center;font-size:13px;color:var(--text-dim)">kp = 400 with kd =</span><button type="button" class="l8kdpre" data-kd="10">10</button><button type="button" class="l8kdpre" data-kd="40">40</button><button type="button" class="l8kdpre" data-kd="112">112 (critical)</button><button type="button" class="l8kdpre" data-kd="400">400</button></div>
+    <div class="readouts">
+      <div class="ro"><span class="lab">damping ratio kd / critical</span><span class="val" id="l8rZeta">-</span></div>
+      <div class="ro frozen"><span class="lab">critical kd = 2 √(kp I)</span><span class="val" id="l8rCrit">-</span> <span class="unit">N m s/rad</span></div>
+      <div class="ro"><span class="lab">rise time</span><span class="val" id="l8rRise">-</span> <span class="unit">s</span></div>
+      <div class="ro"><span class="lab">overshoot</span><span class="val" id="l8rOver">-</span> <span class="unit">%</span></div>
+      <div class="ro"><span class="lab">settling time</span><span class="val" id="l8rSettle">-</span> <span class="unit">s</span></div>
+      <div class="ro"><span class="lab">steady-state error</span><span class="val" id="l8rErr">-</span> <span class="unit">rad</span></div>
+      <div class="ro"><span class="lab">time at the motor limit</span><span class="val" id="l8rSat">-</span> <span class="unit">s</span></div>
+    </div>
+    <p class="caption">Teal = angle <code>qpos[0]</code> (rad). Yellow dashed = target. Grey dashed = balance angle q*, where the spring's pull equals gravity. Purple band = q* ± 0.02 rad; the purple line marks the settling time. Orange dot = the highest swing. Real MuJoCo and this page agree to better than 1e-15 rad at every step of a 3 s run. That was checked with <code>08_check_browser_copy.py</code> for six cases, including kp = 400, kd = 40 (clipped at the start) and kp = 60, kd = 25 (never clipped).</p>
+  </div>
+  <p>The script's table, kp fixed at 400, only kd changes:</p>
+  <table>
+    <thead><tr><th>kd (N m s/rad)</th><th>damping ratio</th><th>rise (s)</th><th>overshoot (%)</th><th>settle (s)</th><th>ss error (rad)</th><th>time at motor limit (s)</th><th>in words</th></tr></thead>
+    <tbody>
+      <tr><td>10</td><td>0.089</td><td>0.364</td><td>47.4</td><td>not settled</td><td>0.1113</td><td>1.694</td><td>underdamped: still bouncing at 3 s</td></tr>
+      <tr><td>40</td><td>0.356</td><td>0.370</td><td>25.4</td><td>1.674</td><td>0.1968</td><td>0.678</td><td>underdamped: a few bounces</td></tr>
+      <tr><td>112</td><td>0.998</td><td>0.514</td><td>0.1</td><td>0.670</td><td>0.1964</td><td>0.172</td><td>about critical: fastest without bouncing</td></tr>
+      <tr><td>400</td><td>3.563</td><td>1.892</td><td>0.0</td><td>not settled</td><td>0.2172</td><td>0.058</td><td>overdamped: slow, still creeping at 3 s</td></tr>
+    </tbody>
+  </table>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">Rule to remember</span>Too little kd bounces. Too much kd crawls. Near <dfn class="term" tabindex="0" data-def="The kd that removes bouncing with no extra slowness: 2 times the square root of kp times I. Damping ratio = 1.">critical damping</dfn> (kd = 2 √(kp I) = 112.26 for kp = 400) it settles fastest. Notice the error column: kd does not fix the gap below the target. That is section 4. The last column shows the 100 N m motor at its limit for part of every run, mostly at the start.</div>
+  <p class="newwords">New words: <span class="chip">kp</span><span class="chip">kd</span><span class="chip">rise time</span><span class="chip">overshoot</span><span class="chip">settling time</span><span class="chip">steady-state error</span><span class="chip">underdamped / critical / overdamped</span></p>
+</section>
+
+<section class="step" id="l8-s-gravity">
+  <span class="lvl lvl-pic">Picture</span> <span class="lvl lvl-words">Experiment</span>
+  <h2>4. Gravity leaves a gap; gravity compensation closes it</h2>
+  <p>To hold the rod at an angle, the motor must push constantly against gravity. A P controller only pushes when there is an error. So it needs some error left over to make that push. The rod stops where the spring's pull equals gravity's pull.</p>
+  <div class="predict">
+    <h3>Predict first: you double kp from 400 to 800. What happens to the steady-state error?</h3>
+    <textarea aria-label="Your prediction for doubling kp"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p>It <strong>roughly halves</strong>, from 0.1964 to 0.1063 rad. It does not reach zero: a stiffer spring needs a smaller stretch to make the same push, but always some stretch. It is not exactly half, because gravity's pull shrinks a little as the rod sits lower. kd stays 112 in every row, so only kp changes:</p>
+      <table>
+        <thead><tr><th>kp</th><th>quick guess m g d sin(1) / kp</th><th>balance-equation error</th><th>measured at 3 s</th><th>measured with gravity comp</th></tr></thead>
+        <tbody>
+          <tr><td>200</td><td>0.4592</td><td>0.3362</td><td>0.3363</td><td>0.002377</td></tr>
+          <tr><td>400</td><td>0.2296</td><td>0.1964</td><td>0.1964</td><td>0.000000</td></tr>
+          <tr><td>800</td><td>0.1148</td><td>0.1063</td><td>0.1063</td><td>0.000000</td></tr>
+        </tbody>
+      </table>
+      <p>All errors are target minus angle, in rad. The balance equation (maths step 4) predicts the measured error to 4 decimals. The kp = 200 run with gravity comp is still creeping in at 3 s (it is overdamped at kd = 112), so 0.002377 rad is left.</p>
+    </div>
+  </div>
+  <p>The fix is <dfn class="term" tabindex="0" data-def="Adding the torque you know gravity needs, m g d sin(q), to the controller's output. Also called feed-forward: it does not wait for an error.">gravity compensation</dfn>. We know the gravity torque exactly from the model, so we add it to the command. The spring then only has to do the moving, not the holding:</p>
+  <pre><code>tau = kp * (target - q) - kd * qvel  <span class="c"># PD: spring + shock absorber, N m</span>
+tau += m * g * d * np.sin(q)         <span class="c"># gravity comp: 109.1404 * sin(q) N m</span>
+data.ctrl[<span class="n">0</span>] = np.clip(tau / <span class="n">100</span>, -<span class="n">1</span>, <span class="n">1</span>)   <span class="c"># torque -> ctrl</span></code></pre>
+  <div class="card">
+    <canvas id="l8cvSS" role="img" aria-label="Angle against time for PD only and PD with gravity compensation"></canvas>
+    <label class="slider"><span>Spring <code>kp</code> (kd stays 112)</span> <output id="l8oSKp">400 N m/rad</output><input type="range" id="l8SKp" min="150" max="1200" step="10" value="400"></label>
+    <div class="btnrow"><button type="button" class="l8kppre" data-kp="200">kp = 200</button><button type="button" class="l8kppre" data-kp="400">kp = 400</button><button type="button" class="l8kppre" data-kp="800">kp = 800</button></div>
+    <div class="readouts">
+      <div class="ro"><span class="lab">quick guess m g d sin(1)/kp</span><span class="val" id="l8sGuess">-</span> <span class="unit">rad</span></div>
+      <div class="ro"><span class="lab">balance-equation error</span><span class="val" id="l8sBal">-</span> <span class="unit">rad</span></div>
+      <div class="ro"><span class="lab">PD error at 3 s</span><span class="val" id="l8sPD">-</span> <span class="unit">rad</span></div>
+      <div class="ro"><span class="lab">PD + gravity comp error at 3 s</span><span class="val" id="l8sGC">-</span> <span class="unit">rad</span></div>
+    </div>
+    <p class="caption">Orange = PD only, stops at q*. Teal = PD + gravity comp, reaches 1.0 rad. With kp = 400, kd = 112 and gravity comp the script measures rise 0.626 s, overshoot 0.0 %, settle 0.902 s, steady-state error 0.000000 rad. At the end the motor gives 91.838 N m, exactly the holding torque. Without gravity comp it settles giving only 78.565 N m, which is why it sits lower.</p>
+  </div>
+  <p class="newwords">New words: <span class="chip">gravity compensation</span><span class="chip">feed-forward</span><span class="chip">balance angle q*</span></p>
+</section>
+
+<section class="step" id="l8-s-dt">
+  <span class="lvl lvl-plain">Plain words</span> <span class="lvl lvl-pic">Picture</span>
+  <h2>5. A big timestep can make a good controller go unstable</h2>
+  <p>Back to the shower. Imagine you may only look at the water every 10 seconds. Each time you look, you turn the tap and leave it for the next 10 seconds. A strong reaction now overshoots badly before you look again. Then you over-correct the other way.</p>
+  <p>The simulated controller has the same problem. It reads the state once per step and holds its push for the whole timestep. A strong shock absorber (big kd) with a long step brakes so hard that the speed flips. With an even longer step, each flip is bigger than the last.</p>
+  <div class="predict">
+    <h3>Predict first: kp = 400, kd = 400, gravity comp on. The timestep goes 10× larger, from 0.002 to 0.02 s. Stable?</h3>
+    <textarea aria-label="Your prediction for a ten times larger timestep"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p><strong>Yes, still stable</strong>, but closer to the edge. At 0.02 s each step shrinks a wobble to 0.9800 of its size (at 0.002 s: 0.9980). The edge is about <strong>0.0386 s</strong>. At 0.039 s each step grows a wobble by 1.0196×, and the motor ends up buzzing: its torque swings by 16.55 N m every step. Try the presets below.</p>
+    </div>
+  </div>
+  <div class="card">
+    <canvas id="l8cvDt" role="img" aria-label="Angle and motor torque over 10 seconds for the chosen timestep, compared with timestep 0.002"></canvas>
+    <label class="slider"><span>timestep <code>model.opt.timestep</code></span> <output id="l8oH">0.002 s</output><input type="range" id="l8H" min="1" max="60" step="1" value="2"></label>
+    <div class="btnrow" style="align-items:center"><button type="button" class="l8hpre" data-h="0.002">0.002</button><button type="button" class="l8hpre" data-h="0.02">0.02</button><button type="button" class="l8hpre" data-h="0.035">0.035</button><button type="button" class="l8hpre" data-h="0.039">0.039</button><button type="button" class="l8hpre" data-h="0.05">0.05</button>
+      <label class="check" style="margin-left:auto"><input type="checkbox" id="l8NoLim"> Second experiment: remove the motor limit</label></div>
+    <div class="readouts">
+      <div class="ro"><span class="lab">steps in 10 s</span><span class="val" id="l8dN">-</span></div>
+      <div class="ro"><span class="lab">kd h / I</span><span class="val" id="l8dKd">-</span></div>
+      <div class="ro"><span class="lab">kp h² / I</span><span class="val" id="l8dKp">-</span></div>
+      <div class="ro"><span class="lab">kp h²/I + 2 kd h/I (stable if &lt; 4)</span><span class="val" id="l8dTest">-</span></div>
+      <div class="ro"><span class="lab">wobble growth per step</span><span class="val" id="l8dG">-</span></div>
+      <div class="ro"><span class="lab">torque swing, 8 to 10 s</span><span class="val" id="l8dSw">-</span> <span class="unit">N m</span></div>
+      <div class="ro"><span class="lab">angle at 10 s</span><span class="val" id="l8dQ">-</span> <span class="unit">rad</span></div>
+      <div class="ro"><span class="lab">verdict</span><span class="val" id="l8dV">-</span></div>
+    </div>
+    <p class="caption">Top: grey = timestep 0.002 s (reference), teal = your timestep (dots are the actual steps). Bottom: torque on the hinge in N m; red lines = the ±100 N m motor limit. kp = 400, kd = 400, gravity comp on, target 1.0 rad, 10 s. The verdict is "buzzing" if the torque still swings by more than 1 N m between 8 and 10 s, the same test the script uses. The checkbox is a separate experiment: it switches off <code>ctrllimited</code> to show what the wobble does with an unlimited motor. Stable runs match MuJoCo to 1e-15 rad. Buzzing runs are chaotic: a difference in the last digit of sin() grows by up to 1.6× per step, so above 0.04 s the page's buzz details can differ slightly from the script's table. The verdict does not change.</p>
+  </div>
+  <p>The script's sweep (real MuJoCo, 10 s per run). Only the timestep changes:</p>
+  <table>
+    <thead><tr><th>h (s)</th><th>steps</th><th>kd h/I</th><th>kp h²/I</th><th>test (&lt; 4)</th><th>growth per step</th><th>torque swing 8-10 s (N m)</th><th>angle at 10 s (rad)</th><th>verdict</th><th>no motor limit</th></tr></thead>
+    <tbody>
+      <tr><td>0.002</td><td>5000</td><td>0.1016</td><td>0.00020</td><td>0.203</td><td>0.9980</td><td>0.02</td><td>1.0000</td><td>stable</td><td>stays at target</td></tr>
+      <tr><td>0.010</td><td>1000</td><td>0.5078</td><td>0.00508</td><td>1.021</td><td>0.9899</td><td>0.02</td><td>1.0000</td><td>stable</td><td>stays at target</td></tr>
+      <tr><td>0.020</td><td>500</td><td>1.0157</td><td>0.02031</td><td>2.052</td><td>0.9800</td><td>0.02</td><td>1.0000</td><td>stable</td><td>stays at target</td></tr>
+      <tr><td>0.030</td><td>333</td><td>1.5235</td><td>0.04571</td><td>3.093</td><td>0.9703</td><td>0.02</td><td>1.0000</td><td>stable</td><td>stays at target</td></tr>
+      <tr><td>0.035</td><td>286</td><td>1.7775</td><td>0.06221</td><td>3.617</td><td>0.9655</td><td>0.02</td><td>1.0000</td><td>stable</td><td>stays at target</td></tr>
+      <tr><td>0.038</td><td>263</td><td>1.9298</td><td>0.07333</td><td>3.933</td><td>0.9658</td><td>0.02</td><td>1.0000</td><td>stable</td><td>stays at target</td></tr>
+      <tr><td>0.039</td><td>256</td><td>1.9806</td><td>0.07724</td><td>4.038</td><td>1.0196</td><td>16.55</td><td>1.0001</td><td>buzzing</td><td>passes 1 rad off at 7.92 s</td></tr>
+      <tr><td>0.040</td><td>250</td><td>2.0314</td><td>0.08126</td><td>4.144</td><td>1.0735</td><td>17.06</td><td>0.9997</td><td>buzzing</td><td>passes 1 rad off at 2.16 s</td></tr>
+      <tr><td>0.050</td><td>200</td><td>2.5392</td><td>0.12696</td><td>5.205</td><td>1.6177</td><td>22.14</td><td>0.9942</td><td>buzzing</td><td>passes 1 rad off at 0.20 s</td></tr>
+    </tbody>
+  </table>
+  <p>The formula <code>kp h²/I + 2 kd h/I = 4</code> puts the edge at <strong>h = 0.03864 s</strong>. Searching with real MuJoCo (30 s runs, halving the interval) finds <strong>0.03859 s</strong>. Softer gains tolerate more: the same formula gives 0.1164 s for kd = 112 and 0.1979 s for kd = 40.</p>
+  <div class="card warn"><span class="callout-title" style="color:var(--orange)">Why it buzzes instead of flying off</span>An unstable loop makes every wobble bigger. With an unlimited motor that goes on until the rod spins away: the last column. Our motor stops at ±100 N m, so the controller can only slam between its limits every step. The angle stays near the target, but the motor chatters. On a real robot you would hear it, and it wears out the gears.</div>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">Debugging rule</span>If a controlled simulation buzzes or explodes, first halve the timestep. If it calms down, your gains are too stiff for that timestep: lower kd (it breaks first because it scales with h), or keep the small timestep.</div>
+  <p class="newwords">New words: <span class="chip">stability</span><span class="chip">control rate</span><span class="chip">chattering</span><span class="chip">kd h / I</span><span class="chip">kp h² / I</span></p>
+</section>
+
+<section class="step" id="l8-s-math">
+  <span class="lvl lvl-math">Maths (optional)</span>
+  <h2>6. The maths, from Newton's law to the stability limit</h2>
+  <details class="math"><summary>Step 1: the equation of motion, with the real numbers</summary><div>
+    <p>Newton's law for turning: inertia × angular acceleration = sum of torques. For our pendulum the torques are the motor and gravity:</p>
+    <div class="eq">I · qacc = tau_motor - m g d · sin(q)          tau_motor = 100 · clip(tau / 100, -1, 1)
+
+I     = 7.8764 kg m²          (mj_fullM: rod spinning about the hinge)
+m g d = 22.2509 × 9.81 × 0.500 = 109.1404 N m
+qacc  = (tau_motor - 109.1404 · sin q) / 7.8764</div>
+    <p>Turn 0 of the loop, by hand: q = 0 and qvel = 0, so tau = 400 N m. ctrl = 400 / 100 = 4.0, clipped to 1.0, so tau_motor = 100 N m. qacc = 100 / 7.8764 = 12.696 rad/s². Then qvel = 0.002 × 12.696 = 0.025392 rad/s and qpos = 0.002 × 0.025392 = 0.000051 rad. The script prints exactly those.</p>
+  </div></details>
+  <details class="math"><summary>Step 2: PD turns the pendulum into a spring and shock absorber</summary><div>
+    <p>While the motor is inside its limit, put tau = kp (target - q) - kd · qvel into step 1 and move everything to one side:</p>
+    <div class="eq">I · qacc + kd · qvel + kp · q = kp · target - m g d · sin q</div>
+    <p>The left side is a mass on a spring (kp) with a shock absorber (kd). Without the shock absorber it swings at the <dfn class="term" tabindex="0" data-def="How fast an undamped spring system swings, in rad/s: square root of stiffness over inertia.">natural frequency</dfn>:</p>
+    <div class="eq">omega = √(kp / I) = √(400 / 7.8764) = 7.1263 rad/s
+one wobble every 2π / omega = 0.882 s</div>
+    <p>While the motor is clipped, none of this holds: the torque is just 100 N m, whatever the gains. That is why the first part of every 1.0 rad step looks the same for kp = 400 and kp = 1600.</p>
+  </div></details>
+  <details class="math"><summary>Step 3: damping ratio and critical kd</summary><div>
+    <p>The <dfn class="term" tabindex="0" data-def="kd divided by the critical kd. Below 1: bounces. 1: fastest without bounce. Above 1: sluggish.">damping ratio</dfn> compares your kd with the kd that just stops the bouncing:</p>
+    <div class="eq">damping ratio = kd / (2 √(kp · I))
+critical kd   = 2 √(400 × 7.8764) = 112.26 N m s/rad
+
+kd = 10  -> 0.089   (bounces, 47.4 % overshoot)
+kd = 40  -> 0.356   (25.4 % overshoot)
+kd = 112 -> 0.998   (0.1 % overshoot)
+kd = 400 -> 3.563   (no overshoot, rise 1.892 s)</div>
+    <p>Why 0.1 % and not exactly 0 at kd = 112? Near the balance angle, gravity acts like a little extra spring, so the true stiffness is a bit above 400 and 112 is a hair under critical. The overshoot numbers are also smaller than a textbook spring would give, because the clipped motor cannot push as hard as the gains ask at the start.</p>
+  </div></details>
+  <details class="math"><summary>Step 4: predicting the steady-state error</summary><div>
+    <p>At rest, qacc = 0 and qvel = 0, so the motor's push equals gravity. Write the error as e = target - q:</p>
+    <div class="eq">kp · e = m g d · sin(target - e)</div>
+    <p>Quick guess: pretend the rod is still at the target on the right side:</p>
+    <div class="eq">e ≈ m g d · sin(1) / kp = 91.839 / 400 = 0.2296 rad</div>
+    <p>That overestimates, because the rod sits lower where gravity pulls less. Solving the balance equation properly (the script halves an interval 80 times) gives 0.1964 rad, and MuJoCo measures 0.1964 rad at 3 s. Doubling kp to 800 gives 0.1063. With gravity comp the right side cancels: kp · e = 0, so e = 0. The resting torque, 400 × 0.1964 = 78.6 N m, is inside the 100 N m limit, so the balance is reachable.</p>
+  </div></details>
+  <details class="math"><summary>Step 5: the timestep limit</summary><div>
+    <p>With gravity comp on and the motor inside its limit, write one MuJoCo step for the error e = q - target and the speed v:</p>
+    <div class="eq">v_new = v + h · (-kp · e - kd · v) / I       (speed first)
+e_new = e + h · v_new                         (then angle, with the NEW speed)</div>
+    <p>This multiplies (e, v) by a fixed 2 × 2 matrix every step. A wobble shrinks only if both of the matrix's growth factors (eigenvalues) are smaller than 1 in size. For this matrix that works out to:</p>
+    <div class="eq">kd · h / I &lt; 2     and     kp · h² / I + 2 · kd · h / I &lt; 4</div>
+    <p>Read them as "how much the brake removes per step" (kd h / I) and "how far the spring moves you per step" (kp h² / I), both compared with the inertia. With kp = 400, kd = 400, I = 7.8764:</p>
+    <div class="eq">400 h² / 7.8764 + 800 h / 7.8764 = 4
+50.785 h² + 101.57 h - 4 = 0   ->   h = 0.03864 s
+MuJoCo search: 0.03859 s</div>
+    <p>The tiny gap is the search, not the formula: right at the edge a wobble grows so slowly that 30 s is barely enough to see it.</p>
+  </div></details>
+</section>
+
+<section class="step" id="l8-s-code">
+  <span class="lvl lvl-code">Code</span>
+  <h2>7. Your script, line by line, and a log anyone can repeat</h2>
+  <table>
+    <thead><tr><th style="width:46%">Code in <code>08_controllers_and_experiments.py</code></th><th>Physical meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>mujoco.mj_fullM(model, data, M)</code></td><td>Fill M (nv × nv = 1 × 1) with the rod's turning inertia about the hinge: 7.8764 kg m².</td></tr>
+      <tr><td><code>MGD = mass * g * d</code></td><td>Gravity's torque when the rod is horizontal: 109.1404 N m, from <code>body_mass[1]</code> and <code>body_ipos[1]</code>.</td></tr>
+      <tr><td><code>GEAR = model.actuator_gear[0][0]</code></td><td>100 N m of torque per unit of ctrl.</td></tr>
+      <tr><td><code>mujoco.mj_resetData(model, data)</code></td><td>Start every experiment the same: hanging still, time 0.</td></tr>
+      <tr><td><code>q, qvel = data.qpos[0], data.qvel[0]</code></td><td>1. Read the state: angle (rad) and spin speed (rad/s), fresh for this step.</td></tr>
+      <tr><td><code>tau = kp*(target - q) - kd*qvel</code></td><td>2. Compute the torque we want: spring towards the target, brake on the speed (N m).</td></tr>
+      <tr><td><code>tau += MGD * np.sin(q)</code></td><td>Optional gravity help: exactly the torque needed to hold the rod at q.</td></tr>
+      <tr><td><code>data.ctrl[0] = np.clip(tau / GEAR, -1, 1)</code></td><td>Turn torque into ctrl for actuator 0, inside its range. ctrl 1.0 = 100 N m.</td></tr>
+      <tr><td><code>mujoco.mj_step(model, data)</code></td><td>3. Step: torque → qacc → new qvel → new qpos, time + h.</td></tr>
+      <tr><td><code>data.qfrc_actuator[0]</code></td><td>The torque the motor really applied on the hinge this step (N m).</td></tr>
+      <tr><td><code>model.opt.timestep = h</code></td><td>Change the tick size for the stability sweep (a model setting, so the script puts it back afterwards).</td></tr>
+      <tr><td><code>np.savetxt(path, rows, header=...)</code></td><td>Write time, qpos, qvel, ctrl, target to <code>08_pd_log.csv</code>, with all the settings in <code>#</code> header lines.</td></tr>
+    </tbody>
+  </table>
+<pre><code><span class="c"># model facts, read from MuJoCo</span>
+body_mass[1] pendulum mass m           22.2509 kg
+turning inertia I  (mj_fullM, nv x nv) 7.8764 kg m^2
+m g d  (gravity torque at 90 deg)      109.1404 N m
+actuator 0 'motor': nu = 1, gear = 100 N m per unit ctrl, ctrlrange = [-1.  1.], ctrllimited = True
+torque to HOLD 1.0 rad = m g d sin(1)  91.839 N m  -> ctrl = 0.91839 (92 % of the limit, 8.161 N m to spare)
+<span class="c"># the loop, turn 1 (kp 400, kd 40): read, compute tau, then ctrl, step</span>
+turn 1: read time=0.002 s qpos[0]=0.000051 rad qvel[0]=0.025392 rad/s -> tau=398.9640 N m -> ctrl[0]=clip(tau/100)=1.0000
+        after mj_step: qpos[0]=0.000152 rad ... | sensordata angle=0.000051 ...  <span class="c"># sensors lag one step</span>
+  clipping:  data.ctrl[0] = 8.0 (tau 800 / 100, unclipped) -> after mj_step data.ctrl[0] = 8.0, actuator_force[0] = 1.0, qfrc_actuator[0] = 100.0 N m
+<span class="c"># experiment 2, kp = 400: kd sweep</span>
+natural frequency sqrt(kp/I) = 7.1263 rad/s (one wobble every 2 pi/omega = 0.882 s), critical kd = 2 sqrt(kp I) = 112.26
+ 112         0.998   0.514             0.1       0.670         0.1964           0.172  <span class="c"># kd, ratio, rise s, overshoot %, settle s, error rad, s at limit</span>
+<span class="c"># experiment 4: the stability edge</span>
+  formula threshold: kp h^2/I + 2 kd h/I = 4  ->  h = 0.03864 s
+  MuJoCo threshold (bisection, 30 s runs)    ->  h = 0.03859 s
+<span class="c"># experiment 5: the log</span>
+wrote 08_pd_log.csv: 1501 rows x 5 columns (+ 6 header lines starting with #)</code></pre>
+  <h3>Reproducible: the log records how it was made</h3>
+  <p>A result you cannot repeat is a rumour. So the CSV starts with every setting that matters: MuJoCo version, model, timestep, gains, target, start state and the exact ctrl rule. The first lines of <code>08_pd_log.csv</code>:</p>
+<pre><code><span class="c"># lesson 08 PD step response, mujoco 3.15.0</span>
+<span class="c"># model: course pendulum + motor 'motor' gear 100 ctrlrange -1 1 (torque = 100 * ctrl N m)</span>
+<span class="c"># timestep 0.002 s, integrator Euler, gravity -9.81, start qpos 0 qvel 0</span>
+<span class="c"># kp 400 N m/rad, kd 40 N m s/rad, target 1.0 rad, gravity_comp no, duration 3.0 s</span>
+<span class="c"># ctrl = clip((kp*(target-qpos) - kd*qvel) / 100, -1, 1), written before each mj_step</span>
+<span class="c"># time_s,qpos_rad,qvel_rad_s,ctrl,target_rad</span>
+0.000000,0.000000,0.000000,1.000000,1.000000
+0.002000,0.000051,0.025392,1.000000,1.000000
+...
+0.500000,0.975859,0.977124,-0.294286,1.000000   <span class="c"># nearly at the target, braking (negative ctrl)</span>
+1.000000,0.703250,-0.295259,1.000000,1.000000   <span class="c"># fell back below q*, motor at its limit</span>
+...
+3.000000,0.803151,0.006932,0.784621,1.000000    <span class="c"># settled near q*, 0.197 rad short, 78.5 N m</span></code></pre>
+  <p>There is no matplotlib in this course's environment, so this page plots the logged run for you. Any plotting tool can read the file the same way: <code>np.loadtxt("08_pd_log.csv", delimiter=",")</code> skips the <code>#</code> lines.</p>
+  <div class="card">
+    <canvas id="l8cvLog" role="img" aria-label="Plot of the logged run: qpos against time on top, ctrl against time below"></canvas>
+    <p class="caption">Top: <code>qpos_rad</code> column (teal) and <code>target_rad</code> (yellow). Bottom: <code>ctrl</code> column (orange) between the red ctrlrange lines. It sits at 1.0 for 0.678 s in total, then settles at 0.784621. The page recomputes this run with its copy of the maths; it matches the CSV rows above to all 6 printed decimals.</p>
+  </div>
+</section>
+
+<section class="step" id="l8-s-check">
+  <span class="lvl lvl-plain">Check yourself</span>
+  <h2>8. Your lesson's checkpoint questions</h2>
+  <p>Answer here, then tell me your answers in the chat so I can update your progress. Success means you can say the number and the reason.</p>
+  <div class="predict">
+    <h3>Q1. In what order must the loop do its three jobs, and what goes wrong if you write ctrl after mj_step?</h3>
+    <textarea aria-label="Answer to question 1"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>Read state, compute ctrl, mj_step.</strong> If you write ctrl after the step, every step uses the command computed for the previous state. The controller is always one step late, which behaves like extra delay and makes bouncing and instability worse.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q2. Your PD controller computes tau = 250 N m. What do you write into data.ctrl[0], and what torque does the hinge get?</h3>
+    <textarea aria-label="Answer to question 2"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>ctrl = 250 / 100 = 2.5, clipped to <strong>1.0</strong>. The hinge gets <strong>100 N m</strong>, the motor's maximum (<code>gear</code> 100 × ctrl 1.0). Writing 2.5 unclipped gives the same torque, because MuJoCo clips inside <code>mj_step</code>, as the script's 8.0 test shows.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q3. kp = 400 and no gravity comp. You raise kd from 112 to 400. Does the steady-state error go down?</h3>
+    <textarea aria-label="Answer to question 3"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>No.</strong> At rest the speed is zero, so kd does nothing there. The balance error stays 0.1964 rad. At 3 s the kd = 400 run even shows 0.2172 rad, because it is so overdamped that it has not arrived yet. Only bigger kp shrinks the error, and only gravity comp removes it.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q4. kp = 400, kd = 400, gravity comp on. Is a timestep of 0.04 s stable? Use the test kp h²/I + 2 kd h/I &lt; 4.</h3>
+    <textarea aria-label="Answer to question 4"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>No.</strong> 0.08126 + 2.0314 = 4.144, more than 4. Each step grows a wobble by 1.0735×. In MuJoCo the torque is still swinging by 17.06 N m at 8 to 10 s; with no motor limit the wobble passes 1 rad at 2.16 s. Halving the timestep to 0.02 s gives 2.052: stable.</p></div>
+  </div>
+
+  <h3>Glossary: new words from this lesson</h3>
+  <dl class="glossary">
+    <dt>controller</dt><dd>A rule run every step that turns the current state into a motor command.</dd>
+    <dt>error</dt><dd>Target angle minus current angle, in rad.</dd>
+    <dt>PD controller</dt><dd>tau = kp × error - kd × speed. P is the spring, D is the shock absorber.</dd>
+    <dt>kp, kd (gains)</dt><dd>Spring strength (N m per rad) and shock absorber strength (N m per rad/s).</dd>
+    <dt>data.ctrl</dt><dd>MjData array of actuator commands, shape (nu,). The controller's output. You write it before each mj_step. Here torque = 100 × ctrl.</dd>
+    <dt>gear</dt><dd>Torque per unit of ctrl (100 N m here). Divide tau by it to get ctrl.</dd>
+    <dt>control loop</dt><dd>Read state, compute ctrl, mj_step; repeated every timestep.</dd>
+    <dt>ctrlrange, saturation</dt><dd>The allowed ctrl range (here -1 to 1, so ±100 N m). Asking for more gives the limit: the motor is saturated.</dd>
+    <dt>actuator_force, qfrc_actuator</dt><dd>The actuator's clipped output before the gear (ctrl units), and the torque it puts on the hinge (N m).</dd>
+    <dt>rise time, overshoot, settling time</dt><dd>How fast it gets near the final angle, how far it swings past, and when it stays within 0.02 rad.</dd>
+    <dt>steady-state error</dt><dd>The gap left at the end. Here caused by gravity; removed by gravity compensation.</dd>
+    <dt>natural frequency, damping ratio</dt><dd>√(kp/I), how fast the spring alone swings; kd / (2√(kp I)), how much the bounce is damped.</dd>
+    <dt>critical damping</dt><dd>Damping ratio 1: fastest settling with no bounce.</dd>
+    <dt>gravity compensation (feed-forward)</dt><dd>Adding the known gravity torque m g d sin(q) to the command, without waiting for an error.</dd>
+    <dt>stability, chattering</dt><dd>Small wobbles shrink step after step; here it needs kp h²/I + 2 kd h/I &lt; 4. Chattering is an unstable loop slamming the motor between its limits.</dd>
+    <dt>mj_fullM</dt><dd>Fills an nv × nv array with the mass matrix (turning inertia for a hinge).</dd>
+  </dl>
+</section>
+
+<section class="step recap" id="l8-recap">
+  <h2>Recap: the lesson in one minute</h2>
+  <div class="mental-model">
+    <p><strong>The control loop</strong> runs once per <code>mj_step</code>: read <code>qpos</code>/<code>qvel</code> (or fresh <code>sensordata</code>), compute <code>tau = kp (target - q) - kd qvel</code> in N m, write <code>data.ctrl[0] = clip(tau / gear, -1, 1)</code>, step. With gear 100 the motor gives at most 100 N m; <code>qfrc_actuator</code> reports the torque it applied.</p>
+    <p><strong>Tuning:</strong> kp sets stiffness, omega = √(kp/I) = 7.1263 rad/s at kp = 400. kd sets damping, ratio kd / (2√(kp I)); critical kd = 112.26. Below it bounces, above it crawls. kd = 0 never settles. Gains that ask for more than the motor has just saturate it.</p>
+    <p><strong>Steady-state error</strong> comes from gravity: kp e = m g d sin(target - e), 0.1964 rad at kp = 400. Doubling kp roughly halves it. Adding m g d sin(q) (gravity compensation) removes it.</p>
+    <p><strong>Stability</strong> depends on gains and timestep together: kp h²/I + 2 kd h/I &lt; 4. For kp = kd = 400 the edge is h = 0.0386 s; past it the motor chatters. Log every run with its settings so the result can be repeated.</p>
+  </div>
+  <div class="checkpoint">
+    <p>In the sandbox, find gains with gravity comp that settle within 1 s with less than 5 % overshoot and zero steady-state error. Then raise the timestep until it breaks.</p>
+    <div class="btn-row">
+      <button class="btn btn-primary btn-sm" type="button" onclick="markComplete(8)">Mark lesson complete</button>
+      <button class="btn btn-sm" type="button" onclick="switchLesson(9)">Next: Environments and Next Steps</button>
+    </div>
+  </div>
+</section>
+</div>

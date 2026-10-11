@@ -1,0 +1,388 @@
+<div class="lesson-content xp" id="lesson9">
+  <header class="lesson-header-block">
+    <p class="lesson-num-label">Lesson 09</p>
+    <h1 class="lesson-title">Environments and Next Steps</h1>
+    <p class="lesson-subtitle">Goal: wrap the course pendulum in a small "game" with reset, step, observation and reward, so any controller or learning algorithm can play it. Then see where to go next: learning, planning, and moving to a real robot.</p>
+    <p class="lesson-legend"><dfn class="term" tabindex="0" data-def="Technical words look like this. Hover or focus one to read a plain-English definition.">Dotted words</dfn> show a definition on hover. <span class="lg-math">Maths boxes</span> are optional. <span class="lg-pred">Predict boxes</span> hide the answer until you guess.</p>
+  </header>
+  <nav class="lesson-toc" aria-label="Sections in lesson 9"><a href="#l9-s-idea">Game console</a><a href="#l9-s-words">Gym words</a><a href="#l9-s-rate">Two clocks</a><a href="#l9-s-policies">Four players</a><a href="#l9-s-math">Maths</a><a href="#l9-s-code">The script</a><a href="#l9-s-next">Where next</a><a href="#l9-s-check">Check yourself</a><a href="#l9-recap">Recap</a></nav>
+
+<section class="step" id="l9-s-idea">
+  <span class="lvl lvl-plain">Plain words</span> <span class="lvl lvl-pic">Picture</span>
+  <h2>1. Turn the simulation into a video game</h2>
+  <p>So far you have called MuJoCo directly. You set <code>ctrl</code>, called <code>mj_step</code>, and read <code>qpos</code>. That works, but every program does it a little differently.</p>
+  <p>A game console fixes this. Every game has the same few buttons. Any player can pick up any game and play it.</p>
+  <div class="card analogy"><strong>Analogy: a video-game console.</strong> <strong>Reset</strong> starts a new game. <strong>Step</strong> is one button press. The <strong>observation</strong> is what is on the screen. The <strong>reward</strong> is the score for that moment. <strong>Done</strong> means game over, or the clock ran out. The <strong>player</strong> only sees the screen and presses buttons. It never opens the console.</div>
+  <p>Our game: the course pendulum starts hanging at a small random tilt. The motor must lift it to 1.0 rad (the lesson 8 target) and hold it there. Each step, the player chooses a motor command. Each step, it loses points for being away from the target, for moving, and for pushing hard.</p>
+  <h3>Try it: drive the game loop one press at a time</h3>
+  <p>Press <strong>Step</strong>. Watch the orange dot carry the action to the pendulum. MuJoCo then ticks 10 times. The teal dot brings the new screen and the score back to the player.</p>
+  <div class="card">
+    <canvas id="l9cvLoop" role="img" aria-label="Loop diagram: the agent sends an action to the environment, MuJoCo ticks 10 times, and the observation and reward come back to the agent"></canvas>
+    <div class="btnrow">
+      <button type="button" data-l9pol="zero">Player: zero</button>
+      <button type="button" data-l9pol="random">Player: random</button>
+      <button type="button" data-l9pol="pd">Player: PD</button>
+      <button type="button" data-l9pol="pdg" class="primary">Player: PD + gravity</button>
+    </div>
+    <div class="btnrow">
+      <button type="button" id="l9lReset">reset(seed=0)</button>
+      <button type="button" id="l9lStepBtn" class="primary">step(action)</button>
+      <button type="button" id="l9lPlay">Play the episode</button>
+    </div>
+    <div class="readouts">
+      <div class="ro" id="l9lStep"><span class="lab">env steps taken</span><span class="val">0</span> <span class="unit">of 250</span></div>
+      <div class="ro" id="l9lTime"><span class="lab">data.time</span><span class="val">0.000</span> <span class="unit">s</span></div>
+      <div class="ro" id="l9lAct"><span class="lab">action = data.ctrl[0]</span><span class="val">0</span> <span class="unit">(-1..1)</span></div>
+      <div class="ro" id="l9lTau"><span class="lab">motor torque = 100 x ctrl</span><span class="val">0</span> <span class="unit">N*m</span></div>
+      <div class="ro" id="l9lRew"><span class="lab">reward (this step)</span><span class="val">0</span> <span class="unit">points</span></div>
+      <div class="ro" id="l9lRet"><span class="lab">return (sum so far)</span><span class="val">0</span> <span class="unit">points</span></div>
+      <div class="ro" id="l9lDone"><span class="lab">terminated / truncated</span><span class="val">false / false</span></div>
+    </div>
+    <p class="caption">The player box decides. The environment box holds MuJoCo. The yellow dashed line is the 1.0 rad target. The arrows are the only way information moves. Play runs the whole 5 s game in real time: 250 presses, 50 per second. This page runs its own small copy of the pendulum maths, checked against MuJoCo (section 6).</p>
+  </div>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">Rule to remember</span>The player never touches <code>MjData</code>. It only sends an action and gets back an observation and a reward. That fixed doorway is what lets you swap in a different player later, such as a learning algorithm.</div>
+  <p class="newwords">New words: <span class="chip">environment</span><span class="chip">episode</span><span class="chip">agent / policy</span><span class="chip">observation</span><span class="chip">action</span><span class="chip">reward</span><span class="chip">return</span></p>
+</section>
+
+<section class="step" id="l9-s-words">
+  <span class="lvl lvl-words">MuJoCo words</span>
+  <h2>2. The official names, and the MuJoCo calls behind each one</h2>
+  <p>The doorway has a standard shape, called the <dfn class="term" tabindex="0" data-def="A Python library (formerly OpenAI Gym) that defines the standard env.reset() and env.step() interface. Version 1.4 is installed in this course's .venv.">Gymnasium</dfn> API. A class that follows it is an <dfn class="term" tabindex="0" data-def="The game: a simulation wrapped in reset() and step(), with a defined observation, action and reward.">environment</dfn> (env for short). Here is what each game word means, and which MuJoCo calls do the work.</p>
+  <table>
+    <thead><tr><th>Gym word</th><th>Plain meaning</th><th>Console analogy</th><th>MuJoCo calls inside</th></tr></thead>
+    <tbody>
+      <tr><td><code>env.reset(seed=0)</code></td><td>Start a new <dfn class="term" tabindex="0" data-def="One game, from reset until terminated or truncated. Here: 250 env steps, 5.0 s of simulated time.">episode</dfn> from a random tilt</td><td>New game</td><td><code>mj_resetData</code>, then <code>qpos[0] = np_random.uniform(-0.5, 0.5)</code>, then <code>mj_forward</code></td></tr>
+      <tr><td><code>env.step(action)</code></td><td>Apply one motor command, let time run 0.02 s</td><td>One button press</td><td><code>data.ctrl[0] = action</code>, then <code>mj_step</code> 10 times</td></tr>
+      <tr><td><dfn class="term" tabindex="0" data-def="The numbers the player is allowed to see after each step. Here a vector of 3: cos q, sin q, qvel.">observation</dfn></td><td>The 3 numbers the player sees</td><td>The screen</td><td><code>[cos qpos[0], sin qpos[0], qvel[0]]</code> (or <code>sensordata</code>, lesson 6)</td></tr>
+      <tr><td><dfn class="term" tabindex="0" data-def="What the player sends each step. Here 1 number: the motor command ctrl, between -1 and 1. The motor turns it into 100 x ctrl N*m.">action</dfn></td><td>The motor command (-1 to 1)</td><td>The button you press</td><td>written to <code>data.ctrl[0]</code>; torque = gear x ctrl = 100 x ctrl N*m</td></tr>
+      <tr><td><dfn class="term" tabindex="0" data-def="One number per step that says how good that moment was. Higher is better. Here it is always 0 or negative.">reward</dfn></td><td>Points for this step (0 is perfect)</td><td>The score change</td><td>computed from <code>qpos[0]</code>, <code>qvel[0]</code> and the action</td></tr>
+      <tr><td><dfn class="term" tabindex="0" data-def="The sum of all rewards in one episode. The single number used to compare players.">return</dfn></td><td>Sum of all rewards in the episode</td><td>Final score</td><td>none; you add it up</td></tr>
+      <tr><td><dfn class="term" tabindex="0" data-def="True when the game reached a real end state (a fall, a crash, a goal). This env never sets it.">terminated</dfn></td><td>The game itself ended</td><td>Game over</td><td>never true here: there is no crash state</td></tr>
+      <tr><td><dfn class="term" tabindex="0" data-def="True when the episode was cut off by a time limit, not by anything that happened in the game.">truncated</dfn></td><td>The clock ran out</td><td>Time up</td><td>true after 250 env steps (<code>data.time</code> = 5.0 s)</td></tr>
+      <tr><td><dfn class="term" tabindex="0" data-def="The player: a rule that turns an observation into an action. A PD controller is a policy. So is a neural network.">policy</dfn></td><td>The rule that picks the action</td><td>The player</td><td>outside the env: zero, random, PD, PD + gravity</td></tr>
+      <tr><td><dfn class="term" tabindex="0" data-def="A number that fixes a random number generator, so the same seed always gives the same random start.">seed</dfn></td><td>Fixes the "random" start</td><td>Level code</td><td><code>super().reset(seed=seed)</code> seeds <code>self.np_random</code></td></tr>
+    </tbody>
+  </table>
+  <h3>Which XML element becomes which number</h3>
+  <div class="grid2">
+<pre><code><span class="t">&lt;option</span> <span class="a">timestep</span>=<span class="s">"0.002"</span><span class="t">/&gt;</span>   <span class="c"># model.opt.timestep</span>
+<span class="t">&lt;body</span> <span class="a">name</span>=<span class="s">"pendulum"</span> <span class="a">pos</span>=<span class="s">"0 0 1"</span><span class="t">&gt;</span>
+  <span class="t">&lt;joint</span> <span class="a">name</span>=<span class="s">"hinge"</span> <span class="a">type</span>=<span class="s">"hinge"</span>
+         <span class="a">axis</span>=<span class="s">"0 1 0"</span><span class="t">/&gt;</span>     <span class="c"># qpos[0], qvel[0]</span>
+  <span class="t">&lt;geom</span> <span class="a">type</span>=<span class="s">"capsule"</span>
+        <span class="a">fromto</span>=<span class="s">"0 0 0 0 0 -1"</span> <span class="a">size</span>=<span class="s">"0.08"</span><span class="t">/&gt;</span>
+<span class="t">&lt;/body&gt;</span>
+<span class="t">&lt;motor</span> <span class="a">name</span>=<span class="s">"motor"</span> <span class="a">joint</span>=<span class="s">"hinge"</span> <span class="a">gear</span>=<span class="s">"100"</span>
+       <span class="a">ctrlrange</span>=<span class="s">"-1 1"</span> <span class="a">ctrllimited</span>=<span class="s">"true"</span><span class="t">/&gt;</span> <span class="c"># ctrl[0]</span></code></pre>
+<pre><code><span class="c"># the 3-number screen, from joint 0</span>
+q, qd = data.qpos[<span class="n">0</span>], data.qvel[<span class="n">0</span>]
+obs = [cos(q), sin(q), qd]       <span class="c"># shape (3,)</span>
+
+<span class="c"># the button, into actuator 0</span>
+data.ctrl[<span class="n">0</span>] = a                  <span class="c"># -1..1, torque 100*a N*m</span>
+
+<span class="c"># the allowed button range, from the XML</span>
+lo, hi = model.actuator_ctrlrange[<span class="n">0</span>]   <span class="c"># -1, 1</span>
+action_space = Box(lo, hi, shape=(<span class="n">1</span>,))
+observation_space = Box(shape=(<span class="n">3</span>,))</code></pre>
+  </div>
+  <table>
+    <thead><tr><th>Array</th><th>Shape</th><th>Meaning</th><th>Unit, frame</th></tr></thead>
+    <tbody>
+      <tr><td><code>obs</code></td><td>(3,) float32</td><td>[cos q, sin q, qvel]; q is the hinge angle from hanging straight down</td><td>none, none, rad/s; joint frame</td></tr>
+      <tr><td><code>action</code></td><td>(1,) float32</td><td>motor command; torque about the hinge axis (world +y) = 100 x action</td><td>no unit, -1..1 (so -100..100 N*m)</td></tr>
+      <tr><td><code>reward</code></td><td>one float</td><td>score for this step</td><td>points (no unit)</td></tr>
+    </tbody>
+  </table>
+  <p>The two <code>Box</code> lines are the <dfn class="term" tabindex="0" data-def="env.observation_space: a description of the observation's shape and allowed range. Here Box(3,): the first two numbers in -1..1, the third unbounded.">observation_space</dfn> and the <dfn class="term" tabindex="0" data-def="env.action_space: a description of the action's shape and allowed range. Here Box(-1, 1, (1,)). Learning libraries read it to size their networks.">action_space</dfn>. Learning libraries read them to know what the game looks like. Why cos and sin, not the angle? Angles wrap: 3.14 rad and -3.14 rad are the same pose. Cos and sin give smooth numbers with no jump (lesson 6).</p>
+  <div class="card warn"><span class="callout-title" style="color:var(--orange)">Can the motor even hold 1.0 rad?</span>Holding a tilt needs torque m*g*d*sin(q). At 1.0 rad the script prints <strong>91.84 N*m</strong>, which is ctrl <strong>0.9184</strong>. The lesson 5 motor gives at most 100 N*m (gear 100, ctrl up to 1). So yes, with only 8% to spare. Check this before you design any game: a target the motor cannot hold makes every player look bad.</div>
+  <p class="newwords">New words: <span class="chip">Gymnasium</span><span class="chip">env.reset</span><span class="chip">env.step</span><span class="chip">terminated</span><span class="chip">truncated</span><span class="chip">seed</span><span class="chip">observation_space</span><span class="chip">action_space</span></p>
+</section>
+
+<section class="step" id="l9-s-rate">
+  <span class="lvl lvl-pic">Picture</span>
+  <h2>3. Two clocks: the physics tick and the button press</h2>
+  <p>MuJoCo ticks every 0.002 s. The player does not need to decide that often. Real robot controllers also run slower than the physics.</p>
+  <p>So each <code>step(action)</code> holds the same torque for several ticks. That number is <dfn class="term" tabindex="0" data-def="How many mj_step calls one env.step makes. The action is held constant for all of them. Here 10.">frame_skip</dfn>. With 10, one env step is 10 x 0.002 = 0.020 s. That is a <dfn class="term" tabindex="0" data-def="How often the policy picks a new action: 1 / (timestep x frame_skip). Here 50 actions per second (50 Hz).">control rate</dfn> of 50 actions per second.</p>
+  <div class="predict">
+    <h3>Predict: you double frame_skip to 20 and keep the game at 5 s (so 125 steps, not 250). What happens to the return of the zero-torque player?</h3>
+    <textarea aria-label="Your prediction for the frame_skip experiment"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p>It <strong>halves</strong>: -256.548 becomes -128.276 for seed 0. The pendulum swings exactly the same way, because zero torque is zero torque at any rate. But the score is added up only 125 times instead of 250. Each reward is a snapshot, so fewer snapshots give a smaller sum.</p>
+      <p>The PD + gravity player also roughly halves: -24.566 becomes -12.787. <strong>Rule: only compare returns from envs with the same frame_skip and episode length.</strong> If you need to compare, multiply each reward by the step time: -256.548 x 0.02 = -5.131 and -128.276 x 0.04 = -5.131.</p>
+    </div>
+  </div>
+  <div class="card">
+    <canvas id="l9cvRate" role="img" aria-label="Timeline of the first 0.2 seconds: physics ticks every 2 ms, a random action held constant between env steps, and one reward dot per env step"></canvas>
+    <div class="btnrow">
+      <button type="button" data-l9fs="10" class="primary">frame_skip = 10</button>
+      <button type="button" data-l9fs="20">frame_skip = 20</button>
+    </div>
+    <div class="readouts">
+      <div class="ro" id="l9rDt"><span class="lab">env step length</span><span class="val">0.020</span> <span class="unit">s</span></div>
+      <div class="ro" id="l9rN"><span class="lab">env steps in 5 s</span><span class="val">250</span></div>
+      <div class="ro" id="l9rZ"><span class="lab">return, zero player, seed 0</span><span class="val">-256.548</span></div>
+      <div class="ro" id="l9rP"><span class="lab">return, PD + gravity, seed 0</span><span class="val">-24.566</span></div>
+    </div>
+    <p class="caption">Top: every grey tick is one <code>mj_step</code>. Middle: a random player's command (page's own seeded random numbers) stays flat between presses, then jumps. Bottom: one reward dot per press. Only the first 0.2 s are drawn. The two returns are for the whole 5 s, and match the script's printed numbers.</p>
+  </div>
+  <p class="newwords">New words: <span class="chip">frame_skip</span><span class="chip">control rate</span><span class="chip">physics rate</span></p>
+</section>
+
+<section class="step" id="l9-s-policies">
+  <span class="lvl lvl-pic">Picture</span> <span class="lvl lvl-code">Experiment</span>
+  <h2>4. Four players, same game, same seeds</h2>
+  <p>The script plays the game with four players. Each plays the same 5 starts (seeds 0 to 4), so the comparison is fair.</p>
+  <ul>
+    <li><strong>Zero</strong>: always ctrl 0. The pendulum just swings near the bottom.</li>
+    <li><strong>Random</strong>: a random ctrl between -1 and 1 each step.</li>
+    <li><strong>PD</strong> (lesson 8): torque = 400 x (1.0 - q) - 40 x qvel N*m, then ctrl = clip(torque / 100, -1, 1). It reads q back from the screen with atan2(sin q, cos q).</li>
+    <li><strong>PD + gravity</strong>: the same, plus m*g*d*sin(q) N*m to cancel gravity's pull (lesson 8's gravity compensation).</li>
+  </ul>
+  <div class="predict">
+    <h3>Predict: which player gets the highest return (closest to 0)? And does random beat doing nothing?</h3>
+    <textarea aria-label="Your prediction for the policy comparison"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p><strong>PD + gravity wins</strong>: mean return -36.622. Plain PD is close behind at -39.353. Zero scores -276.234 and random -311.319. Plain PD loses because it sags: at rest it stops at 0.80359 rad, where its spring pull 400 x (1.0 - q) just equals gravity's pull. Gravity compensation removes the sag and ends at 0.99999 rad.</p>
+      <p><strong>Random is worse than nothing on average</strong>, though not on every seed (seed 4). Random pushes help as often as they hurt, and every push costs a little effort penalty. Random play is still useful: it is how a learning algorithm explores at the start.</p>
+    </div>
+  </div>
+  <table>
+    <thead><tr><th>seed</th><th>start angle (rad)</th><th>zero</th><th>random</th><th>PD</th><th>PD + gravity</th></tr></thead>
+    <tbody>
+      <tr><td>0</td><td>0.13696</td><td>-256.548</td><td>-364.607</td><td>-28.020</td><td>-24.566</td></tr>
+      <tr><td>1</td><td>0.01182</td><td>-250.117</td><td>-274.149</td><td>-34.684</td><td>-31.981</td></tr>
+      <tr><td>2</td><td>-0.23839</td><td>-264.999</td><td>-326.232</td><td>-51.432</td><td>-50.051</td></tr>
+      <tr><td>3</td><td>-0.41435</td><td>-296.021</td><td>-318.863</td><td>-66.057</td><td>-65.403</td></tr>
+      <tr><td>4</td><td>0.44306</td><td>-313.484</td><td>-272.742</td><td>-16.571</td><td>-11.111</td></tr>
+      <tr><td><strong>mean</strong></td><td></td><td><strong>-276.234</strong></td><td><strong>-311.319</strong></td><td><strong>-39.353</strong></td><td><strong>-36.622</strong></td></tr>
+    </tbody>
+  </table>
+  <p class="caption">From the script's printed table (MuJoCo 3.15.0, 250 env steps, frame_skip 10). Random uses <code>env.action_space.sample()</code> seeded with the same seed.</p>
+  <div class="card">
+    <canvas id="l9cvPol" role="img" aria-label="Hinge angle over 5 seconds for the zero, random, PD and PD plus gravity players from the chosen seed"></canvas>
+    <div class="btnrow">
+      <button type="button" data-l9seed="0" class="primary">seed 0</button><button type="button" data-l9seed="1">seed 1</button><button type="button" data-l9seed="2">seed 2</button><button type="button" data-l9seed="3">seed 3</button><button type="button" data-l9seed="4">seed 4</button>
+      <button type="button" id="l9pPlay">Replay over 5 s</button>
+    </div>
+    <div class="readouts">
+      <div class="ro frozen" id="l9pS"><span class="lab">start angle qpos[0]</span><span class="val">0.13696</span> <span class="unit">rad</span></div>
+      <div class="ro" id="l9pZ"><span class="lab">return, zero</span><span class="val">-</span></div>
+      <div class="ro" id="l9pR"><span class="lab">return, random (page PRNG)</span><span class="val">-</span></div>
+      <div class="ro" id="l9pP"><span class="lab">return, PD</span><span class="val">-</span></div>
+      <div class="ro" id="l9pG"><span class="lab">return, PD + gravity</span><span class="val">-</span></div>
+    </div>
+    <p class="caption">Grey = zero, purple = random, orange = PD, teal = PD + gravity, yellow dashed = target. Zero, PD and PD + gravity match the table above to 3 decimals. The start angles were recorded from the script, because a browser cannot run numpy's random generator. The page's random player uses its own seeded generator, so its returns differ from the table.</p>
+  </div>
+  <p>With seed 0 the script prints the state at t = 5.0 s. Zero: qpos = 0.13252 rad, still swinging near the bottom. PD: qpos = 0.80359 rad, ctrl = 0.78566 (sagging). PD + gravity: qpos = 0.99999 rad, ctrl = 0.91848, which is the 0.9184 holding command from section 2.</p>
+</section>
+
+<section class="step" id="l9-s-math">
+  <span class="lvl lvl-math">Maths (optional)</span>
+  <h2>5. The score, term by term</h2>
+  <details class="math"><summary>Step 1: what the reward punishes</summary><div>
+    <div class="eq">reward = -( angle_error^2  +  0.1 * qvel^2  +  0.01 * ctrl^2 )
+          angle_error = qpos[0] - target      (target = 1.0 rad)</div>
+    <p><strong>angle_error^2</strong>: being away from the target costs the most. Squaring makes a big miss cost much more than a small one, and makes "too low" and "too high" cost the same.</p>
+    <p><strong>0.1 * qvel^2</strong>: moving costs a little. Without it, swinging fast through 1.0 rad would look perfect for an instant.</p>
+    <p><strong>0.01 * ctrl^2</strong>: pushing costs a little. Holding 1.0 rad needs ctrl 0.9184, which costs 0.01 x 0.9184^2 = 0.0084 per step. That is small enough that holding the target is still worth it.</p>
+    <p>Every term is 0 or positive, and there is a minus sign in front. So the best possible reward is 0, and a real player at 1.0 rad gets about -0.0084 per step.</p>
+  </div></details>
+  <details class="math"><summary>Step 2: one real step, by hand</summary><div>
+    <p><code>reset(seed=0)</code> gives qpos = 0.13696 rad, qvel = 0. The PD player computes its torque from the screen, then turns it into ctrl:</p>
+    <div class="eq">torque = 400 * (1.0 - 0.13696) - 40 * 0.0 = 345.2 N*m
+ctrl   = clip(345.2 / 100, -1, 1) = clip(3.452, -1, 1) = 1.00000    (the motor is maxed out)</div>
+    <p>MuJoCo then ticks 10 times with 100 N*m. After step 1 the script prints qpos = 0.13934 rad, qvel = 0.21589 rad/s. The reward:</p>
+    <div class="eq">angle_error^2  = (0.13934 - 1.0)^2   = 0.74074
+0.1 * qvel^2   = 0.1 * 0.21589^2      = 0.00466
+0.01 * ctrl^2  = 0.01 * 1.0^2         = 0.01000
+reward = -(0.74074 + 0.00466 + 0.01000) = -0.75540      (script: reward=-0.75540)</div>
+  </div></details>
+  <details class="math"><summary>Step 3: the return is just the sum</summary><div>
+    <p>The script runs a tiny episode with <code>max_steps=5</code>, seed 0, PD player:</p>
+    <table>
+      <thead><tr><th>step</th><th>time (s)</th><th>ctrl</th><th>qpos (rad)</th><th>qvel (rad/s)</th><th>reward</th><th>return so far</th><th>truncated</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>0.020</td><td>1.00000</td><td>0.13934</td><td>0.21589</td><td>-0.75540</td><td>-0.75540</td><td>False</td></tr>
+        <tr><td>2</td><td>0.040</td><td>1.00000</td><td>0.14602</td><td>0.43059</td><td>-0.75782</td><td>-1.51322</td><td>False</td></tr>
+        <tr><td>3</td><td>0.060</td><td>1.00000</td><td>0.15697</td><td>0.64294</td><td>-0.76203</td><td>-2.27526</td><td>False</td></tr>
+        <tr><td>4</td><td>0.080</td><td>1.00000</td><td>0.17214</td><td>0.85177</td><td>-0.76791</td><td>-3.04317</td><td>False</td></tr>
+        <tr><td>5</td><td>0.100</td><td>1.00000</td><td>0.19143</td><td>1.05595</td><td>-0.77530</td><td>-3.81846</td><td>True</td></tr>
+      </tbody>
+    </table>
+    <div class="eq">return = r1 + r2 + r3 + r4 + r5
+       = -0.75540 - 0.75782 - 0.76203 - 0.76791 - 0.77530
+       = -3.81846      (script: return=-3.81846)</div>
+    <p>Notice the reward gets slightly <em>worse</em> each step, even though the pendulum is rising. The angle error shrinks, but the speed penalty grows faster for now. A score does not have to improve every step for the player to be doing the right thing.</p>
+  </div></details>
+  <details class="math"><summary>Step 4: why doubling frame_skip halves the return</summary><div>
+    <p>A return is a sum of N snapshots. For the same 5 s, N = 5 / (0.002 * frame_skip):</p>
+    <div class="eq">frame_skip 10:  N = 250    zero return = -256.548
+frame_skip 20:  N = 125    zero return = -128.276    (half)</div>
+    <p>Multiply each reward by the step time and the sum approximates the area under the reward curve, which does not depend on frame_skip:</p>
+    <div class="eq">-256.548 * 0.02 = -5.131        -128.276 * 0.04 = -5.131</div>
+  </div></details>
+</section>
+
+<section class="step" id="l9-s-code">
+  <span class="lvl lvl-code">Code</span>
+  <h2>6. Your script, line by line</h2>
+  <p>Run it with <code>uv run --python .venv/bin/python lessons/09-environments-and-next-steps/09_environments_and_next_steps.py</code>. No viewer needed.</p>
+  <table>
+    <thead><tr><th style="width:46%">Code in <code>09_environments_and_next_steps.py</code></th><th>Physical meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>class PendulumHoldEnv(gym.Env)</code></td><td>The console. Inside it lives one MuJoCo model and its data.</td></tr>
+      <tr><td><code>self.model = MjModel.from_xml_string(XML)</code><br><code>self.data = MjData(self.model)</code></td><td>The blueprint (fixed) and the state (changes every tick). Built once, reused for every episode.</td></tr>
+      <tr><td><code>spaces.Box(lo, hi, shape=(1,))</code></td><td>The action is one ctrl between -1 and 1, read from <code>actuator_ctrlrange</code>.</td></tr>
+      <tr><td><code>super().reset(seed=seed)</code></td><td>Seeds <code>self.np_random</code>, so seed 3 always starts at -0.41435 rad.</td></tr>
+      <tr><td><code>mujoco.mj_resetData(model, data)</code></td><td>Back to the model's first page: time 0, qpos0 = 0, qvel 0, ctrl 0 (lesson 3).</td></tr>
+      <tr><td><code>data.qpos[0] = np_random.uniform(-0.5, 0.5)</code></td><td>Tilt the pendulum by a random angle, in radians, from hanging down.</td></tr>
+      <tr><td><code>mujoco.mj_forward(model, data)</code></td><td>Recompute everything for the new tilt, without moving the clock.</td></tr>
+      <tr><td><code>data.ctrl[0] = a</code></td><td>Set the motor command. The motor applies 100 x a N*m about the hinge (gear 100).</td></tr>
+      <tr><td><code>for _ in range(self.frame_skip): mj_step(...)</code></td><td>Hold that command for 10 ticks: 0.020 s of physics.</td></tr>
+      <tr><td><code>reward = -(err**2 + 0.1*qd**2 + 0.01*a**2)</code></td><td>Points lost for missing the target, for speed and for effort, at the end of this step.</td></tr>
+      <tr><td><code>truncated = self.steps &gt;= self.max_steps</code></td><td>Time is up after 250 steps (5.0 s). <code>terminated</code> stays False: nothing can "crash".</td></tr>
+      <tr><td><code>np.clip(tau / GEAR, -1.0, 1.0)</code></td><td>The PD players think in N*m (lesson 8) and divide by the gear to get ctrl.</td></tr>
+      <tr><td><code>check_env(PendulumHoldEnv())</code></td><td>Gymnasium's own tester: it calls reset and step and checks shapes, types and seeding.</td></tr>
+    </tbody>
+  </table>
+<pre><code><span class="c"># == 1. The game and its clock ==</span>
+model.opt.timestep (physics tick)       : 0.002 s
+frame_skip (physics ticks per env step) : 10
+env step (control period)               : 0.020 s  -> 50 actions per second   <span class="c"># control rate</span>
+max_steps per episode                   : 250  -> 5.0 s of simulated time
+observation_space                       : Box([ -1.  -1. -inf], [ 1.  1. inf], (3,), float32)
+action_space (ctrl, -1..1)              : Box(-1.0, 1.0, (1,), float32)
+motor gear (N*m per unit ctrl)          : 100  -> max torque 100 N*m
+pendulum mass, inertia about hinge      : 22.25 kg, I = 7.8764 kg*m^2
+target angle                            : 1.0 rad
+torque to HOLD the target (m g d sin)   : 91.84 N*m  = ctrl 0.9184   <span class="c"># fits under 100 N*m</span>
+
+<span class="c"># == 2. Gymnasium's own checker ==</span>
+check_env: passed, 2 warning(s)                    <span class="c"># advice only, not errors</span>
+   warning: WARN: A Box observation space minimum value is -infinity. This is probably too low.
+   warning: WARN: A Box observation space maximum value is infinity. This is probably too high.
+
+<span class="c"># == 3. One short episode by hand (seed 0, PD policy, max_steps=5) ==</span>
+reset(seed=0): time=0.000 s  qpos=0.13696 rad  obs=[cos q, sin q, qvel]=[0.9906399846076965, 0.13652999699115753, 0.0]
+step 1: time=0.020 s  ctrl= 1.00000 ( 100.00 N*m)  qpos= 0.13934 rad  qvel= 0.21589 rad/s  reward=-0.75540  return=-0.75540  terminated=False truncated=False
+<span class="c">...</span>
+step 5: time=0.100 s  ctrl= 1.00000 ( 100.00 N*m)  qpos= 0.19143 rad  qvel= 1.05595 rad/s  reward=-0.77530  return=-3.81846  terminated=False truncated=True
+
+<span class="c"># == 4. Returns over 5 seeds (frame_skip 10, 250 steps = 5.0 s) ==</span>
+mean                     -276.234  -311.319   -39.353   -36.622   <span class="c"># zero, random, PD, PD+grav</span>
+
+<span class="c"># == 6. Final state, seed 0, after 5.0 s ==</span>
+     PD: qpos= 0.80359 rad  qvel=-0.00006 rad/s  ctrl= 0.78566  time=5.000 s  steps=250   <span class="c"># sags</span>
+PD+grav: qpos= 0.99999 rad  qvel=-0.00014 rad/s  ctrl= 0.91848  time=5.000 s  steps=250   <span class="c"># on target</span>
+
+<span class="c"># == 7. Gymnasium's built-in MuJoCo environments in this venv ==</span>
+'InvertedPendulum-v5' registered: True
+gym.make('InvertedPendulum-v5'): fails with ModuleNotFoundError: No module named 'imageio'</code></pre>
+  <div class="card warn"><span class="callout-title" style="color:var(--orange)">About the two warnings</span>They are advice for learning algorithms: a finite bound on the speed reading is tidier than infinity. You could set it to, say, 20 rad/s. It does not change the physics. The action already uses the -1..1 range that many algorithms prefer, thanks to lesson 5's gear 100.</div>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">Checked against MuJoCo</span>The page's pendulum (game loop, timeline, players, sandbox) uses the same model, the same reward and the same semi-implicit Euler step as MuJoCo. <code>09_check_browser_physics.py</code> runs the page's JavaScript and the real env side by side: zero, PD and PD + gravity players, seeds 0 to 4, frame_skip 10 and 20, every step. The largest differences were 8.2e-8 rad in qpos and 3.0e-6 in a 250-step return, far inside 4 decimals.</div>
+</section>
+
+<section class="step" id="l9-s-next">
+  <span class="lvl lvl-plain">Plain words</span> <span class="lvl lvl-words">MuJoCo words</span>
+  <h2>7. Where next: four roads from here</h2>
+  <p>Your env has the standard doorway. So many tools can now play it. Each road below answers a different question.</p>
+  <table>
+    <thead><tr><th>Road</th><th>What it is, in one sentence</th><th>Pick it when</th></tr></thead>
+    <tbody>
+      <tr><td><dfn class="term" tabindex="0" data-def="Reinforcement learning: an algorithm plays the game many times and adjusts a neural-network policy to raise the return.">Reinforcement learning</dfn> (Stable-Baselines3: PPO, SAC)</td><td>An algorithm plays your env thousands of times and tunes a neural-network policy to raise the return.</td><td>You cannot write a good controller by hand, for example a contact-rich grasp.</td></tr>
+      <tr><td>GPU-scale simulation (MJX, MuJoCo Playground)</td><td>MJX is MuJoCo written in JAX so thousands of copies can step in parallel on a GPU or TPU; Playground is a collection of ready environments and training recipes built on it.</td><td>Training needs many millions of steps and a CPU loop is too slow.</td></tr>
+      <tr><td><dfn class="term" tabindex="0" data-def="Model predictive control: use the model to plan the best actions a short time ahead, apply the first one, then plan again at the next step.">Trajectory optimisation and MPC</dfn> (MuJoCo MPC)</td><td>Instead of training a policy, use the model to search for the best actions a short time ahead, apply the first, and replan every step.</td><td>Your model is accurate, you want behaviour without training, and you can afford the computing at run time.</td></tr>
+      <tr><td><dfn class="term" tabindex="0" data-def="Moving a controller from simulation to a real robot. Two main tools: system identification and domain randomisation.">Sim-to-real</dfn>: system identification and domain randomisation</td><td>System identification measures the real robot (masses, friction, motor limits) and tunes the XML until simulated and real motions match; domain randomisation varies those values on every reset so the policy works across the whole range.</td><td>You plan to run the controller on hardware. Identify what you can measure; randomise what you cannot.</td></tr>
+    </tbody>
+  </table>
+  <div class="card">
+    <span class="callout-title" style="color:var(--blue)">What is actually installed in this course's .venv</span>
+    <p>Stable-Baselines3 2.9.0 is installed. The optional script <code>09_try_sac.py</code> trains SAC on <em>this</em> env for 20,000 env steps (80 episodes). On this laptop it took 58 s. Mean return over seeds 0 to 4: <strong>SAC -24.253</strong>, PD + gravity -36.622, zero -276.234. From scores alone, the network found a controller that beats our hand-tuned PD on this score. (One run; exact numbers can vary between machines.)</p>
+    <p>Gymnasium also ships MuJoCo games such as <code>InvertedPendulum-v5</code>. Here it is registered, but <code>gym.make</code> fails: it needs <code>imageio</code>, which comes with the <code>gymnasium[mujoco]</code> extra and is not installed. JAX, MJX and MuJoCo Playground are not installed either. Nothing was installed for this lesson.</p>
+  </div>
+  <div class="predict">
+    <h3>Predict: your SAC policy works in simulation, but the real pendulum is 10% heavier. Which road helps most?</h3>
+    <textarea aria-label="Your prediction for the sim-to-real question"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer"><p><strong>Sim-to-real.</strong> Note the danger here: holding 1.0 rad already needs 92% of the motor. 10% more mass needs about 101 N*m, more than the motor can give. First weigh the real pendulum and update the mass in the XML (system identification). Then, inside <code>reset</code>, scale the mass by a random factor on each episode (domain randomisation), so the policy learns to cope with a range of masses. Capstone 2's grasp env randomises its start pose on every reset for the same reason.</p></div>
+  </div>
+  <h3>Where this leads: Capstone 2, the warehouse robot</h3>
+  <p>First, Capstone 1 asks you to build a cart-pole with everything from lessons 1-9. Later, Capstone 2's <code>WarehouseGraspEnv</code> is this lesson's pattern at full size. Its <code>reset</code> parks a mobile robot at a shelf with random parking error and moves the box a little. Its observation has 19 numbers in the chassis frame. Its action has 4 numbers in -1..1: a gripper-target move of up to 1.5 cm and a gripper command. It runs 25 physics steps per action (20 Hz) for 100 steps. <code>train_grasp_rl.py</code> trains SAC on it. Its notes tell two true stories of "reward hacking", where the learner found a loophole in the score.</p>
+  <p class="newwords">New words: <span class="chip">reinforcement learning</span><span class="chip">PPO / SAC</span><span class="chip">MJX</span><span class="chip">MPC</span><span class="chip">system identification</span><span class="chip">domain randomisation</span><span class="chip">sim-to-real</span></p>
+</section>
+
+<section class="step" id="l9-s-check">
+  <span class="lvl lvl-plain">Check yourself</span>
+  <h2>8. Your lesson's questions</h2>
+  <p>Answer them here, then tell me your answers in the chat so I can update your progress.</p>
+  <div class="predict">
+    <h3>Q1. timestep = 0.002 s and frame_skip = 10. How many actions does the policy choose per simulated second? How many mj_step calls per episode of 250 steps?</h3>
+    <textarea aria-label="Answer to question 1"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>50 actions per second</strong> (1 / 0.020 s), and <strong>2,500 mj_step calls</strong> (250 x 10), which is 5.0 s.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q2. You call env.reset(seed=3) twice. Do both games start at the same angle? Why?</h3>
+    <textarea aria-label="Answer to question 2"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>Yes</strong>, both at -0.41435 rad. <code>super().reset(seed=3)</code> re-seeds <code>self.np_random</code>, so the same "random" number comes out. That is what makes the returns table repeatable.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q3. Which MuJoCo calls does reset make, and in what order? Why the last one?</h3>
+    <textarea aria-label="Answer to question 3"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><code>mj_resetData</code> (clear everything), set <code>data.qpos[0]</code> (the random tilt), then <code>mj_forward</code>. The last one recomputes positions and forces for the new tilt, so nothing read afterwards is stale (lesson 3).</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q4. The PD player sees obs = [0.99064, 0.13653, 0.0]. What ctrl does it send?</h3>
+    <textarea aria-label="Answer to question 4"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>q = atan2(0.13653, 0.99064) = 0.13696 rad. Torque = 400 x (1.0 - 0.13696) - 40 x 0.0 = 345.2 N*m. Divided by the gear, 3.452, which clips to <strong>ctrl = 1.0</strong> (100 N*m, the motor's maximum). That is step 1 of the script's short episode.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q5. Why is terminated always False in this env, while truncated becomes True?</h3>
+    <textarea aria-label="Answer to question 5"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>Nothing in this game can "end" it: the pendulum cannot fall over or crash. The episode only stops because the 5 s clock runs out, which is truncation. Learning algorithms treat the two differently: after truncation the future still had value, after termination it did not.</p></div>
+  </div>
+
+  <h3>Glossary: new words from this lesson</h3>
+  <dl class="glossary">
+    <dt>Gymnasium</dt><dd>The Python library that defines the standard <code>reset()</code> / <code>step()</code> doorway.</dd>
+    <dt>environment (env)</dt><dd>A simulation wrapped in that doorway, with a fixed observation, action and reward.</dd>
+    <dt>episode</dt><dd>One game, from reset until terminated or truncated. Here 250 steps, 5.0 s.</dd>
+    <dt>observation</dt><dd>What the player sees each step: here [cos q, sin q, qvel], shape (3,).</dd>
+    <dt>action</dt><dd>What the player sends each step: here one ctrl in -1..1, written to <code>data.ctrl[0]</code>; the motor applies 100 x ctrl N*m.</dd>
+    <dt>reward / return</dt><dd>Points for one step / the sum over a whole episode.</dd>
+    <dt>terminated / truncated</dt><dd>The game really ended / the time limit cut it off.</dd>
+    <dt>policy (agent)</dt><dd>The rule that turns an observation into an action: zero, random, PD, PD + gravity, or a neural network.</dd>
+    <dt>seed</dt><dd>A number that makes the random start repeatable.</dd>
+    <dt>observation_space / action_space</dt><dd>Descriptions of the shapes and ranges of the observation and the action (<code>Box</code>).</dd>
+    <dt>frame_skip, control rate</dt><dd>Physics ticks per env step (10); actions per second (50).</dd>
+    <dt>reinforcement learning</dt><dd>Training a policy from rewards alone, by playing many episodes (PPO and SAC are two algorithms).</dd>
+    <dt>MJX, MuJoCo Playground</dt><dd>MuJoCo in JAX for many parallel copies on a GPU or TPU; ready environments built on it.</dd>
+    <dt>MPC</dt><dd>Model predictive control: plan a short way ahead with the model, act, replan.</dd>
+    <dt>system identification, domain randomisation</dt><dd>Match the model to the real robot; vary the model on every reset so the policy copes with what you could not measure.</dd>
+  </dl>
+</section>
+
+<section class="step recap" id="l9-recap">
+  <h2>Recap: the lesson in one minute</h2>
+  <div class="mental-model">
+    <p>A <strong>Gymnasium environment</strong> wraps one <code>MjModel</code> and one <code>MjData</code> behind two calls. <code>reset(seed)</code> runs <code>mj_resetData</code>, sets a seeded random <code>qpos</code>, runs <code>mj_forward</code>, and returns the first observation. <code>step(action)</code> writes <code>data.ctrl</code>, runs <code>mj_step</code> <code>frame_skip</code> times, and returns <code>obs, reward, terminated, truncated, info</code>.</p>
+    <p>The <strong>observation</strong> here is <code>[cos qpos[0], sin qpos[0], qvel[0]]</code>, shape (3,). The <strong>action</strong> is the motor command, <code>Box(-1, 1, (1,))</code>, giving 100 x ctrl N*m. The <strong>reward</strong> is <code>-(err^2 + 0.1*qvel^2 + 0.01*ctrl^2)</code> with err = qpos - 1.0 rad, and the <strong>return</strong> is its sum over the episode.</p>
+    <p><strong>frame_skip</strong> sets the control rate: 10 ticks of 0.002 s gives 50 actions per second. Returns only compare fairly at the same frame_skip and episode length. Over seeds 0 to 4: PD + gravity -36.622, PD -39.353, zero -276.234, random -311.319; a 58 s SAC run reached -24.253.</p>
+    <p>Next roads: reinforcement learning (Stable-Baselines3, MJX and Playground for GPU scale), trajectory optimisation and MPC (MuJoCo MPC), and sim-to-real (system identification and domain randomisation).</p>
+  </div>
+  <div class="checkpoint">
+    <p>In the episode sandbox, pick a player and a seed, then Run episode. Check that the PD + gravity return for seed 0 is -24.566 and the zero return is -256.548, as in the script.</p>
+    <div class="btn-row">
+      <button class="btn btn-primary btn-sm" type="button" onclick="markComplete(9)">Mark lesson complete</button>
+      <button class="btn btn-sm" type="button" onclick="switchLesson(10)">Next: Capstone 1, balance a cart-pole</button>
+    </div>
+  </div>
+</section>
+</div>

@@ -1,0 +1,511 @@
+<div class="lesson-content xp" id="lesson12">
+  <header class="lesson-header-block">
+    <p class="lesson-num-label">Lesson 12</p>
+    <h1 class="lesson-title">Kinematics and Jacobians</h1>
+    <p class="lesson-subtitle">Goal: go from joint angles to the hand position (forward kinematics), learn how fast the hand moves when a joint turns (the Jacobian), and go back from a hand position to joint angles (inverse kinematics), first with a formula and then with a method that works for any arm. You will use the two-link arm from Lesson 4.</p>
+    <p class="lesson-legend"><dfn class="term" tabindex="0" data-def="Technical words look like this. Hover or focus one to read a plain-English definition.">Dotted words</dfn> show a definition on hover. <span class="lg-math">Maths boxes</span> are optional. <span class="lg-pred">Predict boxes</span> hide the answer until you guess.</p>
+  </header>
+  <nav class="lesson-toc" aria-label="Sections in lesson 12"><a href="#l12-s-idea">Big idea</a><a href="#l12-s-fk">Chain of frames</a><a href="#l12-s-jac">Jacobian</a><a href="#l12-s-sing">Straight arm</a><a href="#l12-s-ik">IK by formula</a><a href="#l12-s-dls">IK by steps</a><a href="#l12-s-code">The script</a><a href="#l12-s-check">Check yourself</a><a href="#l12-recap">Recap</a></nav>
+
+<section class="step" id="l12-s-idea">
+  <span class="lvl lvl-plain">Plain words</span> <span class="lvl lvl-pic">Picture</span>
+  <h2>1. Pointing at a cup: your brain picks the angles for you</h2>
+  <p>Reach for a cup on the table. You think "hand to the cup". You never think "shoulder 0.03 rad, elbow 1.29 rad". Your brain works out the joint angles for you.</p>
+  <p>A robot has no such brain. It can only set joint angles. So we need two translations, one in each direction.</p>
+  <div class="grid2">
+    <div class="card"><span class="callout-title" style="color:var(--teal)">Forward: angles to hand</span>"My shoulder is at 0.5 rad and my elbow at 0.8 rad. Where is my hand?" This is easy. There is always exactly one answer. You just follow the arm from the shoulder to the hand. This is <dfn class="term" tabindex="0" data-def="Working out where a part of the robot is (for example the hand) from the joint angles. Always one answer.">forward kinematics</dfn>.</div>
+    <div class="card"><span class="callout-title" style="color:var(--orange)">Inverse: hand to angles</span>"I want my hand on the cup. Which angles?" This is harder. There may be two answers (elbow up or elbow down), one, or none (the cup is out of reach). This is <dfn class="term" tabindex="0" data-def="Working out joint angles that put a part of the robot (for example the hand) at a wanted position. Zero, one, two or many answers.">inverse kinematics</dfn>, or IK.</div>
+  </div>
+  <div class="card analogy"><strong>Analogy: directions versus an address.</strong> "Walk 0.5 m, turn, walk 0.4 m" always lands you somewhere: that is forward. "Get to this address" may have two routes, or none if the address is across a river with no bridge: that is inverse.</div>
+  <h3>Try it: put the hand on the cup yourself</h3>
+  <p>Move the two joint sliders until the red hand dot sits on the yellow cup. You are doing inverse kinematics by trial and error, the way a toddler learns to reach.</p>
+  <div class="card">
+    <div class="grid2">
+      <canvas id="l12cvIdea" role="img" aria-label="Side view of the two-link arm with a cup target at x 0.6 m, z 0.6 m. Sliders set the shoulder and elbow angles."></canvas>
+      <div>
+        <label class="slider"><span>Shoulder angle <code>qpos[0]</code></span> <output id="l12oIdQ1">0.00 rad</output><input type="range" id="l12IdQ1" min="-3.14" max="3.14" step="0.01" value="0"></label>
+        <label class="slider"><span>Elbow angle <code>qpos[1]</code></span> <output id="l12oIdQ2">0.00 rad</output><input type="range" id="l12IdQ2" min="-3.14" max="3.14" step="0.01" value="0"></label>
+        <div class="readouts">
+          <div class="ro"><span class="lab">hand x (world)</span><span class="val" id="l12rIdX">-</span> <span class="unit">m</span></div>
+          <div class="ro"><span class="lab">hand z (world)</span><span class="val" id="l12rIdZ">-</span> <span class="unit">m</span></div>
+          <div class="ro"><span class="lab">distance to the cup</span><span class="val" id="l12rIdD">-</span> <span class="unit">m</span></div>
+        </div>
+        <div class="btnrow">
+          <button id="l12IdShow" type="button">Show the two answers</button>
+          <button id="l12IdUp" type="button">Jump to elbow up</button>
+          <button id="l12IdDown" type="button">Jump to elbow down</button>
+        </div>
+      </div>
+    </div>
+    <p class="caption">The shoulder is at world (0, 0, 1) m. Upper arm 0.5 m (teal), forearm 0.4 m (orange) to the <code>hand</code> site (red). The cup is at world x = 0.6 m, z = 0.6 m. Two different poses touch it: (0.0255, 1.2922) rad with the elbow up and (1.1505, -1.2922) rad with the elbow down. Section 5 computes both.</p>
+  </div>
+  <div class="predict">
+    <h3>Predict: the arm is 0.5 m + 0.4 m long. How many ways can the hand touch a point 0.6 m from the shoulder? And a point 1.0 m away?</h3>
+    <textarea aria-label="Your prediction for the number of solutions"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p><strong>0.6 m: two ways. 1.0 m: none.</strong> The fully stretched arm reaches 0.5 + 0.4 = 0.9 m, so 1.0 m is too far. For 0.6 m the elbow can bend up or down, a mirror image across the line from shoulder to target. The script checks targets at shoulder height (z = 1 m):</p>
+      <table>
+        <thead><tr><th>distance r from the shoulder</th><th>solutions</th><th>angles (q1, q2) in rad</th><th>why</th></tr></thead>
+        <tbody>
+          <tr><td>0.60 m</td><td>2</td><td>(-0.7227, +1.6961) and (+0.7227, -1.6961)</td><td>elbow up and elbow down</td></tr>
+          <tr><td>0.90 m</td><td>1</td><td>(0.0000, 0.0000)</td><td>arm fully straight</td></tr>
+          <tr><td>1.00 m</td><td>0</td><td>none</td><td>too far: r &gt; L1 + L2 = 0.9 m</td></tr>
+          <tr><td>0.10 m</td><td>1</td><td>(0.0000, 3.1416)</td><td>forearm folded right back</td></tr>
+          <tr><td>0.05 m</td><td>0</td><td>none</td><td>too close: r &lt; L1 - L2 = 0.1 m</td></tr>
+        </tbody>
+      </table>
+      <p>So the hand can reach a ring: between 0.1 m and 0.9 m from the shoulder. The sandbox draws it.</p>
+    </div>
+  </div>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">The model</span>This is the Lesson 4 arm, unchanged: same bodies, joints, sizes and <code>hand</code> site. I dropped Lesson 4's loose box and its two cameras, because kinematics never looks at them.</div>
+  <p class="newwords">New words: <span class="chip">kinematics</span><span class="chip">forward kinematics</span><span class="chip">inverse kinematics (IK)</span><span class="chip">workspace</span></p>
+</section>
+
+<section class="step" id="l12-s-fk">
+  <span class="lvl lvl-pic">Picture</span> <span class="lvl lvl-words">MuJoCo words</span> <span class="lvl lvl-math">simple arithmetic</span>
+  <h2>2. Forward kinematics: follow the chain of frames</h2>
+  <p>Each joint turns everything after it. Turn the shoulder, and the upper arm, the elbow, the forearm and the hand all swing together. The elbow then turns only the forearm and the hand.</p>
+  <p>So the hand position is a walk: start at the shoulder, walk 0.5 m in the upper arm's direction, then walk 0.4 m in the forearm's direction. The forearm's direction is the shoulder angle <em>plus</em> the elbow angle.</p>
+  <div class="grid2">
+<pre><code><span class="t">&lt;body</span> <span class="a">name</span>=<span class="s">"upper_arm"</span> <span class="a">pos</span>=<span class="s">"0 0 1"</span><span class="t">&gt;</span>
+  <span class="t">&lt;joint</span> <span class="a">name</span>=<span class="s">"shoulder"</span> <span class="a">type</span>=<span class="s">"hinge"</span> <span class="a">axis</span>=<span class="s">"0 1 0"</span><span class="t">/&gt;</span>
+  <span class="t">&lt;geom</span> <span class="a">fromto</span>=<span class="s">"0 0 0  0.5 0 0"</span> .../&gt;
+  <span class="t">&lt;body</span> <span class="a">name</span>=<span class="s">"forearm"</span> <span class="a">pos</span>=<span class="s">"0.5 0 0"</span><span class="t">&gt;</span>
+    <span class="t">&lt;joint</span> <span class="a">name</span>=<span class="s">"elbow"</span> <span class="a">type</span>=<span class="s">"hinge"</span> <span class="a">axis</span>=<span class="s">"0 1 0"</span><span class="t">/&gt;</span>
+    <span class="t">&lt;geom</span> <span class="a">fromto</span>=<span class="s">"0 0 0  0.4 0 0"</span> .../&gt;
+    <span class="t">&lt;site</span> <span class="a">name</span>=<span class="s">"hand"</span> <span class="a">pos</span>=<span class="s">"0.4 0 0"</span><span class="t">/&gt;</span>
+  <span class="t">&lt;/body&gt;</span>
+<span class="t">&lt;/body&gt;</span></code></pre>
+<pre><code><span class="c"># joint 0 shoulder -> qpos[0], joint 1 elbow -> qpos[1] (rad)</span>
+data.qpos[:] = (<span class="n">0.5</span>, <span class="n">0.8</span>)
+mujoco.mj_forward(model, data)   <span class="c"># walk the chain</span>
+
+data.xpos[<span class="n">1</span>]   <span class="c"># upper_arm origin = shoulder (0, 0, 1)</span>
+data.xpos[<span class="n">2</span>]   <span class="c"># forearm origin = elbow, world m</span>
+sid = mujoco.mj_name2id(model,
+        mujoco.mjtObj.mjOBJ_SITE, <span class="s">"hand"</span>)  <span class="c"># 0</span>
+data.site_xpos[sid]  <span class="c"># hand, world m, shape (3,)</span></code></pre>
+  </div>
+  <div class="card warn"><span class="callout-title" style="color:var(--orange)">The sign: positive angles tip the arm DOWN</span>Both hinges turn about +y, and +y points <em>into</em> the screen in this side view. By the right-hand rule (Lesson 2), a positive turn about +y moves +x towards -z. So on screen, positive angles turn the arm <strong>clockwise</strong>. The script checks it: at <code>qpos = (+0.1, 0)</code> the hand is at z = 0.9101 m, below the shoulder. At <code>(-0.1, 0)</code> it is at z = 1.0899 m, above it.</div>
+  <h3>Try it: the hand is the sum of two arrows</h3>
+  <div class="card">
+    <div class="grid2">
+      <canvas id="l12cvChain" role="img" aria-label="The arm drawn as two arrows placed tip to tail: teal for the upper arm, orange for the forearm, with the angles q1 and q2 marked."></canvas>
+      <div>
+        <label class="slider"><span>Shoulder <code>q1 = qpos[0]</code></span> <output id="l12oChQ1">0.50 rad</output><input type="range" id="l12ChQ1" min="-3.14" max="3.14" step="0.01" value="0.5"></label>
+        <label class="slider"><span>Elbow <code>q2 = qpos[1]</code></span> <output id="l12oChQ2">0.80 rad</output><input type="range" id="l12ChQ2" min="-3.14" max="3.14" step="0.01" value="0.8"></label>
+        <div class="btnrow"><button type="button" class="l12chpre" data-q="0,0">(0, 0)</button><button type="button" class="l12chpre" data-q="0.5,0.8">(0.5, 0.8)</button><button type="button" class="l12chpre" data-q="1,-0.5">(1.0, -0.5)</button><button type="button" class="l12chpre" data-q="-0.4,1.2">(-0.4, 1.2)</button><button type="button" class="l12chpre" data-q="0.3,2">(0.3, 2.0)</button></div>
+      </div>
+    </div>
+    <div class="eq" id="l12ChEq" aria-live="polite"></div>
+    <p class="caption">q1 is measured from horizontal at the shoulder. q2 is measured from the upper arm's own direction (dashed line at the elbow), not from horizontal. That is why the forearm's direction is q1 + q2. R(a) [L, 0] means "an arrow of length L turned by angle a": (L cos a, -L sin a) in world (x, z). The minus sign is the clockwise sign above.</p>
+  </div>
+  <p>The script computes the hand both ways for five poses. Lesson 4 did the pose (0.5, 0.8) in detail; the rule is the same for every pose:</p>
+  <table>
+    <thead><tr><th>(q1, q2) rad</th><th>elbow <code>xpos[2]</code> (x, z) m</th><th>hand by hand (x, z) m</th><th>MuJoCo <code>site_xpos</code> (x, z) m</th><th>difference</th></tr></thead>
+    <tbody>
+      <tr><td>(0.00, 0.00)</td><td>(0.5000, 1.0000)</td><td>(0.9000, 1.0000)</td><td>(0.9000, 1.0000)</td><td>0</td></tr>
+      <tr><td>(0.50, 0.80)</td><td>(0.4388, 0.7603)</td><td>(0.5458, 0.3749)</td><td>(0.5458, 0.3749)</td><td>1.1e-16 m</td></tr>
+      <tr><td>(1.00, -0.50)</td><td>(0.2702, 0.5793)</td><td>(0.6212, 0.3875)</td><td>(0.6212, 0.3875)</td><td>5.6e-17 m</td></tr>
+      <tr><td>(-0.40, 1.20)</td><td>(0.4605, 1.1947)</td><td>(0.7392, 0.9078)</td><td>(0.7392, 0.9078)</td><td>0</td></tr>
+      <tr><td>(0.30, 2.00)</td><td>(0.4777, 0.8522)</td><td>(0.2112, 0.5540)</td><td>(0.2112, 0.5540)</td><td>1.1e-16 m</td></tr>
+    </tbody>
+  </table>
+  <p>The y coordinate is 0.0000 in every case: the arm never leaves the x-z plane. The differences are rounding in the last of 16 digits.</p>
+  <details class="math"><summary>Maths: the chain rule for positions, with pose (0.5, 0.8)</summary><div>
+    <p>Each link is an arrow in its own frame: [0.5, 0] for the upper arm, [0.4, 0] for the forearm. Turning a frame by angle a about +y turns that arrow into (L cos a, -L sin a) in world (x, z). Add the arrows to the shoulder position:</p>
+    <div class="eq">hand = (0, 1) + R(q1) [L1, 0] + R(q1 + q2) [L2, 0]
+     = (L1 cos q1 + L2 cos(q1 + q2),   1 - L1 sin q1 - L2 sin(q1 + q2))
+
+R(0.5) [0.5, 0] = (0.5 cos 0.5, -0.5 sin 0.5) = (0.4388, -0.2397)    -> elbow (0.4388, 0.7603)
+R(1.3) [0.4, 0] = (0.4 cos 1.3, -0.4 sin 1.3) = (0.1070, -0.3854)
+hand = (0, 1) + both                          = (0.5458, 0.3749) m     (script: 0.5458, 0.3749)</div>
+    <p>MuJoCo does the same thing in 3D for every body: each body's frame = parent frame, then the body's <code>pos</code> offset, then its joint's turn. A longer arm just adds more arrows to the sum.</p>
+  </div></details>
+  <p class="newwords">New words: <span class="chip">chain of frames</span><span class="chip">site_xpos</span><span class="chip">R(a)</span></p>
+</section>
+
+<section class="step" id="l12-s-jac">
+  <span class="lvl lvl-plain">Plain words</span> <span class="lvl lvl-words">MuJoCo words</span> <span class="lvl lvl-pic">Picture</span>
+  <h2>3. The Jacobian: "if I turn this joint, how fast does the hand move, and which way?"</h2>
+  <p>A bicycle has a gear table: one turn of the pedals moves the bike so many metres. The <dfn class="term" tabindex="0" data-def="A table (matrix) of how fast the hand moves, and in which direction, per unit of speed at each joint. Shape 3 x nv for a position. It changes with the pose.">Jacobian</dfn> is that table for an arm. For each joint it says: if this joint turns at 1 rad/s, the hand moves this fast, in this direction.</p>
+  <p>Unlike a bicycle, the table changes with the pose. With the arm stretched out, a shoulder turn swings the hand a long way. With the arm folded, the same shoulder turn hardly moves the hand.</p>
+  <div class="card analogy"><strong>Analogy: a door.</strong> Push a door near the hinge and the edge barely moves. The far edge moves fastest. A joint's effect on the hand grows with the distance from the joint to the hand, and the hand always moves sideways to that line, never along it.</div>
+  <p>MuJoCo fills the table for any site with <code>mj_jacSite</code>. You give it two empty arrays:</p>
+  <div class="grid2">
+<pre><code>jacp = np.zeros((<span class="n">3</span>, model.nv))  <span class="c"># 3 x 2, m/rad</span>
+jacr = np.zeros((<span class="n">3</span>, model.nv))  <span class="c"># 3 x 2, rad/rad</span>
+mujoco.mj_forward(model, data)    <span class="c"># pose first!</span>
+mujoco.mj_jacSite(model, data, jacp, jacr, sid)
+v_hand = jacp @ data.qvel        <span class="c"># m/s, world</span></code></pre>
+<pre><code><span class="c"># pose (0.5, 0.8): columns shoulder, elbow</span>
+jacp = [[-0.6251 -0.3854]   <span class="c"># world x</span>
+        [ 0.      0.    ]   <span class="c"># world y</span>
+        [-0.5458 -0.107 ]]  <span class="c"># world z</span>
+jacr = [[0. 0.]
+        [1. 1.]             <span class="c"># both turn about +y</span>
+        [0. 0.]]</code></pre>
+  </div>
+  <table>
+    <thead><tr><th>Array</th><th>Shape</th><th>Row means</th><th>Column means</th><th>Unit, frame</th></tr></thead>
+    <tbody>
+      <tr><td><code>jacp</code></td><td>(3, nv) = (3, 2)</td><td>world x, y, z of the hand's velocity</td><td>one joint in <code>qvel</code> order (dof 0 shoulder, dof 1 elbow)</td><td>m/s per rad/s, world frame</td></tr>
+      <tr><td><code>jacr</code></td><td>(3, nv) = (3, 2)</td><td>world x, y, z of the hand frame's spin</td><td>same</td><td>rad/s per rad/s, world frame</td></tr>
+      <tr><td><code>jacp @ qvel</code></td><td>(3,)</td><td colspan="2">the hand's velocity: add up each column times its joint speed</td><td>m/s, world frame</td></tr>
+    </tbody>
+  </table>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">Reading one column</span>Column j is "the hand's velocity when only joint j turns, at 1 rad/s". For a hinge it is the joint axis crossed with the arrow from the joint to the hand. Shoulder: (0, 1, 0) x (0.5458, 0, -0.6251) = (-0.6251, 0, -0.5458). Its length, 0.8299 m/rad, is exactly the shoulder-to-hand distance, like the door. Elbow column length: 0.4000 m/rad = the forearm. Row y is zero: no joint can push the hand out of the x-z plane.</div>
+  <div class="predict">
+    <h3>Predict: the arm is straight out (0, 0). The shoulder turns at 0.1 rad/s, the elbow is still. How fast does the hand move, and which way?</h3>
+    <textarea aria-label="Your prediction for the hand speed"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p><strong>0.09 m/s, straight down.</strong> The hand is 0.9 m from the shoulder, so it moves 0.9 m x 0.1 rad/s = 0.09 m/s, sideways to the arm. The script prints <code>v_hand = (0.0000, 0.0000, -0.0900) m/s</code>: down, because positive angles turn clockwise. The elbow alone at 0.1 rad/s gives (0.0000, 0.0000, -0.0400) m/s: 0.4 m x 0.1 rad/s. At pose (0.5, 0.8) the shoulder at 0.1 rad/s gives 0.0830 m/s, because the hand is then only 0.8299 m from the shoulder.</p>
+    </div>
+  </div>
+  <h3>Try it: columns and the hand velocity</h3>
+  <div class="card">
+    <div class="grid2">
+      <canvas id="l12cvJac" role="img" aria-label="The arm with the two Jacobian columns drawn as faint arrows at the hand and the total hand velocity as a purple arrow."></canvas>
+      <div>
+        <label class="slider"><span>Shoulder <code>qpos[0]</code></span> <output id="l12oJQ1">0.50 rad</output><input type="range" id="l12JQ1" min="-3.14" max="3.14" step="0.01" value="0.5"></label>
+        <label class="slider"><span>Elbow <code>qpos[1]</code></span> <output id="l12oJQ2">0.80 rad</output><input type="range" id="l12JQ2" min="-3.14" max="3.14" step="0.01" value="0.8"></label>
+        <label class="slider"><span>Shoulder speed <code>qvel[0]</code></span> <output id="l12oJV1">0.10 rad/s</output><input type="range" id="l12JV1" min="-1" max="1" step="0.05" value="0.1"></label>
+        <label class="slider"><span>Elbow speed <code>qvel[1]</code></span> <output id="l12oJV2">0.20 rad/s</output><input type="range" id="l12JV2" min="-1" max="1" step="0.05" value="0.2"></label>
+        <div class="btnrow"><button type="button" class="l12jpre" data-v="0.5,0.8,0.1,0.2">script (0.5, 0.8), qvel (0.1, 0.2)</button><button type="button" class="l12jpre" data-v="0,0,0.1,0">straight, shoulder 0.1</button></div>
+      </div>
+    </div>
+    <div class="eq" id="l12JEq" aria-live="polite"></div>
+    <div class="readouts">
+      <div class="ro"><span class="lab">hand speed |J qvel|</span><span class="val" id="l12rJS">-</span> <span class="unit">m/s</span></div>
+      <div class="ro"><span class="lab">length of column 1</span><span class="val" id="l12rJC1">-</span> <span class="unit">m/rad</span></div>
+      <div class="ro frozen"><span class="lab">shoulder-to-hand distance</span><span class="val" id="l12rJR">-</span> <span class="unit">m</span></div>
+    </div>
+    <p class="caption">Faint arrows: each column times 0.5, the hand velocity if only that joint turned at 0.5 rad/s (teal shoulder, orange elbow). Purple: the real hand velocity J qvel. All arrows are drawn as "where the hand would be after 1 s at this velocity". This page computes J with the same formula as the maths box below. It matches <code>mj_jacSite</code> to better than 1e-15 for eight poses (checked by <code>check_browser_match.py</code>).</p>
+  </div>
+  <h3>Is J qvel really the hand's velocity? Three checks</h3>
+  <p>At pose (0.5, 0.8), the script compares <code>J @ qvel</code> with a <dfn class="term" tabindex="0" data-def="Estimate a rate of change by nudging the input a tiny bit and dividing the change in output by the nudge.">finite difference</dfn>: nudge the angles by qvel x 1e-6 s forward and back, and divide the change in <code>site_xpos</code> by the time.</p>
+  <table>
+    <thead><tr><th>qvel (rad/s)</th><th>J qvel (world x, y, z) m/s</th><th>speed m/s</th><th>finite difference m/s</th><th>difference</th></tr></thead>
+    <tbody>
+      <tr><td>(0.1, 0.0)</td><td>(-0.0625, 0.0000, -0.0546)</td><td>0.0830</td><td>(-0.0625, 0.0000, -0.0546)</td><td>1.5e-11</td></tr>
+      <tr><td>(0.0, 0.1)</td><td>(-0.0385, 0.0000, -0.0107)</td><td>0.0400</td><td>(-0.0385, 0.0000, -0.0107)</td><td>2.4e-11</td></tr>
+      <tr><td>(0.1, 0.2)</td><td>(-0.1396, 0.0000, -0.0760)</td><td>0.1589</td><td>(-0.1396, 0.0000, -0.0760)</td><td>7.2e-11</td></tr>
+    </tbody>
+  </table>
+  <p>Then a real <code>mj_step</code> (h = 0.002 s, gravity on), starting from qvel = (0.1, 0.2). The hand moves (site_xpos after - before) / h = <strong>(-0.1388, 0.0000, -0.0935) m/s</strong>. That matches J qvel computed with the <em>new</em> qvel, (0.147747, 0.120372) rad/s: (-0.1388, 0.0000, -0.0935). It does not match the old one, (-0.1396, 0, -0.0760). This is semi-implicit Euler from Lesson 3: the position moves with the new speed. <code>mj_objectVelocity</code> on the site agrees: (-0.1388, 0.0000, -0.0935) m/s.</p>
+  <details class="math"><summary>Maths: the Jacobian is the slope of forward kinematics</summary><div>
+    <p>Take the forward formula and ask how each coordinate changes when one angle changes a little (a partial derivative). Write s1 = sin q1, c12 = cos(q1 + q2) and so on:</p>
+    <div class="eq">x = L1 c1 + L2 c12           dx/dq1 = -L1 s1 - L2 s12     dx/dq2 = -L2 s12
+z = 1 - L1 s1 - L2 s12       dz/dq1 = -L1 c1 - L2 c12     dz/dq2 = -L2 c12
+
+J = [ -L1 s1 - L2 s12   -L2 s12 ]
+    [ -L1 c1 - L2 c12   -L2 c12 ]</div>
+    <p>At pose (0.5, 0.8): s1 = 0.4794, c1 = 0.8776, s12 = sin 1.3 = 0.9636, c12 = cos 1.3 = 0.2675:</p>
+    <div class="eq">dx/dq1 = -0.5 x 0.4794 - 0.4 x 0.9636 = -0.2397 - 0.3854 = -0.6251
+dx/dq2 = -0.4 x 0.9636                          = -0.3854
+dz/dq1 = -0.5 x 0.8776 - 0.4 x 0.2675 = -0.4388 - 0.1070 = -0.5458
+dz/dq2 = -0.4 x 0.2675                          = -0.1070      (script: max difference 1.1e-16)</div>
+    <p>Notice the pieces: they are the same numbers as the two arrows in section 2, swapped and with a sign. Turning an arrow (a, b) by a small angle moves its tip along (b, -a) here. That is the "sideways, never along" rule from the door analogy.</p>
+  </div></details>
+  <p class="newwords">New words: <span class="chip">Jacobian</span><span class="chip">mj_jacSite</span><span class="chip">jacp / jacr</span><span class="chip">finite difference</span><span class="chip">mj_objectVelocity</span></p>
+</section>
+
+<section class="step" id="l12-s-sing">
+  <span class="lvl lvl-plain">Plain words</span> <span class="lvl lvl-pic">Picture</span>
+  <h2>4. The straight arm: a direction the hand cannot move</h2>
+  <p>Stretch your arm straight out and try to push your hand further out, without moving your shoulder. You can't. Every joint turn swings the hand sideways. None moves it along the arm.</p>
+  <div class="predict">
+    <h3>Predict: the arm is straight (elbow = 0, shoulder = 0). Can any joint speed move the hand outward, along +x?</h3>
+    <textarea aria-label="Your prediction for the straight arm"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p><strong>No.</strong> At (0, 0) the x row of the Jacobian is all zeros: J = [[0.0000, 0.0000], [-0.9000, -0.4000]]. Both columns point along z. Whatever qvel you pick, the hand's x velocity is 0. The arm has two joints but, at this pose, the hand can move in only one direction. This is a <dfn class="term" tabindex="0" data-def="A pose where the Jacobian loses a direction: some hand velocity cannot be made by any joint speeds. Its determinant is 0. For this arm: elbow = 0 (straight) or elbow = pi (folded).">singular pose</dfn>, or a singularity.</p>
+    </div>
+  </div>
+  <div class="card">
+    <div class="grid2">
+      <canvas id="l12cvSing" role="img" aria-label="The arm near straight with an ellipse at the hand showing every hand velocity the joints can make. The ellipse flattens to a line as the elbow straightens."></canvas>
+      <div>
+        <label class="slider"><span>Elbow <code>qpos[1]</code> (shoulder stays 0)</span> <output id="l12oSgQ2">0.80 rad</output><input type="range" id="l12SgQ2" min="0" max="1.5" step="0.01" value="0.8"></label>
+        <div class="btnrow"><button type="button" class="l12sgpre" data-q="0.8">0.8</button><button type="button" class="l12sgpre" data-q="0.3">0.3</button><button type="button" class="l12sgpre" data-q="0.1">0.1</button><button type="button" class="l12sgpre" data-q="0.01">0.01</button><button type="button" class="l12sgpre" data-q="0">0 (straight)</button></div>
+        <div class="readouts">
+          <div class="ro"><span class="lab">det J</span><span class="val" id="l12rSgDet">-</span> <span class="unit">(m/rad)²</span></div>
+          <div class="ro"><span class="lab">smallest stretch</span><span class="val" id="l12rSgMin">-</span> <span class="unit">m/rad</span></div>
+          <div class="ro"><span class="lab">condition number</span><span class="val" id="l12rSgCond">-</span></div>
+          <div class="ro"><span class="lab">x velocity per 0.3 rad/s (shoulder, elbow)</span><span class="val" id="l12rSgVx">-</span> <span class="unit">m/s</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="caption">Shoulder fixed at 0. The purple ellipse is every hand velocity you can get with joint speeds of size 0.3 rad/s in any mix. A fat ellipse: the hand can move any way. A flat ellipse: one direction is almost impossible. At elbow = 0 it is a vertical line, and the yellow "outward" arrow is outside it.</p>
+  </div>
+  <p>Two numbers measure how close you are. The <dfn class="term" tabindex="0" data-def="For a 2 x 2 matrix [[a, b], [c, d]]: ad - bc. The area the matrix turns a unit square into. Zero means a direction is lost.">determinant</dfn> is the area of the velocity "patch"; for this arm it is exactly -L1 L2 sin q2 = -0.2 sin q2. The <dfn class="term" tabindex="0" data-def="Largest stretch divided by smallest stretch of a matrix. 1 is perfect; large means some directions need huge inputs; infinite means singular.">condition number</dfn> is the longest stretch of the ellipse divided by the shortest. The script, shoulder at 0:</p>
+  <table>
+    <thead><tr><th>elbow q2 (rad)</th><th>J rows x and z (m/rad)</th><th>det (m/rad)²</th><th>-0.2 sin q2</th><th>smallest stretch (m/rad)</th><th>condition number</th></tr></thead>
+    <tbody>
+      <tr><td>0.80</td><td>[[-0.2869, -0.2869], [-0.7787, -0.2787]]</td><td>-0.14347</td><td>-0.14347</td><td>0.15808</td><td>5.7</td></tr>
+      <tr><td>0.30</td><td>[[-0.1182, -0.1182], [-0.8821, -0.3821]]</td><td>-0.05910</td><td>-0.05910</td><td>0.06069</td><td>16.0</td></tr>
+      <tr><td>0.10</td><td>[[-0.0399, -0.0399], [-0.8980, -0.3980]]</td><td>-0.01997</td><td>-0.01997</td><td>0.02030</td><td>48.5</td></tr>
+      <tr><td>0.01</td><td>[[-0.0040, -0.0040], [-0.9000, -0.4000]]</td><td>-0.00200</td><td>-0.00200</td><td>0.00203</td><td>485.0</td></tr>
+      <tr><td>0.00</td><td>[[0.0000, 0.0000], [-0.9000, -0.4000]]</td><td>0.00000</td><td>0.00000</td><td>0.00000</td><td>infinite</td></tr>
+    </tbody>
+  </table>
+  <div class="card warn"><span class="callout-title" style="color:var(--orange)">Why singularities matter</span>Near a singular pose, a small hand motion in the "hard" direction needs huge joint speeds: at elbow 0.01 rad, moving the hand outward at just 1 mm/s needs qvel = (0.2000, -0.4500) rad/s, size 0.4924 rad/s. Half a radian per second, for one millimetre per second. Any method that divides by J (section 6) will ask for wild joint moves there. That is the problem damping fixes.</div>
+  <p class="newwords">New words: <span class="chip">singular pose</span><span class="chip">determinant</span><span class="chip">condition number</span></p>
+</section>
+
+<section class="step" id="l12-s-ik">
+  <span class="lvl lvl-plain">Plain words</span> <span class="lvl lvl-pic">Picture</span> <span class="lvl lvl-math">Maths</span>
+  <h2>5. Inverse kinematics by formula: a triangle with three known sides</h2>
+  <p>Draw a line from the shoulder to the target. The upper arm, the forearm and that line make a triangle. We know all three side lengths: 0.5 m, 0.4 m and the distance r. A triangle with three known sides has fixed angles. So the elbow angle is fixed too, up to a mirror image.</p>
+  <div class="card analogy"><strong>Analogy: a folding ruler.</strong> Hold the two ends of a two-piece folding ruler at a fixed distance apart. The hinge has only two places it can go: bent up or bent down. Pull the ends further apart than the ruler is long, and there is no place at all.</div>
+  <div class="card">
+    <div class="grid2">
+      <canvas id="l12cvIk" role="img" aria-label="Analytic IK: the arm in its elbow-up solution (solid) and elbow-down solution (purple, faint) reaching a target, with the reachable ring shaded. Click to move the target."></canvas>
+      <div>
+        <label class="slider"><span>Target x (world)</span> <output id="l12oIkX">0.60 m</output><input type="range" id="l12IkX" min="-1.05" max="1.05" step="0.01" value="0.6"></label>
+        <label class="slider"><span>Target z (world)</span> <output id="l12oIkZ">0.60 m</output><input type="range" id="l12IkZ" min="0" max="2" step="0.01" value="0.6"></label>
+        <div class="btnrow"><button type="button" class="l12ikpre" data-t="0.6,0.6">cup (0.6, 0.6)</button><button type="button" class="l12ikpre" data-t="0.6,1">r = 0.6</button><button type="button" class="l12ikpre" data-t="0.9,1">r = 0.9</button><button type="button" class="l12ikpre" data-t="1,1">r = 1.0</button><button type="button" class="l12ikpre" data-t="0.05,1">r = 0.05</button></div>
+        <div class="readouts">
+          <div class="ro"><span class="lab">distance r</span><span class="val" id="l12rIkR">-</span> <span class="unit">m</span></div>
+          <div class="ro"><span class="lab">cos q2</span><span class="val" id="l12rIkC">-</span></div>
+          <div class="ro"><span class="lab">elbow up (q1, q2)</span><span class="val" id="l12rIkUp">-</span> <span class="unit">rad</span></div>
+          <div class="ro"><span class="lab">elbow down (q1, q2)</span><span class="val" id="l12rIkDn">-</span> <span class="unit">rad</span></div>
+          <div class="ro"><span class="lab">solutions</span><span class="val" id="l12rIkN">-</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="caption">Click the picture, or use the sliders, to move the target. The shaded ring is the workspace, 0.1 m to 0.9 m from the shoulder. Solid arm: elbow up (q2 &gt; 0). Faint purple arm: elbow down (q2 &lt; 0). When |cos q2| &gt; 1 there is no triangle: the red dashed line shows the target is out of reach. This page uses the script's formula; every answer was checked by putting it into <code>qpos</code> and reading <code>site_xpos</code> in MuJoCo.</p>
+  </div>
+  <details class="math" open><summary>Maths: the cup at (0.6, 0, 0.6), step by step</summary><div>
+    <p>Step 1. Where is the target, seen from the shoulder? Positive angles tip the arm down, so measure "down" as positive:</p>
+    <div class="eq">u = x - 0     = 0.6000 m out
+w = -(z - 1)  = 0.4000 m down
+r = √(u² + w²) = 0.7211 m        (inside 0.1 ... 0.9: reachable)</div>
+    <p>Step 2. The elbow angle, from the <dfn class="term" tabindex="0" data-def="For a triangle with sides a, b and c: c² = a² + b² - 2ab cos(C), where C is the angle opposite c. It turns three side lengths into an angle.">law of cosines</dfn>. It is Pythagoras with a correction for a bent elbow:</p>
+    <div class="eq">r² = L1² + L2² + 2 L1 L2 cos q2
+cos q2 = (r² - L1² - L2²) / (2 L1 L2) = (0.5200 - 0.25 - 0.16) / 0.4 = 0.2750
+q2 = +1.2922 rad (elbow up)   or   q2 = -1.2922 rad (elbow down)</div>
+    <p>Step 3. The shoulder angle: aim at the target, then back off by the angle the bent forearm adds:</p>
+    <div class="eq">aim       = atan2(w, u)                          = 0.5880 rad below horizontal
+correction = atan2(L2 sin q2, L1 + L2 cos q2)     = +0.5625 (up)  or  -0.5625 (down)
+q1 = aim - correction                           = +0.0255 rad    or  +1.1505 rad</div>
+    <p>Step 4. Check in MuJoCo: set <code>qpos</code>, call <code>mj_forward</code>, read <code>site_xpos</code>. Both give (0.6000, 0.0000, 0.6000) m, error 1.6e-16 m. Elbow up puts the elbow at (0.4998, 0.9873): just below the shoulder. Elbow down puts it at (0.2040, 0.5435). If |cos q2| &gt; 1 in step 2, stop: there is no triangle, and so no answer.</p>
+  </div></details>
+  <h3>The warehouse robot uses exactly this</h3>
+  <p>Capstone 2's robot arm calls <code>arm_ik</code> in <code>16-capstone-warehouse-robot/warehouse_common.py</code>. Its heart is the same two lines:</p>
+<pre><code>cos_e = (d2 - L_UPPER**<span class="n">2</span> - L_FORE**<span class="n">2</span>) / (<span class="n">2</span> * L_UPPER * L_FORE)
+<span class="k">if</span> abs(cos_e) &gt; <span class="n">1.0</span>:
+    <span class="k">return</span> None                      <span class="c"># out of reach</span>
+elbow = np.arccos(cos_e)             <span class="c"># positive branch: elbow bends forward</span>
+shoulder = np.arctan2(wf, wu) - np.arctan2(L_FORE * np.sin(elbow),
+                                           L_UPPER + L_FORE * np.cos(elbow))</code></pre>
+  <p>Around that core it adds three things. A <strong>yaw</strong> angle, <code>yaw = np.arctan2(r[1], r[0])</code>, first turns the arm's plane to face the target. A <strong>gripper back-off</strong>, <code>wf = h - L_GRIP * np.cos(pitch_down)</code>, aims the two-link part at the wrist instead of the fingertips. A <strong>wrist angle</strong> then sets the gripper's pitch. Its angles are measured from vertical, so it uses <code>atan2(wf, wu)</code> where we use <code>atan2(w, u)</code>. It always takes one branch, and returns <code>None</code> when the target is out of reach.</p>
+  <p class="newwords">New words: <span class="chip">analytic IK</span><span class="chip">law of cosines</span><span class="chip">elbow up / elbow down</span><span class="chip">atan2</span></p>
+</section>
+
+<section class="step" id="l12-s-dls">
+  <span class="lvl lvl-plain">Plain words</span> <span class="lvl lvl-pic">Picture</span> <span class="lvl lvl-math">Maths</span>
+  <h2>6. Inverse kinematics by small steps: damped least squares</h2>
+  <p>The triangle trick only works for this exact arm. A robot with six joints needs pages of hand-derived algebra. There is a method that needs no formula at all, only the Jacobian.</p>
+  <p>Think of the game "hotter, colder" with your eyes shut. You can't see the cup. But you know which way each joint moves your hand (that is J). So you nudge the joints in the direction that shrinks the gap, look again, and repeat.</p>
+  <div class="grid3">
+    <div class="card"><span class="callout-title" style="color:var(--teal)">1. Measure the gap</span><code>e = target - site_xpos</code>, in world metres.</div>
+    <div class="card"><span class="callout-title" style="color:var(--orange)">2. Ask J for a nudge</span>Which joint change dq would move the hand by e, if J stayed the same? Damping keeps dq sensible near a singular pose.</div>
+    <div class="card"><span class="callout-title" style="color:var(--purple)">3. Apply and repeat</span><code>q = q + dq</code>, call <code>mj_forward</code>, measure again. Stop when the gap is below 1e-6 m.</div>
+  </div>
+  <p>The nudge has a formula, <dfn class="term" tabindex="0" data-def="A way to solve J dq = e that also keeps dq small: dq = J^T (J J^T + lambda^2 I)^-1 e. Lambda (in m) sets how strongly big steps are discouraged.">damped least squares</dfn> (DLS):</p>
+  <div class="eq">dq = Jᵀ (J Jᵀ + λ² I)⁻¹ e          J = jacp (3 x nv), e in m, dq in rad, λ in m</div>
+  <p>With λ = 0 this is "divide by J". The <dfn class="term" tabindex="0" data-def="The lambda in damped least squares, in metres. 0 = no damping (plain inverse). Bigger = smaller, safer steps but more of them.">damping</dfn> λ is a brake. It stops a nearly-singular J from asking for an enormous step.</p>
+  <h3>Watch it converge from the straight (singular!) arm</h3>
+  <div class="card">
+    <div class="grid2">
+      <canvas id="l12cvDls" role="img" aria-label="Damped least squares IK: the arm and the path of the hand over the iterations, numbered, approaching the target."></canvas>
+      <div>
+        <label class="slider"><span>Damping <code>lambda</code></span> <output id="l12oDLam">0.05 m</output><input type="range" id="l12DLam" min="0" max="0.5" step="0.01" value="0.05"></label>
+        <div class="btnrow"><span style="align-self:center;font-size:13px;color:var(--text-dim)">start q =</span><button type="button" class="l12dstart" data-q="0,0">(0, 0)</button><button type="button" class="l12dstart" data-q="0,0.001">(0, 0.001)</button><button type="button" class="l12dstart" data-q="0.3,0.6">(0.3, 0.6)</button></div>
+        <div class="btnrow"><span style="align-self:center;font-size:13px;color:var(--text-dim)">target =</span><button type="button" class="l12dtgt" data-t="0.6,0.6">cup (0.6, 0.6)</button><button type="button" class="l12dtgt" data-t="1.2,1">too far (1.2, 1.0)</button></div>
+        <div class="btnrow"><button id="l12DStep" type="button" class="primary">Step one iteration</button><button id="l12DSolve" type="button">Solve (up to 60 steps)</button><button id="l12DReset" type="button">Reset</button></div>
+        <div class="readouts">
+          <div class="ro"><span class="lab">iteration</span><span class="val" id="l12rDit">0</span></div>
+          <div class="ro"><span class="lab">|error|</span><span class="val" id="l12rDerr">-</span> <span class="unit">m</span></div>
+          <div class="ro"><span class="lab">last step |dq|</span><span class="val" id="l12rDdq">-</span> <span class="unit">rad</span></div>
+          <div class="ro"><span class="lab">q (shoulder, elbow)</span><span class="val" id="l12rDq">-</span> <span class="unit">rad</span></div>
+        </div>
+      </div>
+    </div>
+    <pre id="l12DLog" style="height:190px;overflow:auto;font-size:12px" aria-live="polite" tabindex="0"></pre>
+    <p class="caption">Purple dots: the hand after each iteration, numbered. The log uses the script's format. With the defaults (cup, start (0, 0), lambda 0.05) it reproduces the script's table row for row; the page and the script agree to about 10 significant digits over six whole runs, including the lambda = 0 run (<code>check_browser_match.py</code>). The page solves only rows x and z; with lambda &gt; 0 that gives exactly the same steps as the full 3-row jacp, because row y is all zeros.</p>
+  </div>
+  <p>The script's run: target the cup (0.6, 0, 0.6), start straight at (0, 0), λ = 0.05 m:</p>
+<pre><code> iter   q1 (rad)  q2 (rad)   hand x (m)  hand z (m)   |error| (m)
+    0    0.0000    0.0000     0.9000      1.0000     0.500000   <span class="c"># singular start: J can only move the hand in z</span>
+    1    0.3702    0.1645     0.8103      0.6153     0.210853   <span class="c"># mostly down; the elbow starts to bend</span>
+    2   -0.2130    1.7429     0.5050      0.7060     0.142325   <span class="c"># overshoots the bend</span>
+    3    0.0045    1.3517     0.5852      0.6069     0.016370
+    4    0.0239    1.2954     0.5994      0.6006     0.000881   <span class="c"># error shrinks about 20x per step now</span>
+    5    0.0254    1.2923     0.6000      0.6000     0.000036
+    6    0.0255    1.2922     0.6000      0.6000     0.000001
+    7    0.0255    1.2922     0.6000      0.6000     0.000000   <span class="c"># = the elbow-up answer of section 5</span></code></pre>
+  <div class="predict">
+    <h3>Predict: start at (0, 0.001), almost straight. What happens with λ = 0 (no damping)? With λ = 0.5?</h3>
+    <textarea aria-label="Your prediction for the damping experiment"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p>With <strong>λ = 0</strong> the first step is <strong>1476 rad</strong>: 235 full turns, because it divides by a nearly-zero determinant. It still "converges", but to (-590.5939, 1333.3275) rad. That is the right pose plus -94 and +212 whole turns. A real motor would spin for minutes. With <strong>λ = 0.5</strong> the steps are small and safe, but it takes 72 iterations. Only λ changes in this table:</p>
+      <table>
+        <thead><tr><th>λ (m)</th><th>first step |dq| (rad)</th><th>iterations to 1e-6 m</th><th>final q (rad)</th></tr></thead>
+        <tbody>
+          <tr><td>0.00</td><td>1476.2727</td><td>9</td><td>(-590.5939, 1333.3275)</td></tr>
+          <tr><td>0.01</td><td>0.7314</td><td>5</td><td>(0.0255, 1.2922)</td></tr>
+          <tr><td>0.05</td><td>0.4056</td><td>7</td><td>(0.0255, 1.2922)</td></tr>
+          <tr><td>0.20</td><td>0.3898</td><td>18</td><td>(0.0255, 1.2922)</td></tr>
+          <tr><td>0.50</td><td>0.3227</td><td>72</td><td>(0.0255, 1.2922)</td></tr>
+        </tbody>
+      </table>
+      <p>Small λ: fast but jumpy near singular poses. Big λ: calm but slow. A few centimetres (0.01 to 0.05 m here) is a good middle.</p>
+    </div>
+  </div>
+  <p><strong>Out of reach.</strong> Ask for (1.2, 0, 1.0), 1.2 m from the shoulder. The formula of section 5 just says "no answer". DLS instead does its best. The script prints the error every 10 iterations:</p>
+  <table>
+    <thead><tr><th>λ (m)</th><th>|error| at iterations 0, 10, 20, ... 60 (m)</th><th>where it ends</th></tr></thead>
+    <tbody>
+      <tr><td>0.05</td><td>0.6610, 0.8900, 0.6277, 0.7790, 0.8203, 0.6825, 0.3180</td><td>thrashes about, never settles</td></tr>
+      <tr><td>0.20</td><td>0.6610, 0.3000, 0.3000, 0.3000, 0.3000, 0.3000, 0.3000</td><td>arm straight at (0, 0), pointing at the target</td></tr>
+    </tbody>
+  </table>
+  <p>0.3000 m is the best possible: 1.2 - 0.9. With enough damping, DLS points the arm at a target it cannot reach.</p>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">It works for any arm</span>The function <code>dls_ik</code> only asks MuJoCo for <code>site_xpos</code> and <code>mj_jacSite</code>. The script runs the very same function on a <strong>three</strong>-link arm (a 0.2 m wrist added, nv = 3, jacp 3 x 3). It reaches the cup in 9 iterations, at q = (-0.2237, 1.2315, 1.0924) rad, error 2.7e-07 m. No new formula. A three-link arm has endlessly many answers; DLS simply finds one close to where it started.</div>
+  <div class="card analogy"><strong>From IK to motion (Lesson 5).</strong> To follow a moving target, run IK every control step and send the joint angles it returns as <code>data.ctrl</code> to position actuators, which then pull each joint towards its angle. The warehouse robot sends <code>arm_ik</code>'s shoulder and elbow angles to its position actuators exactly this way.</div>
+  <details class="math"><summary>Maths: where the DLS formula comes from</summary><div>
+    <p>We want a joint change dq so that the hand moves by e. To first order the hand moves by J dq. So we would like J dq = e. Near a singular pose, solving that exactly needs a huge dq. DLS asks for a compromise instead: make the miss small, and the step small too:</p>
+    <div class="eq">minimise   |J dq - e|²  +  λ² |dq|²
+answer     dq = (Jᵀ J + λ² I)⁻¹ Jᵀ e  =  Jᵀ (J Jᵀ + λ² I)⁻¹ e</div>
+    <p>Both forms give the same dq. The second inverts a matrix the size of e (3 x 3), whatever the number of joints. With λ = 0 and a square J it becomes J⁻¹ e: plain Newton's method.</p>
+    <p>Step 1 of the script's run, by hand. At q = (0, 0): J (rows x, z) = [[0, 0], [-0.9, -0.4]] and e = (0.6 - 0.9, 0.6 - 1.0) = (-0.3, -0.4) m. Then</p>
+    <div class="eq">J Jᵀ + λ² I = [[0 + 0.0025, 0], [0, 0.81 + 0.16 + 0.0025]] = [[0.0025, 0], [0, 0.9725]]
+(J Jᵀ + λ² I)⁻¹ e = (-0.3 / 0.0025, -0.4 / 0.9725) = (-120, -0.41131)
+dq = Jᵀ (-120, -0.41131) = (-0.9 x -0.41131, -0.4 x -0.41131) = (0.3702, 0.1645) rad    (script row 1)</div>
+    <p>The x part of e (-0.3 m) got multiplied by a zero column: the straight arm cannot move along x, so DLS ignores that part this step and fixes z first. Without λ, the 0.0025 would be 0, and the division would fail.</p>
+  </div></details>
+  <p class="newwords">New words: <span class="chip">numerical IK</span><span class="chip">damped least squares</span><span class="chip">damping lambda</span><span class="chip">iteration</span><span class="chip">convergence</span></p>
+</section>
+
+<section class="step" id="l12-s-code">
+  <span class="lvl lvl-code">Code</span>
+  <h2>7. Your script, line by line</h2>
+  <table>
+    <thead><tr><th style="width:46%">Code in <code>12_kinematics_and_jacobians.py</code></th><th>Physical meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>sid = mj_name2id(model, mjOBJ_SITE, "hand")</code></td><td>Find the hand's row in <code>site_xpos</code> (Lesson 4). Here it is 0.</td></tr>
+      <tr><td><code>data.qpos[:] = q; mj_forward(model, data)</code></td><td>Set the joint angles (rad) and walk the chain of frames. No time passes.</td></tr>
+      <tr><td><code>data.site_xpos[sid]</code></td><td>Forward kinematics: the hand in world metres, shape (3,).</td></tr>
+      <tr><td><code>mj_jacSite(model, data, jacp, jacr, sid)</code></td><td>Fill the 3 x nv tables: hand velocity (m/s) and spin (rad/s) per rad/s of each joint, world frame. Needs <code>mj_forward</code> first.</td></tr>
+      <tr><td><code>jacp @ qvel</code></td><td>The hand's velocity in world m/s: each column times its joint speed, added up.</td></tr>
+      <tr><td><code>np.linalg.svd(J2)</code>, <code>np.linalg.det(J2)</code></td><td>How close the pose is to singular: smallest stretch and area of the velocity ellipse.</td></tr>
+      <tr><td><code>cos q2 = (r² - L1² - L2²) / (2 L1 L2)</code></td><td>Analytic IK: the elbow angle from the triangle's three sides. |cos q2| &gt; 1 means out of reach.</td></tr>
+      <tr><td><code>q1 = atan2(w, u) - atan2(L2 sin q2, L1 + L2 cos q2)</code></td><td>Aim the shoulder at the target, minus the angle the bent forearm adds.</td></tr>
+      <tr><td><code>dq = jacp.T @ np.linalg.solve(jacp @ jacp.T + lam**2 * I, e)</code></td><td>One DLS nudge: the joint change (rad) that best closes the gap e (m) without huge steps.</td></tr>
+      <tr><td><code>q = q + dq</code> (then <code>mj_forward</code> again)</td><td>Apply the nudge and look again. Repeat until the gap is below 1e-6 m.</td></tr>
+    </tbody>
+  </table>
+  <p>Run it with <code>.venv/bin/python lessons/12-kinematics-and-jacobians/12_kinematics_and_jacobians.py</code>. Selected output:</p>
+<pre><code>model: nq = 2, nv = 2, site 'hand' id = 0, L1 = 0.5 m, L2 = 0.4 m, shoulder at ( 0.0000,  0.0000,  1.0000) m (world)
+<span class="c"># 1. sign convention: positive = down</span>
+qpos = (+0.1, +0.0) rad -> hand site_xpos = ( 0.8955,  0.0000,  0.9101) m (world)
+qpos = (-0.1, +0.0) rad -> hand site_xpos = ( 0.8955,  0.0000,  1.0899) m (world)
+<span class="c"># 2. forward kinematics, by hand vs MuJoCo</span>
+q = (+0.50, +0.80) rad: elbow xpos = ( 0.4388,  0.0000,  0.7603)  hand by hand = ( 0.5458,  0.0000,  0.3749)  MuJoCo site_xpos = ( 0.5458,  0.0000,  0.3749)  |diff| = 1.1e-16 m
+<span class="c"># 3. Jacobian at (0.5, 0.8): 3 x nv, m/rad, world rows x, y, z</span>
+jacp (3 x nv = 3 x 2, rows world x, y, z; columns shoulder, elbow; m/rad):
+[[-0.6251 -0.3854]
+ [ 0.      0.    ]
+ [-0.5458 -0.107 ]]
+column lengths: shoulder 0.8299 m/rad (= shoulder-to-hand distance 0.8299 m), elbow 0.4000 m/rad (= L2)
+qvel = (0.1, 0.2) rad/s -> v_hand = J qvel = (-0.1396,  0.0000, -0.0760) m/s, speed 0.1589 m/s; finite difference = (-0.1396,  0.0000, -0.0760)  |diff| = 7.2e-11
+one mj_step (h = 0.002 s, gravity on) from qvel = (0.1, 0.2): (site_xpos after - before) / h = (-0.1388,  0.0000, -0.0935) m/s
+   J qvel before step = (-0.1396,  0.0000, -0.0760)   J qvel after step = (-0.1388,  0.0000, -0.0935)  <span class="c"># moves with the NEW qvel</span>
+<span class="c"># 4. singular pose</span>
+q = (0, 0.00): J2 = [[ 0.0000,  0.0000], [-0.9000, -0.4000]]  det =  0.00000 (m/rad)^2 ...  condition number inf
+<span class="c"># 5. analytic IK for the cup</span>
+cos q2 = (r^2 - L1^2 - L2^2) / (2 L1 L2) = (0.5200 - 0.25 - 0.16) / 0.4 = 0.2750 -> q2 = +/-1.2922 rad
+  q2 = +1.2922: ... q1 = 0.5880 - (+0.5625) = +0.0255 rad; elbow at ( 0.4998,  0.0000,  0.9873) -> elbow UP; check site_xpos = ( 0.6000,  0.0000,  0.6000)  error 1.6e-16 m
+  q2 = -1.2922: ... q1 = 0.5880 - (-0.5625) = +1.1505 rad; elbow at ( 0.2040,  0.0000,  0.5435) -> elbow DOWN; check site_xpos = ( 0.6000,  0.0000,  0.6000)  error 1.6e-16 m
+<span class="c"># 6. DLS: 7 iterations from the straight arm (table in section 6), then the lambda sweep</span>
+lambda = 0 with all 3 rows: LinAlgError 'Singular matrix' (row y of J is always 0, so J J^T is singular)  <span class="c"># use rows x, z or lambda &gt; 0</span>
+  0.00      1476.2727                9            (-590.5939,  1333.3275)
+         (that is (0.0255, 1.2922) plus -94 and 212 whole turns: right pose, absurd joint motion)
+  nv = 3, jacp shape (3, 3); iterations 9; final q = [-0.2237  1.2315  1.0924] rad; hand = ( 0.6000,  0.0000,  0.6000); |error| = 2.7e-07 m</code></pre>
+  <div class="card warn"><span class="callout-title" style="color:var(--orange)">Common mistake: a stale Jacobian</span><code>mj_jacSite</code> reads the frames MuJoCo computed last. Change <code>qpos</code> and call it without <code>mj_forward</code>, and you get the Jacobian of the <em>old</em> pose (the stale values of Lesson 3). In an IK loop, call <code>mj_forward</code> after every <code>q = q + dq</code>.</div>
+</section>
+
+<section class="step" id="l12-s-check">
+  <span class="lvl lvl-plain">Check yourself</span>
+  <h2>8. Your lesson's questions</h2>
+  <p>Answer these here, then tell me your answers in the chat so I can update your progress.</p>
+  <div class="predict">
+    <h3>Q1. Set qpos = (1.0, -0.5). Without running anything, where is the hand (world x, z)?</h3>
+    <textarea aria-label="Answer to question 1"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>(0.5 cos 1.0 + 0.4 cos 0.5, 1 - 0.5 sin 1.0 - 0.4 sin 0.5) = <strong>(0.6212, 0.3875) m</strong>. The forearm's direction is 1.0 + (-0.5) = 0.5 rad. MuJoCo's <code>site_xpos</code> agrees to 5.6e-17 m.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q2. What shape is jacp for this arm, and what does the number in row z, column 0 mean?</h3>
+    <textarea aria-label="Answer to question 2"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>3 x nv = 3 x 2.</strong> Row z, column 0 is how fast the hand moves along world z (m/s) per rad/s of the shoulder (dof 0). At pose (0.5, 0.8) it is -0.5458: turning the shoulder at +1 rad/s moves the hand down at 0.5458 m/s.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q3. The elbow turns at 0.1 rad/s and the shoulder is still. Does the hand speed depend on the pose?</h3>
+    <textarea aria-label="Answer to question 3"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>No: always 0.04 m/s</strong>, because the hand is always 0.4 m from the elbow (column 2 always has length 0.4000 m/rad). Only the direction changes. The shoulder's effect does depend on the pose: 0.09 m/s straight, 0.0830 m/s at (0.5, 0.8).</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q4. A target is 0.95 m from the shoulder. What does the analytic IK return, and what does DLS with lambda = 0.2 do?</h3>
+    <textarea aria-label="Answer to question 4"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>Analytic: <strong>no solution</strong>. r = 0.95 &gt; 0.9 m makes cos q2 &gt; 1, so there is no triangle (the warehouse <code>arm_ik</code> returns <code>None</code>). DLS with enough damping straightens the arm and points it at the target, missing by 0.95 - 0.9 = 0.05 m (the script: |error| = 0.0500 m after 60 iterations, q = (0, 0)). Section 6 shows the same thing for 1.2 m: the error settles at 0.3000 m.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q5. Your IK loop gives joint angles that change by hundreds of radians in one step. What is the likely cause and the fix?</h3>
+    <textarea aria-label="Answer to question 5"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>The arm is at or near a <strong>singular pose</strong> (here: nearly straight) and the loop divides by J with no damping. With λ = 0 from (0, 0.001) the first step was 1476 rad. Fix: use damped least squares with λ of a few centimetres (0.01 to 0.05 m), or start from a bent pose.</p></div>
+  </div>
+
+  <h3>Glossary: new words from this lesson</h3>
+  <dl class="glossary">
+    <dt>kinematics</dt><dd>The geometry of motion: where parts are and how fast they move, without asking about forces.</dd>
+    <dt>forward kinematics</dt><dd>Joint angles to hand position. One answer. MuJoCo does it in <code>mj_forward</code>; read <code>site_xpos</code>.</dd>
+    <dt>inverse kinematics (IK)</dt><dd>Hand position to joint angles. Zero, one, two or many answers.</dd>
+    <dt>chain of frames</dt><dd>Each body's frame is its parent's frame, moved by the body offset and turned by its joint. The hand is the sum of the link arrows.</dd>
+    <dt>Jacobian, jacp, jacr</dt><dd>Tables (3 x nv) of hand velocity (m/s) and spin (rad/s) per rad/s of each joint, world frame. Filled by <code>mj_jacSite</code>.</dd>
+    <dt>column of J</dt><dd>The hand's velocity when only that joint turns at 1 rad/s. For a hinge: axis x (hand - joint).</dd>
+    <dt>finite difference</dt><dd>Estimating a rate by a tiny nudge: change in output divided by the nudge.</dd>
+    <dt>singular pose</dt><dd>A pose where J loses a direction (det J = 0). Here: elbow straight (0) or fully folded (pi).</dd>
+    <dt>determinant, condition number</dt><dd>Area of the velocity patch (here -0.2 sin q2), and longest over shortest stretch. 0 and infinite at a singular pose.</dd>
+    <dt>workspace</dt><dd>Every point the hand can reach: here a ring 0.1 m to 0.9 m from the shoulder.</dd>
+    <dt>analytic IK, law of cosines</dt><dd>Solving IK with a formula. For two links: cos q2 = (r² - L1² - L2²) / (2 L1 L2).</dd>
+    <dt>elbow up / elbow down</dt><dd>The two mirror-image answers of two-link IK. Here: q2 &gt; 0 and q2 &lt; 0.</dd>
+    <dt>damped least squares (DLS), lambda</dt><dd>Numerical IK: dq = Jᵀ (J Jᵀ + λ² I)⁻¹ e, repeated. λ (m) brakes huge steps near singular poses.</dd>
+  </dl>
+</section>
+
+<section class="step recap" id="l12-recap">
+  <h2>Recap: the lesson in one minute</h2>
+  <div class="mental-model">
+    <p><strong>Forward kinematics</strong> maps <code>qpos</code> to positions. <code>mj_forward</code> composes each body's frame from its parent's, its offset and its joint rotation; read <code>data.site_xpos[sid]</code> (world, m). For this planar arm: hand = (L1 cos q1 + L2 cos(q1+q2), 1 - L1 sin q1 - L2 sin(q1+q2)), with positive hinge angles about +y turning +x towards -z.</p>
+    <p><strong>The Jacobian</strong> <code>mj_jacSite(model, data, jacp, jacr, sid)</code> gives the 3 x nv maps from <code>qvel</code> to the site's linear and angular velocity in the world frame: <code>v = jacp @ qvel</code>. Column j of a hinge is axis x (site - joint). It is pose-dependent and needs a fresh <code>mj_forward</code>. At a <strong>singular pose</strong> (straight arm here) it loses rank: det = -L1 L2 sin q2 = 0.</p>
+    <p><strong>Inverse kinematics</strong>: two-link arms have a closed form (law of cosines, elbow up and elbow down, none outside 0.1 m to 0.9 m). Any arm can use <strong>damped least squares</strong>: repeat dq = Jᵀ (J Jᵀ + λ² I)⁻¹ (target - site_xpos), q += dq, <code>mj_forward</code>. λ trades speed for safety near singularities. IK outputs joint targets; position actuators (Lesson 5) then drive the joints there.</p>
+  </div>
+  <div class="checkpoint">
+    <p>Open the kinematics sandbox: drag the target around the ring, flip elbow up and down, then switch to DLS and press "Step one iteration" from the straight arm with lambda 0 and with lambda 0.05.</p>
+    <div class="btn-row">
+      <button class="btn btn-primary btn-sm" type="button" onclick="markComplete(12)">Mark lesson complete</button>
+      <button class="btn btn-sm" type="button" onclick="switchLesson(13)">Next: Grippers and Grasping</button>
+    </div>
+  </div>
+</section>
+</div>

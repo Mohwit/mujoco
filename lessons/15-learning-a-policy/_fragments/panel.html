@@ -1,0 +1,413 @@
+<div class="lesson-content xp" id="lesson15">
+  <header class="lesson-header-block">
+    <p class="lesson-num-label">Lesson 15</p>
+    <h1 class="lesson-title">Learning a Policy</h1>
+    <p class="lesson-subtitle">Goal: let a learning algorithm play the lesson 9 pendulum game thousands of times until it writes its own controller. Read its learning curve, compare it with your PD controller, and see that it learns exactly what the score pays for, loopholes included.</p>
+    <p class="lesson-legend"><dfn class="term" tabindex="0" data-def="Technical words look like this. Hover or focus one to read a plain-English definition.">Dotted words</dfn> show a definition on hover. <span class="lg-math">Maths boxes</span> are optional. <span class="lg-pred">Predict boxes</span> hide the answer until you guess.</p>
+  </header>
+  <nav class="lesson-toc" aria-label="Sections in lesson 15"><a href="#l15-s-idea">Treats</a><a href="#l15-s-words">RL words</a><a href="#l15-s-curve">Training run</a><a href="#l15-s-vs">SAC vs PD</a><a href="#l15-s-reward">Reward design</a><a href="#l15-s-hack">Loopholes</a><a href="#l15-s-code">The script</a><a href="#l15-s-check">Check yourself</a><a href="#l15-recap">Recap</a></nav>
+
+<section class="step" id="l15-s-idea">
+  <span class="lvl lvl-plain">Plain words</span> <span class="lvl lvl-pic">Picture</span>
+  <h2>1. Learning by trial and error, with a score</h2>
+  <p>In lesson 8 you wrote the controller yourself. You picked the PD rule and tuned two gains. That works when you understand the task well.</p>
+  <p>Now we try the opposite. We write no controller at all. We only give a score, and let a program try things until the score goes up.</p>
+  <div class="card analogy"><strong>Analogy: training a dog with treats.</strong> You cannot explain "sit" in words. So you wait, and give a treat whenever the dog sits. After many tries, the dog sits more often. But the dog learns what you <em>rewarded</em>, not what you <em>meant</em>. Reward it for being near the sofa, and it may learn to sleep on the sofa.</div>
+  <p>Our "dog" is a small neural network. Our "treat" is the lesson 9 reward. The game is the same: lift the course pendulum to 1.0 rad and hold it there, in 250 steps of 0.02 s.</p>
+  <h3>Try it: the same game, played by the learner at three ages</h3>
+  <p>Each pendulum below is the learner after a different amount of practice. Press <strong>Play</strong> and watch all three play the same start (seed 0) side by side.</p>
+  <div class="card">
+    <canvas id="l15cvAge" role="img" aria-label="Three pendulums replaying the seed 0 episode: the learner after 0, 5,000 and 20,000 env steps of training"></canvas>
+    <div class="btnrow">
+      <button type="button" id="l15aPlay" class="primary">Play the 5 s episode</button>
+      <button type="button" id="l15aStart">Back to start</button>
+    </div>
+    <p class="caption">Grey: the untrained network (0 steps). Purple: after 5,000 env steps (20 episodes, about 10 s of training). Teal: after 20,000 env steps (80 episodes, about 41 s of training). Orange arrow: motor torque. Yellow dashed: the 1.0 rad target. This picture replays rollouts recorded from MuJoCo by <code>15_train.py</code>.</p>
+  </div>
+  <p>Mean return over seeds 0 to 4 for the three ages: <strong>-223.841</strong>, <strong>-30.825</strong> and <strong>-24.253</strong>. For comparison, your lesson 9 PD + gravity controller scores <strong>-36.622</strong>.</p>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">Rule to remember</span>The learner only ever sees the score. It will find whatever behaviour gets the most points, whether or not that is what you had in mind.</div>
+  <p class="newwords">New words: <span class="chip">reinforcement learning</span><span class="chip">trial and error</span><span class="chip">training</span></p>
+</section>
+
+<section class="step" id="l15-s-words">
+  <span class="lvl lvl-words">MuJoCo words</span>
+  <h2>2. The learning words, mapped onto your lesson 9 game</h2>
+  <p>This kind of learning is called <dfn class="term" tabindex="0" data-def="RL: a program improves a policy by playing an environment many times and keeping what raises the return.">reinforcement learning</dfn> (RL). The algorithm we use is <dfn class="term" tabindex="0" data-def="Soft Actor-Critic, an RL algorithm for continuous actions. It learns a policy network (the actor) and score-guessing networks (the critics), and keeps exploring on purpose.">SAC</dfn>, from the Stable-Baselines3 library. You met most of the words in lesson 9. Here is what each one becomes.</p>
+  <table>
+    <thead><tr><th>RL word</th><th>Plain meaning</th><th>Dog analogy</th><th>In this lesson</th></tr></thead>
+    <tbody>
+      <tr><td>environment</td><td>The game</td><td>The living room</td><td><code>PendulumHoldEnv</code>, imported from lesson 9, not copied</td></tr>
+      <tr><td><dfn class="term" tabindex="0" data-def="The rule that turns an observation into an action. Here a neural network with 3 inputs, two layers of 256 numbers, and 1 action out.">policy</dfn> (the <dfn class="term" tabindex="0" data-def="SAC's name for its policy network: the part that picks actions.">actor</dfn>)</td><td>A function: 3 numbers in, 1 motor command out</td><td>The dog's habits</td><td>A neural network: 3 inputs, 256, 256, then 1 action squashed into -1..1. 67,330 adjustable numbers.</td></tr>
+      <tr><td>episode, return</td><td>One game; its total score</td><td>One training session; treats earned</td><td>250 env steps (5.0 s); sum of the lesson 9 rewards</td></tr>
+      <tr><td><dfn class="term" tabindex="0" data-def="Trying actions that are not the current best guess, to discover better ones. SAC does it by adding randomness to its actions while training.">exploration</dfn></td><td>Trying something new on purpose</td><td>The dog tries rolling over, just to see</td><td>While training, SAC adds randomness to each action. To evaluate, we switch it off (<code>deterministic=True</code>).</td></tr>
+      <tr><td><dfn class="term" tabindex="0" data-def="A big list of past steps (observation, action, reward, next observation). SAC learns from random handfuls of it, not only from the newest step.">replay buffer</dfn></td><td>A diary of every step played so far</td><td>Remembering yesterday's sessions</td><td>Room for 1,000,000 steps; we use 20,000. Each update reads a random batch of 256.</td></tr>
+      <tr><td><dfn class="term" tabindex="0" data-def="A network that guesses the future score from a situation and an action: 'if I do this here, how many points will I collect from now on?' SAC trains two of them.">critic</dfn> (value)</td><td>A learned guess of the future score</td><td>The dog's hunch: "sitting here usually gets a treat"</td><td>2 networks, each 4 inputs (3 obs + 1 action), 256, 256, 1 output. 67,329 numbers each.</td></tr>
+      <tr><td><dfn class="term" tabindex="0" data-def="gamma: how much a reward one step later is worth compared with now. 0.99 here, so a reward 100 steps away counts 36.6%.">discount</dfn> gamma</td><td>Later treats count a little less</td><td>A treat now beats a treat next week</td><td>0.99 per env step</td></tr>
+      <tr><td>training step</td><td>Play one step, write it in the diary, nudge the networks once</td><td>One try, one lesson</td><td>The first 100 steps are purely random; then 1 update per env step</td></tr>
+    </tbody>
+  </table>
+  <h3>Which XML element sets the size of the network</h3>
+  <p>SAC builds its networks by reading the env's two spaces. Those come straight from the model, as in lesson 9.</p>
+  <div class="grid2">
+<pre><code><span class="t">&lt;joint</span> <span class="a">name</span>=<span class="s">"hinge"</span> <span class="a">type</span>=<span class="s">"hinge"</span>
+       <span class="a">axis</span>=<span class="s">"0 1 0"</span><span class="t">/&gt;</span>
+  <span class="c"># qpos[0], qvel[0] -> obs (3,)</span>
+  <span class="c"># [cos q, sin q, qvel]</span>
+
+<span class="t">&lt;motor</span> <span class="a">name</span>=<span class="s">"motor"</span> <span class="a">joint</span>=<span class="s">"hinge"</span>
+       <span class="a">gear</span>=<span class="s">"100"</span> <span class="a">ctrlrange</span>=<span class="s">"-1 1"</span>
+       <span class="a">ctrllimited</span>=<span class="s">"true"</span><span class="t">/&gt;</span>
+  <span class="c"># ctrl[0] -> action (1,), -1..1</span></code></pre>
+<pre><code>env = lesson9.PendulumHoldEnv()
+env.observation_space.shape   <span class="c"># (3,) -> actor input 3</span>
+env.action_space              <span class="c"># Box(-1, 1, (1,))</span>
+                              <span class="c"># -> actor output 1, tanh</span>
+model = SAC(<span class="s">"MlpPolicy"</span>, env,
+            seed=<span class="n">0</span>, device=<span class="s">"cpu"</span>)
+model.actor      <span class="c"># 3 -> 256 -> 256 -> 1 action</span>
+model.critic     <span class="c"># 2 nets: 4 -> 256 -> 256 -> 1</span>
+model.gamma      <span class="c"># 0.99</span></code></pre>
+  </div>
+  <table>
+    <thead><tr><th>Array</th><th>Shape</th><th>Meaning</th><th>Unit, frame</th></tr></thead>
+    <tbody>
+      <tr><td><code>obs</code></td><td>(3,) float32</td><td>[cos q, sin q, qvel], the network's input</td><td>none, none, rad/s; joint frame</td></tr>
+      <tr><td><code>action</code></td><td>(1,) float32</td><td>the network's output, written to <code>data.ctrl[0]</code></td><td>-1..1; torque 100 x action N*m about the hinge axis (world +y)</td></tr>
+      <tr><td>replay buffer row</td><td>obs (3,), action (1,), reward, next obs (3,)</td><td>one remembered step</td><td>as above; reward in points</td></tr>
+    </tbody>
+  </table>
+  <p>Why can the untrained network already act? Its 67,330 numbers start random, so it is a fixed but arbitrary rule. On seed 0's first screen it always says ctrl 0.9673 when exploration is off. With exploration on, three calls gave 0.993, 0.9563 and 0.74. That randomness is how it discovers new moves.</p>
+  <details class="math"><summary>Step 1: what is a reward 100 steps away worth now?</summary><div>
+    <p>SAC does not add future rewards at full value. Each step later, a reward is multiplied by gamma = 0.99 once more:</p>
+    <div class="eq">worth now = reward x gamma^k        (k = steps away, one step = 0.02 s)
+gamma^1   = 0.9900     (0.02 s away: 99.0%)
+gamma^10  = 0.9044     (0.20 s away: 90.4%)
+gamma^50  = 0.6050     (1.00 s away: 60.5%)
+gamma^100 = 0.3660     (2.00 s away: 36.6%)
+gamma^250 = 0.0811     (5.00 s away:  8.1%)</div>
+    <p>Example with a real number: holding the target costs -0.0084 per step (lesson 9: 0.01 x 0.9184^2). The same -0.0084, 100 steps from now, is worth -0.0084 x 0.3660 = <strong>-0.00307</strong> today (script: -0.00307).</p>
+  </div></details>
+  <details class="math"><summary>Step 2: how far ahead does the learner "look"?</summary><div>
+    <p>Add up the weights of all future steps:</p>
+    <div class="eq">1 + 0.99 + 0.99^2 + ... = 1 / (1 - 0.99) = 100 steps = 100 x 0.02 s = 2.0 s</div>
+    <p>So SAC mostly cares about the next 2 seconds. That is plenty here: the pendulum reaches the target in about 1 s. A task whose payoff comes 10 s later would need gamma closer to 1.</p>
+  </div></details>
+  <p class="newwords">New words: <span class="chip">SAC</span><span class="chip">actor</span><span class="chip">critic</span><span class="chip">exploration</span><span class="chip">replay buffer</span><span class="chip">discount gamma</span></p>
+</section>
+
+<section class="step" id="l15-s-curve">
+  <span class="lvl lvl-pic">Picture</span> <span class="lvl lvl-code">Experiment</span>
+  <h2>3. A training run, and how to read its learning curve</h2>
+  <p><code>15_train.py</code> trains SAC for 20,000 env steps (80 episodes). It pauses at 0, 1,000, 2,000, 5,000, 10,000 and 20,000 steps. At each pause it switches exploration off and plays seeds 0 to 4, the same starts as lesson 9. The mean return is one point on the <dfn class="term" tabindex="0" data-def="A plot of how good the policy is (here: mean evaluation return) against how much it has practised (here: env steps of training).">learning curve</dfn>.</p>
+  <div class="predict">
+    <h3>Predict: after 0 training steps, how does SAC compare with the random player (-311.319)?</h3>
+    <textarea aria-label="Your prediction for the untrained SAC policy"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p><strong>It depends on the luck of its starting numbers.</strong> We trained three times with training seeds 0, 1 and 2. Untrained, they scored -223.841, -202.278 and <strong>-405.000</strong>. Two beat random; one is worse than random.</p>
+      <p>The untrained network is not random noise. It is a fixed, arbitrary rule, often a gentle constant push (mean |action| 0.105 for seed 0). A gentle push behaves a bit like the zero player (-276.234). An unlucky rule can push the wrong way all game.</p>
+    </div>
+  </div>
+  <div class="card">
+    <canvas id="l15cvCurve" role="img" aria-label="Learning curve: mean evaluation return against env steps of training for three SAC training seeds, with dashed reference lines for the zero, random and PD plus gravity players"></canvas>
+    <div class="btnrow">
+      <button type="button" data-l15ck="0">0</button><button type="button" data-l15ck="1">1,000</button><button type="button" data-l15ck="2">2,000</button><button type="button" data-l15ck="3">5,000</button><button type="button" data-l15ck="4">10,000</button><button type="button" data-l15ck="5" class="primary">20,000</button>
+    </div>
+    <canvas id="l15cvQ" role="img" aria-label="Hinge angle over 5 seconds for seed 0: the SAC policy at the chosen checkpoint against PD plus gravity"></canvas>
+    <div class="readouts">
+      <div class="ro" id="l15cSteps"><span class="lab">trained for (env steps)</span><span class="val">20,000</span></div>
+      <div class="ro" id="l15cRet"><span class="lab">return, training seed 0</span><span class="val">-24.253</span></div>
+      <div class="ro" id="l15cMean"><span class="lab">return, mean of 3 training seeds</span><span class="val">-24.256</span></div>
+      <div class="ro" id="l15cErr"><span class="lab">final angle error</span><span class="val">0.081</span> <span class="unit">rad</span></div>
+      <div class="ro" id="l15cAct"><span class="lab">mean |action|</span><span class="val">0.809</span></div>
+    </div>
+    <p class="caption">Top: each point is the mean return over seeds 0 to 4 with exploration off. Orange lines: SAC with training seeds 0 (thick), 1 and 2 (thin). Dashed: the lesson 9 players on the same seeds. Bottom: the seed 0 episode at the chosen checkpoint (orange) against PD + gravity (teal). Replays rollouts recorded from MuJoCo.</p>
+  </div>
+  <table>
+    <thead><tr><th>env steps</th><th>episodes</th><th>training seed 0</th><th>seed 1</th><th>seed 2</th><th>mean</th></tr></thead>
+    <tbody>
+      <tr><td>0</td><td>0</td><td>-223.841</td><td>-202.278</td><td>-405.000</td><td>-277.039</td></tr>
+      <tr><td>1,000</td><td>4</td><td>-227.747</td><td>-208.121</td><td>-219.635</td><td>-218.501</td></tr>
+      <tr><td>2,000</td><td>8</td><td>-134.030</td><td>-122.514</td><td>-119.223</td><td>-125.256</td></tr>
+      <tr><td>5,000</td><td>20</td><td>-30.825</td><td>-28.827</td><td>-29.053</td><td>-29.568</td></tr>
+      <tr><td>10,000</td><td>40</td><td>-24.605</td><td>-24.568</td><td>-25.112</td><td>-24.762</td></tr>
+      <tr><td>20,000</td><td>80</td><td><strong>-24.253</strong></td><td>-24.420</td><td>-24.095</td><td><strong>-24.256</strong></td></tr>
+    </tbody>
+  </table>
+  <p class="caption">From the script's printed table. References on the same seeds: zero -276.234, random -311.319, PD + gravity -36.622.</p>
+  <h3>How to read it</h3>
+  <ul>
+    <li><strong>Flat at first.</strong> The first 1,000 steps barely help. Seed 0 even got slightly worse (-223.841 to -227.747). The diary is still nearly empty.</li>
+    <li><strong>Then a steep climb.</strong> Between 2,000 and 5,000 steps the mean jumps from -125.256 to -29.568, already past PD + gravity.</li>
+    <li><strong>Then a plateau.</strong> From 10,000 to 20,000 steps it only gains half a point. More training here would not change much.</li>
+    <li><strong>Seeds differ early, agree late.</strong> Always train more than one seed before you believe a curve.</li>
+  </ul>
+  <div class="card"><span class="callout-title" style="color:var(--blue)">How long it took</span>One 20,000-step training run took about 41 s on this machine (Apple M5, CPU only, one thread). All ten runs in <code>15_train.py</code> plus their evaluations took 432 s, about 7 minutes. The lesson script then reads the saved results in a few seconds.</div>
+  <p class="newwords">New words: <span class="chip">learning curve</span><span class="chip">checkpoint</span><span class="chip">training seed</span><span class="chip">evaluation</span></p>
+</section>
+
+<section class="step" id="l15-s-vs">
+  <span class="lvl lvl-pic">Picture</span> <span class="lvl lvl-code">Experiment</span>
+  <h2>4. SAC against your hand-written PD controller</h2>
+  <div class="predict">
+    <h3>Predict: after 20,000 steps, will SAC beat PD + gravity (-36.622) on this task?</h3>
+    <textarea aria-label="Your prediction for SAC against PD plus gravity"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p><strong>Yes, on the score: -24.253 against -36.622</strong>, and on every one of the 5 seeds. It also wins on 5 starts it never trained on (seeds 100 to 104): -19.854 against -29.169.</p>
+      <p><strong>But PD + gravity is more precise at the end.</strong> PD + gravity finishes at 1.0000 rad. SAC finishes at 0.9186 rad on every seed, about 0.08 rad short. The win comes from the first second, not from the hold.</p>
+    </div>
+  </div>
+  <table>
+    <thead><tr><th>seed</th><th>start (rad)</th><th>SAC return</th><th>PD + gravity</th><th>SAC, first 1 s</th><th>PD + gravity, first 1 s</th><th>SAC final q (rad)</th><th>PD + gravity final q (rad)</th></tr></thead>
+    <tbody>
+      <tr><td>0</td><td>0.13696</td><td>-17.331</td><td>-24.566</td><td>-14.517</td><td>-21.013</td><td>0.9186</td><td>1.0000</td></tr>
+      <tr><td>1</td><td>0.01182</td><td>-21.668</td><td>-31.981</td><td>-18.845</td><td>-27.506</td><td>0.9186</td><td>1.0000</td></tr>
+      <tr><td>2</td><td>-0.23839</td><td>-32.138</td><td>-50.051</td><td>-29.289</td><td>-43.181</td><td>0.9186</td><td>1.0000</td></tr>
+      <tr><td>3</td><td>-0.41435</td><td>-40.952</td><td>-65.403</td><td>-38.078</td><td>-56.395</td><td>0.9186</td><td>1.0001</td></tr>
+      <tr><td>4</td><td>0.44306</td><td>-9.173</td><td>-11.111</td><td>-6.367</td><td>-8.963</td><td>0.9186</td><td>1.0000</td></tr>
+      <tr><td><strong>mean</strong></td><td></td><td><strong>-24.253</strong></td><td><strong>-36.622</strong></td><td>-21.419</td><td>-31.412</td><td>0.9186</td><td>1.0000</td></tr>
+    </tbody>
+  </table>
+  <div class="card">
+    <canvas id="l15cvVs" role="img" aria-label="Seed 0: hinge angle (top) and motor command (bottom) over time for the trained SAC policy and PD plus gravity"></canvas>
+    <div class="btnrow"><button type="button" data-l15vs="5" class="primary">Whole 5 s</button><button type="button" data-l15vs="1">Zoom: first 1 s</button></div>
+    <p class="caption">Seed 0. Top: hinge angle <code>qpos[0]</code> in rad (joint frame, 0 = hanging down). Bottom: the action <code>ctrl</code> (-1..1, x 100 N*m). Teal: PD + gravity. Orange: SAC after 20,000 steps. Replays rollouts recorded from MuJoCo, every 0.04 s.</p>
+  </div>
+  <h3>Why SAC wins the score</h3>
+  <p>PD + gravity uses lesson 8's gains, 400 and 40. They were tuned by eye for a nice step response, not for this score. So it overshoots: it swings right through the band 1.0 +- 0.05 rad 2.8 times per episode on average. SAC never does (0.0). It learned to arrive without overshooting, so it pays less for error and speed on the way.</p>
+  <p>SAC is also smoother. Its action changes by 0.0070 per step on average; PD + gravity's by 0.0138.</p>
+  <h3>Why SAC is still not "better" in every way</h3>
+  <ul>
+    <li><strong>It sags.</strong> It holds at 0.919 rad. The script computes that this wastes 1.14 points over the last 4 s. Small, so the learner never bothered to fix it.</li>
+    <li><strong>It only knows one target.</strong> Want 0.5 rad? PD changes one number. SAC needs a new 41 s training run, or a target added to its observation.</li>
+    <li><strong>It needed practice.</strong> PD worked from the first step, with zero training and a formula you can read.</li>
+  </ul>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">The honest summary</span>On a one-joint pendulum with a known model, a hand-written controller is nearly as good and far simpler. RL earns its keep when you cannot write the controller, such as closing a gripper around a box you see from an odd angle. That is exactly where Capstone 2 uses it.</div>
+  <details class="math"><summary>Where do the 12.369 points between them come from?</summary><div>
+    <div class="eq">total gap      = -24.253 - (-36.622) = 12.369
+first 1 s gap  = -21.419 - (-31.412) =  9.993
+last 4 s gap   = 12.369 - 9.993      =  2.376</div>
+    <p>About four fifths of SAC's advantage is earned while rising. In the last 4 s PD + gravity is still settling from its overshoot, while SAC pays the small sag cost every step.</p>
+  </div></details>
+</section>
+
+<section class="step" id="l15-s-reward">
+  <span class="lvl lvl-pic">Picture</span> <span class="lvl lvl-code">Experiment</span> <span class="lvl lvl-math">Maths</span>
+  <h2>5. Change one reward term, retrain, compare</h2>
+  <p>The reward is the only thing the learner sees. So it is your main design tool. We change <strong>one term at a time</strong>, retrain 20,000 steps with training seed 0, and measure. Physics, observation and action stay the same.</p>
+  <div class="predict">
+    <h3>Predict: remove the action penalty (the 0.01 x ctrl^2 term). What changes?</h3>
+    <textarea aria-label="Your prediction for removing the action penalty"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p><strong>Almost nothing.</strong> Many people expect a jittery, full-on/full-off motor. It did not happen here. Mean |action| went from 0.809 to 0.813. The step-to-step change went from 0.0070 to 0.0071. The lesson 9 score went from -24.253 to -24.079.</p>
+      <p>Why? The term was tiny. At the target it costs 0.0084 per step. At seed 0's start, the angle term alone costs 0.74 per step (lesson 9). The task itself already demands nearly full torque. A term that small barely steers the learner. Effort penalties matter when there are many ways to do the job, some much more wasteful than others.</p>
+    </div>
+  </div>
+  <table>
+    <thead><tr><th>reward variant</th><th>reward per step</th><th>own return</th><th>PD + gravity, same reward</th><th>lesson 9 return</th><th>mean |action|</th><th>final error (rad)</th></tr></thead>
+    <tbody>
+      <tr><td>lesson 9</td><td>-(err^2 + 0.1 qvel^2 + 0.01 a^2)</td><td>-24.253</td><td>-36.622</td><td>-24.253</td><td>0.809</td><td>0.081</td></tr>
+      <tr><td>no action term</td><td>-(err^2 + 0.1 qvel^2)</td><td>-22.362</td><td>-34.615</td><td>-24.079</td><td>0.813</td><td>0.073</td></tr>
+      <tr><td>action term x100</td><td>-(err^2 + 0.1 qvel^2 + 1.0 a^2)</td><td>-140.010</td><td>-235.351</td><td>-78.400</td><td>0.489</td><td>0.507</td></tr>
+      <tr><td>sparse</td><td>+1 if |err| &lt; 0.05 rad, else 0</td><td>225.400</td><td>167.800</td><td>-26.554</td><td>0.894</td><td>0.023</td></tr>
+    </tbody>
+  </table>
+  <p class="caption">Means over seeds 0 to 4 after 20,000 steps. "Lesson 9 return" scores every policy with the original reward, so you can compare what we <em>meant</em>. err = qpos[0] - 1.0 rad.</p>
+  <div class="card">
+    <canvas id="l15cvVar" role="img" aria-label="Seed 0 hinge angle and motor command for SAC trained on the chosen reward variant, against SAC trained on the lesson 9 reward"></canvas>
+    <div class="btnrow">
+      <button type="button" data-l15var="no_act" class="primary">No action term</button>
+      <button type="button" data-l15var="big_act">Action term x100</button>
+      <button type="button" data-l15var="sparse">Sparse</button>
+    </div>
+    <div class="readouts">
+      <div class="ro" id="l15vRet"><span class="lab">own return</span><span class="val">-</span></div>
+      <div class="ro" id="l15vPd"><span class="lab">PD + gravity, same reward</span><span class="val">-</span></div>
+      <div class="ro" id="l15vBase"><span class="lab">lesson 9 return</span><span class="val">-</span></div>
+      <div class="ro" id="l15vAct"><span class="lab">mean |action|</span><span class="val">-</span></div>
+      <div class="ro" id="l15vDa"><span class="lab">mean |change of action| per step</span><span class="val">-</span></div>
+      <div class="ro" id="l15vErr"><span class="lab">final angle error</span><span class="val">-</span> <span class="unit">rad</span></div>
+    </div>
+    <p class="caption">Grey: SAC on the lesson 9 reward. Orange: SAC on the chosen variant. Top: <code>qpos[0]</code> (rad). Bottom: ctrl. The shaded strip on the sparse view is the 0.05 rad band that pays +1. Replays rollouts recorded from MuJoCo.</p>
+  </div>
+  <h3>Action term x100: the learner gives up half the lift, on purpose</h3>
+  <p>Make pushing 100 times more expensive, and the learner holds at about <strong>0.49 rad</strong>, half way. That is not a failure. It is the cheapest place to stand under that score.</p>
+  <details class="math"><summary>Step 1: the cost of standing still at angle q</summary><div>
+    <p>Standing still at q needs ctrl = m*g*d*sin(q) / 100 = 1.0914 sin(q) (lesson 9: m*g*d = 109.14 N*m). Speed is 0. So each step costs:</p>
+    <div class="eq">cost(q) = (q - 1.0)^2 + w * (1.0914 sin q)^2</div>
+  </div></details>
+  <details class="math"><summary>Step 2: find the cheapest q for w = 0.01 and for w = 1.0</summary><div>
+    <p>The script tries every q from 0 to 1.2 rad in steps of 0.00001 and keeps the cheapest:</p>
+    <div class="eq">w = 0.01: best q = 0.9946 rad, ctrl 0.9152, cost 0.0084 per step
+w = 1.0 : best q = 0.4993 rad, ctrl 0.5226, cost 0.5238 per step</div>
+    <p>The x100 learner ends seed 0 at <strong>0.493 rad</strong>, within 0.01 rad of the predicted 0.4993. It found the trade-off we wrote, exactly. If you wanted 1.0 rad, the reward was wrong, not the learner.</p>
+  </div></details>
+  <h3>Sparse: no hint until you stumble on the answer</h3>
+  <p>The sparse reward pays +1 only inside 1.0 +- 0.05 rad, and 0 everywhere else. There is no "warmer, colder". Look at its own return at each checkpoint: <strong>0.000, 0.000, 0.000, 3.400, 198.400, 225.400</strong>. For 2,000 steps it learned nothing, because nothing ever paid. Exploration finally swung the pendulum through the band, and then it learned fast.</p>
+  <p>Here sparse worked in the end, and even finished closest to the target (0.023 rad). That is luck of a small task: random pushes do reach 1 rad sometimes. On a grasp, random arm motions almost never lift a box, so a sparse "+1 when lifted" might never pay at all.</p>
+  <div class="card warn"><span class="callout-title" style="color:var(--orange)">Compare returns only under the same reward</span>Sparse's 225.400 is not "better" than -24.253. They are different scores. To compare behaviour, score every policy with one fixed yardstick, as the "lesson 9 return" column does.</div>
+  <p class="newwords">New words: <span class="chip">reward design</span><span class="chip">dense reward</span><span class="chip">sparse reward</span><span class="chip">reward weight</span></p>
+</section>
+
+<section class="step" id="l15-s-hack">
+  <span class="lvl lvl-plain">Plain words</span> <span class="lvl lvl-code">Experiment</span>
+  <h2>6. Reward hacking: the learner finds a loophole</h2>
+  <p>Here is a reward that sounds sensible. "Pay the pendulum for every step that brings it closer to the target." We wrote it as <code>max(0, |err_prev| - |err|)</code>: the drop in distance, and never less than 0. So moving away costs nothing.</p>
+  <div class="predict">
+    <h3>Predict: what does SAC learn from this "approach" reward?</h3>
+    <textarea aria-label="Your prediction for the approach reward"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p><strong>It learns to swing back and forth through the target, forever.</strong> Every approach pays, and every retreat is free. So the best plan is to approach as often and from as far as possible. On seed 0 it swings between -1.312 and 1.370 rad.</p>
+      <p>It happened with all three training seeds we tried: own return 8.785, 10.522 and 9.925, against PD + gravity's 1.572 under the same reward. Scored with the lesson 9 reward, the same policies get -811.976, -1394.211 and -1014.966.</p>
+    </div>
+  </div>
+  <div class="card">
+    <canvas id="l15cvHack" role="img" aria-label="Seed 0 hinge angle over 5 seconds: SAC trained on the approach reward swings through the target again and again; SAC trained on the signed fix settles near it; PD plus gravity for reference"></canvas>
+    <div class="btnrow">
+      <button type="button" data-l15hk="approach" class="primary">The loophole (approach)</button>
+      <button type="button" data-l15hk="signed">The fix (signed)</button>
+      <button type="button" id="l15hPlay">Draw it over 5 s</button>
+    </div>
+    <div class="readouts">
+      <div class="ro" id="l15hRet"><span class="lab">SAC, own return</span><span class="val">-</span></div>
+      <div class="ro" id="l15hPd"><span class="lab">PD + gravity, same reward</span><span class="val">-</span></div>
+      <div class="ro" id="l15hBase"><span class="lab">SAC, lesson 9 return</span><span class="val">-</span></div>
+      <div class="ro" id="l15hPass"><span class="lab">swings through the band</span><span class="val">-</span> <span class="unit">per episode</span></div>
+    </div>
+    <p class="caption">Seed 0, 5 s. Shaded strip: 1.0 +- 0.05 rad. Teal: PD + gravity. Red: SAC on the approach reward. Orange: SAC on the signed fix. Swings are counted when the angle crosses the whole strip, averaged over seeds 0 to 4. Replays rollouts recorded from MuJoCo.</p>
+  </div>
+  <details class="math"><summary>Why the swinging pays so well</summary><div>
+    <p>An honest policy goes to the target and stays. Its approach reward adds up to the starting distance. Over seeds 0 to 4 that is on average:</p>
+    <div class="eq">mean |q0 - 1.0| = 1.012 rad   (the most "go there and stay" can earn)</div>
+    <p>PD + gravity earns 1.572, a bit more, because its overshoot comes back and is paid twice. The swinging policy earns 8.785. A swing from -1.31 rad up to 1.0 rad alone pays about 2.3, and it is free to swing away again.</p>
+  </div></details>
+  <h3>The fix: make moving away cost what coming back pays</h3>
+  <p>Remove the <code>max(0, ...)</code>: reward = <code>|err_prev| - |err|</code>. Now a swing away and back nets zero. Retrained, SAC stops swinging: 0.0 swings, own return 0.853, lesson 9 return -28.634. It settles 0.159 rad short of the target, less precise than the lesson 9 reward. A fix closes the loophole; it does not make a reward perfect.</p>
+  <div class="card warn"><span class="callout-title" style="color:var(--orange)">This happens in real projects</span>A classic example from the research literature: a 1998 bicycle-riding learner (Randlov and Alstrom) was paid for progress towards a goal but not charged for moving away. It learned to ride in circles. Capstone 2 tells two more stories from this course's own warehouse robot. A grasp bonus based on touch sensors was collected by pressing the fingers on the shelf. And ending the episode on success taught the robot to hover just below the finish line.</div>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">Rule to remember</span>Before training, ask: "What is the laziest or weirdest way to get a high score?" After training, always watch the behaviour and score it with a second, fixed yardstick. Never trust the learner's own return alone.</div>
+  <h3>Where this goes: Capstone 2</h3>
+  <p>Capstone 2's <code>WarehouseGraspEnv</code> uses the same SAC. Its observation has 19 numbers in the chassis frame: gripper and box positions, finger touch, arm angles, parking error. Its action has 4 numbers in -1..1: move the grasp point and open or close the gripper. A classical controller drives the robot to the shelf, as in lesson 14, and analytic IK (lesson 12) moves the arm. RL only learns the hard part, the grasp.</p>
+  <p class="newwords">New words: <span class="chip">reward hacking</span><span class="chip">loophole</span><span class="chip">yardstick</span></p>
+</section>
+
+<section class="step" id="l15-s-code">
+  <span class="lvl lvl-code">Code</span>
+  <h2>7. The two scripts, line by line</h2>
+  <p>Training is slow, so it lives in its own script. Run it once, then run the lesson script as often as you like:</p>
+<pre><code>cd /Users/mohwit/Desktop/mujoco
+.venv/bin/python lessons/15-learning-a-policy/15_train.py              <span class="c"># about 7 min, writes results/</span>
+.venv/bin/python lessons/15-learning-a-policy/15_learning_a_policy.py  <span class="c"># a few seconds</span></code></pre>
+  <table>
+    <thead><tr><th style="width:46%">Code</th><th>Physical meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>spec_from_file_location("lesson9", ...)</code></td><td>Import the lesson 9 game. Same MuJoCo pendulum, same motor, same reward.</td></tr>
+      <tr><td><code>class VariantEnv(lesson9.PendulumHoldEnv)</code></td><td>The same game with one reward change. <code>super().step()</code> still runs <code>mj_step</code> 10 times; only the score is recomputed.</td></tr>
+      <tr><td><code>SAC("MlpPolicy", env, seed=0, device="cpu")</code></td><td>Build the actor and two critics, sized from the env's spaces. Fixed seed, so a rerun gives the same numbers on this machine.</td></tr>
+      <tr><td><code>model.learn(total_timesteps=20000, callback=...)</code></td><td>Play 20,000 env steps (400 s of simulated time), updating the networks after each one.</td></tr>
+      <tr><td><code>model.predict(obs, deterministic=True)</code></td><td>Act with exploration off: the network's best guess, for fair evaluation.</td></tr>
+      <tr><td><code>evaluate(policy, variant)</code></td><td>Play seeds 0 to 4, sum both rewards, measure mean |action| and final error, record seed 0's <code>qpos[0]</code>.</td></tr>
+      <tr><td><code>torch.save(model.actor.state_dict(), ...)</code></td><td>Save only the policy network (0.3 MB). The critics are only needed for training.</td></tr>
+      <tr><td><code>model.actor.load_state_dict(torch.load(...))</code></td><td>The lesson script reloads the trained policy and replays it in MuJoCo, to check the saved numbers.</td></tr>
+    </tbody>
+  </table>
+<pre><code><span class="c"># == 1. The learner: SAC and its networks ==</span>
+gamma (discount)                 : 0.99
+buffer_size (replay diary, steps): 1,000,000
+learning_starts (random steps)   : 100
+batch_size (steps per update)    : 256
+actor (the policy) layers        : 3 obs -> 256 -> 256 -> mean and log_std of 1 action, squashed by tanh to -1..1
+actor parameters                 : 67,330
+critics (score guessers)         : 2 networks, each 4 inputs (3 obs + 1 action) -> 256 -> 256 -> 1, 67,329 parameters each
+
+<span class="c"># == 3. Learning curve: mean return over seeds 0-4 at each checkpoint (lesson 9 reward) ==</span>
+env steps  episodes   train seed 0   seed 1     seed 2     mean
+        0         0     -223.841   -202.278   -405.000   -277.039   <span class="c"># untrained: luck of the start</span>
+     5000        20      -30.825    -28.827    -29.053    -29.568   <span class="c"># already past PD + gravity</span>
+    20000        80      -24.253    -24.420    -24.095    -24.256
+reference  PD+grav:   -36.622
+
+<span class="c"># == 4. Reload the trained policy (train seed 0, 20,000 steps) and replay it in MuJoCo ==</span>
+mean return now -24.253   stored by 15_train.py -24.253   same: True   <span class="c"># reproducible</span>
+SAC     : mean |action| 0.809, mean |change of action per step| 0.0070, final |error| 0.081 rad, passes through the target band 0.0
+PD+grav : mean |action| 0.876, mean |change of action per step| 0.0138, final |error| 0.000 rad, passes through the target band 2.8
+unseen seeds 100-104: SAC mean -19.854, PD+grav mean -29.169
+whole evaluation while still exploring: mean return -26.981, mean |change of action per step| 0.2165   <span class="c"># noise on</span>
+
+<span class="c"># == 7. The loophole ==</span>
+train seed 0: own return 8.785   lesson-9 return -811.976   passes through the target band 6.8   final |err| 0.756 rad
+PD+grav     : own return 1.572   lesson-9 return -36.622   passes through the target band 2.8</code></pre>
+  <p>Notice the exploring line: with randomness left on, the same network scores -26.981 instead of -24.253 and its action jumps 0.2165 per step instead of 0.0070. That is why we always evaluate with <code>deterministic=True</code>.</p>
+  <div class="card warn"><span class="callout-title" style="color:var(--orange)">About reproducibility</span>Fixed seeds made a full rerun of <code>15_train.py</code> on this machine give the same numbers. A different CPU or library version can change the last digits, or more. That is another reason to train several seeds.</div>
+</section>
+
+<section class="step" id="l15-s-check">
+  <span class="lvl lvl-plain">Check yourself</span>
+  <h2>8. Your lesson's questions</h2>
+  <p>Answer them here, then tell me your answers in the chat so I can update your progress.</p>
+  <div class="predict">
+    <h3>Q1. gamma = 0.99 and one env step is 0.02 s. How much is a reward 1.0 s away worth now, as a fraction?</h3>
+    <textarea aria-label="Answer to question 1"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>1.0 s is 50 steps, so 0.99^50 = <strong>0.6050</strong>, about 60%.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q2. Why do we evaluate with deterministic=True, even though SAC trains with randomness?</h3>
+    <textarea aria-label="Answer to question 2"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>Exploration noise is for discovering moves, not for using them. With noise on, the same trained network scored -26.981 instead of -24.253, and the score changes from run to run. Switching it off measures the policy itself.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q3. You want the pendulum held at 0.5 rad instead of 1.0 rad. What do you change for PD + gravity, and for SAC?</h3>
+    <textarea aria-label="Answer to question 3"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>PD + gravity: change one number, the target. SAC: its network only ever saw target 1.0, so retrain with the new target (about 41 s here), or add the target to the observation and train on many targets.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q4. The "action x100" learner holds at 0.49 rad. Is the learner broken?</h3>
+    <textarea aria-label="Answer to question 4"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>No.</strong> Under that reward the cheapest place to stand is 0.4993 rad (cost 0.5238 per step). It found almost exactly that. The reward said "pushing is very expensive", so it pushed less.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q5. A reward pays +1 every step the pendulum tip moves upwards, and nothing otherwise. Spot the loophole before you train.</h3>
+    <textarea aria-label="Answer to question 5"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>Moving down is free, so swinging up and down forever earns +1 on every upward half-swing. It is the same loophole as "approach". Fix: charge for moving down as much as you pay for moving up, or reward the position, not the motion.</p></div>
+  </div>
+
+  <h3>Glossary: new words from this lesson</h3>
+  <dl class="glossary">
+    <dt>reinforcement learning (RL)</dt><dd>Improving a policy by trial and error, guided only by a reward.</dd>
+    <dt>SAC</dt><dd>Soft Actor-Critic: an RL algorithm for continuous actions such as a motor command.</dd>
+    <dt>actor (policy network)</dt><dd>The network that picks actions: here 3 inputs, 256, 256, 1 action in -1..1; 67,330 numbers.</dd>
+    <dt>critic</dt><dd>A network that guesses the future score of an action in a situation. SAC trains two.</dd>
+    <dt>exploration</dt><dd>Trying actions that are not the current best guess. SAC adds randomness while training; evaluation turns it off.</dd>
+    <dt>replay buffer</dt><dd>The diary of past steps the learner studies from, in random batches of 256.</dd>
+    <dt>discount gamma</dt><dd>How much a reward one step later is worth now: 0.99, so 100 steps away counts 36.6%.</dd>
+    <dt>learning curve, checkpoint</dt><dd>Return plotted against training steps; a saved moment of training where we pause and evaluate.</dd>
+    <dt>training seed</dt><dd>The seed of the learner's own randomness (starting weights, exploration). Different from the env's start seed.</dd>
+    <dt>dense / sparse reward</dt><dd>A score that changes a little every step / one that pays only on success.</dd>
+    <dt>reward hacking</dt><dd>The learner finds a way to get a high score that you did not intend.</dd>
+    <dt>yardstick</dt><dd>A fixed score (here the lesson 9 reward) used to compare policies trained on different rewards.</dd>
+  </dl>
+</section>
+
+<section class="step recap" id="l15-recap">
+  <h2>Recap: the lesson in one minute</h2>
+  <div class="mental-model">
+    <p><strong>Reinforcement learning</strong> replaces the hand-written controller with a <strong>policy network</strong> that improves by trial and error. <strong>SAC</strong> plays the env, writes every step into a <strong>replay buffer</strong>, trains two <strong>critics</strong> to guess the discounted future return (gamma 0.99, about 2 s of look-ahead), and nudges the <strong>actor</strong> (3 -> 256 -> 256 -> 1, tanh to -1..1) towards actions the critics like. It explores with random actions while training; we evaluate with <code>deterministic=True</code>.</p>
+    <p>On the lesson 9 pendulum, 20,000 env steps (about 41 s of CPU) took the mean return from -223.841 to -24.253, past PD + gravity's -36.622, by rising faster without overshoot. PD + gravity still holds the target more precisely (1.0000 rad against 0.9186 rad), needs no training, and changes target with one number.</p>
+    <p>The learner optimises the <strong>reward you wrote</strong>. A tiny action term barely matters; a 100x action term makes it hold at 0.49 rad, the cheapest point; a sparse reward pays nothing until exploration stumbles on success; and "pay for getting closer" without charging for moving away is a <strong>loophole</strong> it exploits on every seed. Always watch the behaviour and score it with a fixed yardstick.</p>
+  </div>
+  <div class="checkpoint">
+    <p>In the training sandbox, pick "approach (loophole)" and step through the checkpoints. Find the first checkpoint where the swinging starts, and check that its lesson 9 return gets worse while its own return gets better.</p>
+    <div class="btn-row">
+      <button class="btn btn-primary btn-sm" type="button" onclick="markComplete(15)">Mark lesson complete</button>
+      <button class="btn btn-sm" type="button" onclick="switchLesson(16)">Next: Capstone 2: Warehouse Robot</button>
+    </div>
+  </div>
+</section>
+</div>

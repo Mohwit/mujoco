@@ -1,0 +1,89 @@
+<div class="sandbox-container" id="sandbox12">
+  <div class="sandbox-header">
+    <span class="sandbox-dot"></span>
+    <span>Kinematics Lab</span>
+  </div>
+  <div class="sandbox-viz">
+    <svg id="s12Svg" viewBox="0 0 400 450" role="img" aria-labelledby="s12Title s12Desc" style="touch-action:none;cursor:crosshair">
+      <title id="s12Title">Inverse kinematics sandbox</title>
+      <desc id="s12Desc">Side view of the Lesson 12 two-link arm in the world x-z plane, shoulder at x 0, z 1 m. A yellow target can be dragged or clicked, or moved with the target sliders. The shaded ring is every point the hand can reach. In analytic mode the arm jumps to the elbow-up or elbow-down solution; in DLS mode it steps towards the target and the purple line shows the hand's path.</desc>
+      <defs>
+        <marker id="s12ArrX" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="var(--x)"/></marker>
+        <marker id="s12ArrZ" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="var(--z)"/></marker>
+        <marker id="s12ArrT" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="var(--teal)"/></marker>
+        <marker id="s12ArrO" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="var(--orange)"/></marker>
+      </defs>
+      <!-- reachable ring: 0.1 m to 0.9 m from the shoulder (180 px per m) -->
+      <path d="M38,225 a162,162 0 1,0 324,0 a162,162 0 1,0 -324,0 Z M182,225 a18,18 0 1,1 36,0 a18,18 0 1,1 -36,0 Z" fill="var(--teal)" fill-opacity="0.08" fill-rule="evenodd" stroke="var(--text-dim)" stroke-opacity="0.5" stroke-dasharray="4 4"></path>
+      <!-- floor and world frame at the origin (world z = 0) -->
+      <line class="axis-line" x1="10" y1="405" x2="390" y2="405"></line>
+      <line x1="200" y1="405" x2="240" y2="405" stroke="var(--x)" stroke-width="2" marker-end="url(#s12ArrX)"></line>
+      <line x1="200" y1="405" x2="200" y2="365" stroke="var(--z)" stroke-width="2" marker-end="url(#s12ArrZ)"></line>
+      <text x="244" y="401" fill="var(--x)" font-size="10" font-family="var(--mono)">x</text>
+      <text x="196" y="359" fill="var(--z)" font-size="10" font-family="var(--mono)">z</text>
+      <text x="14" y="421" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">floor, world z = 0; origin under the shoulder</text>
+      <line x1="200" y1="405" x2="200" y2="225" stroke="var(--text-dim)" stroke-opacity="0.35" stroke-width="3" stroke-dasharray="3 4"></line>
+      <!-- path of the hand over DLS iterations -->
+      <polyline id="s12Path" points="" fill="none" stroke="var(--purple)" stroke-width="1.5" pointer-events="none"></polyline>
+      <!-- the arm -->
+      <line id="s12Up" x1="200" y1="225" x2="290" y2="225" stroke="var(--teal)" stroke-width="12" stroke-linecap="round" pointer-events="none"></line>
+      <line id="s12Fo" x1="290" y1="225" x2="362" y2="225" stroke="var(--orange)" stroke-width="9" stroke-linecap="round" pointer-events="none"></line>
+      <circle cx="200" cy="225" r="4" fill="var(--text-bright)" pointer-events="none"></circle>
+      <circle id="s12Elbow" cx="290" cy="225" r="4" fill="var(--text-bright)" pointer-events="none"></circle>
+      <circle id="s12Hand" cx="362" cy="225" r="5" fill="var(--red)" pointer-events="none"></circle>
+      <!-- Jacobian columns: hand velocity if that joint turns at 0.5 rad/s, drawn as 1 s of travel -->
+      <line id="s12C1" x1="0" y1="0" x2="0" y2="0" stroke="var(--teal)" stroke-width="2" marker-end="url(#s12ArrT)" pointer-events="none" style="display:none"></line>
+      <line id="s12C2" x1="0" y1="0" x2="0" y2="0" stroke="var(--orange)" stroke-width="2" marker-end="url(#s12ArrO)" pointer-events="none" style="display:none"></line>
+      <!-- target -->
+      <g id="s12Tgt" transform="translate(308,297)" pointer-events="none">
+        <circle r="8" fill="none" stroke="var(--yellow)" stroke-width="2"></circle>
+        <line x1="-12" y1="0" x2="12" y2="0" stroke="var(--yellow)" stroke-width="1.5"></line>
+        <line x1="0" y1="-12" x2="0" y2="12" stroke="var(--yellow)" stroke-width="1.5"></line>
+      </g>
+      <text x="390" y="20" text-anchor="end" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">side view: x right, z up, +y into screen</text>
+      <text x="390" y="36" text-anchor="end" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">drag or click to move the target</text>
+      <text x="390" y="440" text-anchor="end" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">ring: 0.1 m to 0.9 m from the shoulder</text>
+    </svg>
+  </div>
+  <div class="sandbox-controls">
+    <div class="btn-row" role="group" aria-label="IK method">
+      <button class="btn btn-sm btn-primary" type="button" data-s12mode="ana" aria-pressed="true">Analytic</button>
+      <button class="btn btn-sm" type="button" data-s12mode="dls" aria-pressed="false">DLS (step by step)</button>
+    </div>
+    <div class="control-group">
+      <label for="s12Tx">Target x, world (m) <span class="control-val" id="s12TxVal">0.60</span></label>
+      <input type="range" id="s12Tx" min="-1.05" max="1.05" step="0.01" value="0.6">
+    </div>
+    <div class="control-group">
+      <label for="s12Tz">Target z, world (m) <span class="control-val" id="s12TzVal">0.60</span></label>
+      <input type="range" id="s12Tz" min="0" max="2" step="0.01" value="0.6">
+    </div>
+    <div id="s12AnaCtl" class="btn-row">
+      <button class="btn btn-sm" type="button" id="s12Elb" aria-pressed="false">Elbow up (q2 &gt; 0)</button>
+    </div>
+    <div id="s12DlsCtl" style="display:none">
+      <div class="control-group">
+        <label for="s12Lam">Damping lambda (m) <span class="control-val" id="s12LamVal">0.05</span></label>
+        <input type="range" id="s12Lam" min="0" max="0.5" step="0.01" value="0.05">
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary btn-sm" type="button" id="s12Step">Step one iteration</button>
+        <button class="btn btn-sm" type="button" id="s12Solve">Solve</button>
+        <button class="btn btn-sm" type="button" id="s12Reset">Arm straight (0, 0)</button>
+      </div>
+    </div>
+    <div class="control-group">
+      <label for="s12Cols"><input type="checkbox" id="s12Cols"> Show Jacobian columns (hand velocity for 0.5 rad/s at each joint)</label>
+    </div>
+    <div class="readout" id="s12Readout" aria-live="polite">
+      <span class="rk">q1, q2 = qpos[0], qpos[1]:</span> <span class="rv" id="s12Q">-</span> <span class="rk">rad</span><br>
+      <span class="rk">hand site_xpos x, z (world):</span> <span class="rv" id="s12H">-</span> <span class="rk">m</span><br>
+      <span class="rk">error |target - hand|:</span> <span class="rv-o" id="s12E">-</span> <span class="rk">m</span><br>
+      <span class="rk">J (rows x, z; m/rad):</span> <span class="rv" id="s12J">-</span><br>
+      <span class="rk">det J:</span> <span class="rv" id="s12Det">-</span> <span class="rk">(m/rad)^2 = -0.2 sin q2</span><br>
+      <span class="rk">DLS iterations:</span> <span class="rv" id="s12It">-</span><br>
+      <span class="rk" id="s12Status"></span>
+    </div>
+    <p class="sidebar-hint" style="margin-top:8px;">Same arm and maths as 12_kinematics_and_jacobians.py: the Lesson 4 arm, L1 = 0.5 m, L2 = 0.4 m, shoulder at world (0, 0, 1). Positive angles tip the arm down. The page's forward kinematics and Jacobian match MuJoCo's site_xpos and mj_jacSite to better than 1e-15 for eight poses, and its IK and DLS steps match the script (check_browser_match.py).</p>
+  </div>
+</div>

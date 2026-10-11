@@ -1,0 +1,101 @@
+<div class="sandbox-container" id="sandbox4">
+  <div class="sandbox-header">
+    <span class="sandbox-dot"></span>
+    <span>Model Inspector</span>
+  </div>
+  <div class="sandbox-viz">
+    <svg viewBox="0 0 400 450" role="img" aria-labelledby="s4Title s4Desc">
+      <title id="s4Title">Two-link arm inspector</title>
+      <desc id="s4Desc">Side view of the Lesson 4 model in the world x-z plane: a two-link arm on hinges shoulder and elbow, a hand site at the tip, a loose box on the floor, and the two cameras. Click a body to read its id, xpos, xquat and xipos.</desc>
+      <defs>
+        <marker id="s4ArrX" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="var(--x)"/></marker>
+        <marker id="s4ArrZ" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="var(--z)"/></marker>
+      </defs>
+      <!-- floor (world z = 0) -->
+      <line class="axis-line" x1="10" y1="420" x2="390" y2="420"></line>
+      <text x="14" y="438" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">floor, world z = 0</text>
+      <!-- world frame at the origin -->
+      <g id="s4World" data-body="0" style="cursor:pointer">
+        <circle cx="165" cy="420" r="9" fill="transparent"></circle>
+        <line class="frame-arrow" x1="165" y1="420" x2="205" y2="420" stroke="var(--x)" marker-end="url(#s4ArrX)"></line>
+        <line class="frame-arrow" x1="165" y1="420" x2="165" y2="380" stroke="var(--z)" marker-end="url(#s4ArrZ)"></line>
+        <text x="209" y="416" fill="var(--x)" font-size="10" font-family="var(--mono)">x</text>
+        <text x="160" y="374" fill="var(--z)" font-size="10" font-family="var(--mono)">z</text>
+        <text x="120" y="412" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">world</text>
+      </g>
+      <!-- base stand -->
+      <line x1="165" y1="420" x2="165" y2="260" stroke="var(--text-dim)" stroke-opacity="0.35" stroke-width="3" stroke-dasharray="3 4"></line>
+      <!-- box: 0.2 m cube turned 30 degrees about z; from the side its silhouette is 0.273 m wide -->
+      <g id="s4Box" data-body="3" style="cursor:pointer">
+        <rect x="335.1" y="388" width="43.7" height="32" rx="2" fill="var(--blue)" fill-opacity="0.35" stroke="var(--blue)" stroke-width="1.5"></rect>
+        <text x="357" y="380" text-anchor="middle" fill="var(--blue)" font-size="10" font-family="var(--mono)">box</text>
+      </g>
+      <!-- side camera (fixed, 3 m in front: y = -3) -->
+      <g id="s4CamSide">
+        <rect x="-7" y="-5" width="14" height="10" rx="2" fill="none" stroke="var(--text-dim)" stroke-width="1.5"></rect>
+        <text x="10" y="14" fill="var(--text-dim)" font-size="9" font-family="var(--mono)">side cam (y = -3)</text>
+      </g>
+      <g id="s4CamTrack">
+        <rect x="-7" y="-5" width="14" height="10" rx="2" fill="none" stroke="var(--text-dim)" stroke-width="1.5"></rect>
+        <text x="-10" y="-8" text-anchor="end" fill="var(--text-dim)" font-size="9" font-family="var(--mono)">track cam (y = -1.2)</text>
+      </g>
+      <!-- upper arm (body 1) -->
+      <g id="s4Upper" data-body="1" style="cursor:pointer">
+        <line id="s4UpperRod" x1="165" y1="260" x2="245" y2="260" stroke="var(--teal)" stroke-width="12.8" stroke-linecap="round"></line>
+      </g>
+      <!-- forearm (body 2) -->
+      <g id="s4Fore" data-body="2" style="cursor:pointer">
+        <line id="s4ForeRod" x1="245" y1="260" x2="309" y2="260" stroke="var(--orange)" stroke-width="9.6" stroke-linecap="round"></line>
+        <rect id="s4Weight" x="-8" y="-8" width="16" height="16" fill="var(--purple)"></rect>
+      </g>
+      <!-- selection ring and the selected body's frame -->
+      <circle id="s4Sel" r="13" fill="none" stroke="var(--text-bright)" stroke-width="1.5" stroke-dasharray="3 3" pointer-events="none"></circle>
+      <g id="s4Frame" pointer-events="none">
+        <line class="frame-arrow" x1="0" y1="0" x2="30" y2="0" stroke="var(--x)" marker-end="url(#s4ArrX)"></line>
+        <line class="frame-arrow" x1="0" y1="0" x2="0" y2="-30" stroke="var(--z)" marker-end="url(#s4ArrZ)"></line>
+      </g>
+      <!-- frame origins (xpos), centres of mass (xipos), hand site -->
+      <circle id="s4O1" r="4" fill="var(--text-bright)" pointer-events="none"></circle>
+      <circle id="s4O2" r="4" fill="var(--text-bright)" pointer-events="none"></circle>
+      <g id="s4C1" pointer-events="none"><circle r="5" fill="none" stroke="var(--yellow)" stroke-width="1.5"></circle><line x1="-5" y1="0" x2="5" y2="0" stroke="var(--yellow)"></line><line x1="0" y1="-5" x2="0" y2="5" stroke="var(--yellow)"></line></g>
+      <g id="s4C2" pointer-events="none"><circle r="5" fill="none" stroke="var(--yellow)" stroke-width="1.5"></circle><line x1="-5" y1="0" x2="5" y2="0" stroke="var(--yellow)"></line><line x1="0" y1="-5" x2="0" y2="5" stroke="var(--yellow)"></line></g>
+      <circle id="s4Hand" r="4" fill="var(--red)" pointer-events="none"></circle>
+      <text id="s4HandLbl" fill="var(--red)" font-size="10" font-family="var(--mono)">hand</text>
+      <text x="390" y="20" text-anchor="end" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">side view: x right, z up, +y into screen</text>
+      <text x="390" y="36" text-anchor="end" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">dot = xpos, ringed cross = xipos</text>
+    </svg>
+  </div>
+  <div class="sandbox-controls">
+    <div class="control-group">
+      <label for="s4Q1">Shoulder qpos[0] (rad) <span class="control-val" id="s4Q1Val">0.50</span></label>
+      <input type="range" id="s4Q1" min="-3.14" max="3.14" step="0.01" value="0.5">
+    </div>
+    <div class="control-group">
+      <label for="s4Q2">Elbow qpos[1] (rad) <span class="control-val" id="s4Q2Val">0.80</span></label>
+      <input type="range" id="s4Q2" min="-2.5" max="2.5" step="0.01" value="0.8">
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-sm" type="button" id="s4Script">Script pose (0.5, 0.8)</button>
+      <button class="btn btn-sm" type="button" id="s4Zero">Zero pose</button>
+      <button class="btn btn-sm" type="button" id="s4Q3">Q3 pose (0, 1.57)</button>
+    </div>
+    <div class="btn-row" role="group" aria-label="Pick a body">
+      <button class="btn btn-sm" type="button" data-s4body="0" aria-pressed="false">world</button>
+      <button class="btn btn-sm" type="button" data-s4body="1" aria-pressed="false">upper_arm</button>
+      <button class="btn btn-sm btn-primary" type="button" data-s4body="2" aria-pressed="true">forearm</button>
+      <button class="btn btn-sm" type="button" data-s4body="3" aria-pressed="false">box</button>
+    </div>
+    <div class="btn-row" role="group" aria-label="Pick a camera">
+      <button class="btn btn-sm btn-primary" type="button" data-s4cam="0" aria-pressed="true">side camera</button>
+      <button class="btn btn-sm" type="button" data-s4cam="1" aria-pressed="false">track camera</button>
+    </div>
+    <div class="readout" id="s4Readout" aria-live="polite">
+      <span class="rk">body:</span> <span class="rv" id="s4Name">forearm</span> <span class="rk">id</span> <span class="rv" id="s4Id">2</span><br>
+      <span class="rk">xpos (world, m):</span> <span class="rv" id="s4Xpos">-</span><br>
+      <span class="rk">xquat [w, x, y, z]:</span> <span class="rv" id="s4Xquat">-</span><br>
+      <span class="rk">xipos (world, m):</span> <span class="rv" id="s4Xipos">-</span><br>
+      <span class="rk">hand site_xpos (world, m):</span> <span class="rv-o" id="s4HandPos">-</span><br>
+      <span class="rk">camera:</span> <span class="rv" id="s4CamName">side (fixed)</span> <span class="rk">cam_xpos (m):</span> <span class="rv" id="s4CamPos">-</span>
+    </div>
+  </div>
+</div>

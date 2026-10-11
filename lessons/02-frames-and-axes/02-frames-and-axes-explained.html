@@ -1,0 +1,662 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 02 explained — Local vs world, frames and axes</title>
+<style>
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#0a0f0d;--raised:#111916;--surface:#151d19;--input:#0d1410;--border:#1e2b25;
+  --teal:#00c9a7;--teal-wash:rgba(0,229,192,.08);--orange:#ff7a45;--orange-wash:rgba(255,122,69,.10);
+  --purple:#c79bff;--blue:#6cb4ff;--yellow:#ffd166;--red:#ff5c6c;
+  --text:#d4ddd8;--dim:#8ea398;--bright:#f0faf5;--code:#0c1210;--grid:#1a2520;
+  --x:#ff5c6c;--y:#7bd88f;--z:#6cb4ff;
+  color-scheme:dark;
+}
+:root[data-theme=light]{
+  --bg:#f4f7f5;--raised:#ffffff;--surface:#eaf0ec;--input:#ffffff;--border:#c9d6ce;
+  --teal:#00796b;--teal-wash:rgba(0,121,107,.07);--orange:#c2410c;--orange-wash:rgba(194,65,12,.07);
+  --purple:#7c3aed;--blue:#1d6fd6;--yellow:#a16207;--red:#c81e3a;
+  --text:#1e2d26;--dim:#52665c;--bright:#0b1510;--code:#f0f4f1;--grid:#dde6e0;
+  --x:#d62839;--y:#2b8a3e;--z:#1d6fd6;
+  color-scheme:light;
+}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--bg);color:var(--text);font:17px/1.65 system-ui,-apple-system,"Segoe UI",sans-serif}
+a{color:var(--teal)}
+:focus-visible{outline:2px solid var(--teal);outline-offset:2px;border-radius:4px}
+code,pre,kbd,.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+code{background:var(--surface);color:var(--orange);padding:.08em .35em;border-radius:5px;font-size:.88em}
+pre{background:var(--code);border:1px solid var(--border);border-radius:10px;padding:14px 16px;overflow-x:auto;font-size:14px;line-height:1.55;margin:0}
+pre code{background:none;color:var(--text);padding:0;font-size:inherit}
+.k{color:var(--purple)}.s{color:var(--y)}.n{color:var(--yellow)}.c{color:var(--dim);font-style:italic}.t{color:var(--blue)}.a{color:var(--orange)}
+.hl{background:var(--teal-wash);box-shadow:inset 3px 0 0 var(--teal);display:inline-block;width:100%}
+
+/* top bar + ladder */
+.topbar{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--border)}
+.topbar-inner{max-width:980px;margin:0 auto;padding:8px 20px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.brand{font-weight:700;color:var(--bright);text-decoration:none;font-size:15px;white-space:nowrap}
+.brand span{color:var(--teal)}
+.ladder{display:flex;gap:4px;flex:1;flex-wrap:wrap;list-style:none;margin:0;padding:0}
+.ladder a{display:block;font-size:12px;padding:3px 9px;border-radius:999px;border:1px solid var(--border);color:var(--dim);text-decoration:none;white-space:nowrap}
+.ladder a.on{border-color:var(--teal);color:var(--teal);background:var(--teal-wash)}
+.theme-btn{font-size:12px}
+
+main{max-width:980px;margin:0 auto;padding:28px 20px 80px}
+header.hero{padding:24px 0 8px}
+.eyebrow{font:600 12px/1 ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--teal)}
+h1{font-size:clamp(28px,5vw,42px);line-height:1.15;margin:.35em 0 .3em;color:var(--bright)}
+h2{font-size:26px;line-height:1.25;margin:0 0 .4em;color:var(--bright)}
+h3{font-size:19px;margin:1.4em 0 .4em;color:var(--bright)}
+.lead{font-size:19px;color:var(--dim);max-width:68ch}
+p,li{max-width:72ch}
+section.step{padding:44px 0 8px;border-top:1px solid var(--border);margin-top:36px;scroll-margin-top:60px}
+.lvl{display:inline-flex;gap:6px;align-items:center;font:600 11px/1 ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase;padding:5px 9px;border-radius:999px;margin-bottom:12px}
+.lvl-plain{color:var(--y);background:color-mix(in srgb,var(--y) 12%,transparent)}
+.lvl-pic{color:var(--blue);background:color-mix(in srgb,var(--blue) 12%,transparent)}
+.lvl-words{color:var(--purple);background:color-mix(in srgb,var(--purple) 12%,transparent)}
+.lvl-math{color:var(--orange);background:var(--orange-wash)}
+.lvl-code{color:var(--teal);background:var(--teal-wash)}
+
+.card{background:var(--raised);border:1px solid var(--border);border-radius:14px;padding:18px 20px;margin:18px 0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media (max-width:760px){.grid2,.grid3{grid-template-columns:1fr}body{font-size:16px}}
+.analogy{border-left:4px solid var(--y);background:color-mix(in srgb,var(--y) 6%,var(--raised))}
+.analogy strong:first-child{color:var(--y)}
+.rule{border-left:4px solid var(--teal);background:var(--teal-wash)}
+.warn{border-left:4px solid var(--orange);background:var(--orange-wash)}
+.callout-title{font:700 12px/1 ui-monospace,monospace;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px;display:block}
+
+/* jargon terms */
+dfn.term{font-style:normal;font-weight:650;color:var(--purple);border-bottom:1.5px dotted var(--purple);cursor:help;position:relative}
+dfn.term:hover::after,dfn.term:focus::after{content:attr(data-def);position:absolute;left:0;top:calc(100% + 6px);width:min(300px,80vw);background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font:400 13.5px/1.45 system-ui,sans-serif;z-index:30;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.newwords{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:14px 0 0;font-size:13px;color:var(--dim)}
+.newwords span.chip{font:600 12px ui-monospace,monospace;padding:3px 8px;border-radius:6px;background:color-mix(in srgb,var(--purple) 12%,transparent);color:var(--purple)}
+
+/* maths boxes */
+details.math{border:1px solid color-mix(in srgb,var(--orange) 40%,var(--border));border-radius:12px;background:var(--orange-wash);margin:16px 0}
+details.math>summary{cursor:pointer;padding:12px 16px;font-weight:650;color:var(--orange);list-style:none}
+details.math>summary::before{content:"∑  ";}
+details.math[open]>summary{border-bottom:1px solid color-mix(in srgb,var(--orange) 30%,var(--border))}
+details.math>div{padding:4px 18px 14px}
+.eq{font:15.5px/1.7 ui-monospace,monospace;background:var(--code);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin:10px 0;overflow-x:auto;white-space:pre;color:var(--bright)}
+
+/* controls */
+button,.btn{font:600 14px system-ui,sans-serif;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:8px;padding:8px 13px;cursor:pointer}
+button:hover{border-color:var(--teal)}
+button.primary{background:var(--teal);border-color:var(--teal);color:#04120e}
+button:disabled{opacity:.45;cursor:not-allowed}
+.btnrow{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+label.slider{display:grid;grid-template-columns:1fr auto;gap:2px 10px;font-size:14px;margin:10px 0}
+label.slider input{grid-column:1/-1;width:100%;accent-color:var(--teal)}
+label.slider output{font:600 13px ui-monospace,monospace;color:var(--teal)}
+label.check{display:flex;gap:8px;align-items:center;font-size:14px;margin:6px 0;cursor:pointer}
+canvas{display:block;width:100%;border-radius:10px;background:var(--code);border:1px solid var(--border);touch-action:none}
+.caption{font-size:13.5px;color:var(--dim);margin-top:8px}
+
+/* readouts */
+.readouts{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin:10px 0}
+.ro{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 10px;transition:border-color .25s}
+.ro .lab{font-size:12px;color:var(--dim);display:block}
+.ro .val{font:700 16px ui-monospace,monospace;color:var(--bright)}
+.ro .unit{font-size:11.5px;color:var(--dim)}
+.ro.flash{border-color:var(--orange);background:var(--orange-wash)}
+.ro.frozen .val{color:var(--dim)}
+.ro.frozen{border-style:dashed}
+
+/* predict */
+.predict{border:1px dashed var(--yellow);border-radius:14px;padding:16px 18px;background:color-mix(in srgb,var(--yellow) 5%,var(--raised));margin:20px 0}
+.predict h4{margin:0 0 6px;color:var(--yellow);font-size:15px;letter-spacing:.02em}
+.predict textarea{width:100%;min-height:64px;background:var(--input);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font:15px system-ui,sans-serif;resize:vertical}
+.predict .answer{display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+.predict.revealed .answer{display:block}
+.predict ol{margin:6px 0;padding-left:22px}
+
+table{border-collapse:collapse;width:100%;font-size:15px;margin:12px 0}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+th{color:var(--dim);font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:.05em}
+.glossary dt{font:700 14px ui-monospace,monospace;color:var(--purple);margin-top:10px}
+.glossary dd{margin:2px 0 0 0;color:var(--text)}
+footer.next{margin-top:48px;padding:20px;border:1px solid var(--border);border-radius:14px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+@media print{.topbar,button,.btnrow{display:none}details.math{display:block}details.math>div{display:block}.predict .answer{display:block}}
+.grid2>*,.grid3>*{min-width:0}
+@media (max-width:760px){.ladder{flex-wrap:nowrap;overflow-x:auto;order:3;flex-basis:100%;padding-bottom:2px}.topbar-inner{gap:6px}}
+
+</style>
+</head>
+<body>
+<div class="topbar"><div class="topbar-inner">
+  <a class="brand" href="../index.html">MuJoCo <span>Learning Lab</span></a>
+  <ul class="ladder" aria-label="Sections on this page">
+    <li><a href="#s-idea">1 · Big idea</a></li>
+    <li><a href="#s-axes">2 · x, y, z</a></li>
+    <li><a href="#s-words">3 · Local vs world</a></li>
+    <li><a href="#s-chain">4 · Chain of arrows</a></li>
+    <li><a href="#s-axis">5 · Joint axis</a></li>
+    <li><a href="#s-math">6 · Maths</a></li>
+    <li><a href="#s-code">7 · The script</a></li>
+    <li><a href="#s-check">8 · Check yourself</a></li>
+  </ul>
+  <button class="theme-btn" id="themeBtn" type="button">☀ Light</button>
+</div></div>
+
+<main>
+<header class="hero">
+  <p class="eyebrow">Lesson 02 · explained gently</p>
+  <h1>Where is it? It depends who you ask.</h1>
+  <p class="lead">Every position in MuJoCo is measured <em>from somewhere</em>. This page shows the two kinds of position, "local" and "world". It shows how MuJoCo turns one into the other, and what a joint's <code>axis</code> really means.</p>
+  <div class="card" style="font-size:15px">
+    <strong>Before you start:</strong> this page builds on <a href="../01-mjcf-hierarchy/01-mjcf-hierarchy-explained.html">Lesson 01 explained</a>. You should know that a <em>body</em> is an invisible point with its own directions, and that children follow their parent. Purple dotted words show a definition on hover. Orange ∑ boxes hold optional maths.
+  </div>
+</header>
+
+<!-- ============ 1 ============ -->
+<section class="step" id="s-idea">
+  <span class="lvl lvl-plain">● Plain words</span>
+  <h2>1. "Two steps to the left" — of what?</h2>
+  <p>Imagine telling a friend where your phone is. You could say <strong>"on the tray, near the front edge"</strong>. Or you could say <strong>"2.3 m from the kitchen door, 0.9 m up"</strong>. Both are correct. The first one is measured from the tray. The second one is measured from the room.</p>
+  <p>Now someone carries the tray to the sofa. The first description is <em>still true</em>: the phone is still near the front edge of the tray. The second description is now wrong. The phone moved through the room.</p>
+  <div class="card analogy"><strong>That is the whole lesson in one sentence.</strong> A <em>local</em> position is measured from the parent (the tray). It doesn't change when the parent moves. A <em>world</em> position is measured from one fixed point in the room. It changes whenever anything up the chain moves.</div>
+
+  <h3>Try it: carry the tray</h3>
+  <p>Drag the <strong style="color:var(--teal)">tray</strong> (or use the sliders). Watch which numbers change.</p>
+  <div class="card">
+    <div class="grid2">
+      <canvas id="cvT" aria-label="Room, tray and phone; drag the tray" role="img"></canvas>
+      <div>
+        <label class="slider"><span>Tray position x (in the room)</span> <output id="oTx">1.00 m</output><input type="range" id="tTx" min="0.3" max="3.2" step="0.01" value="1"></label>
+        <label class="slider"><span>Tray height z (in the room)</span> <output id="oTz">0.80 m</output><input type="range" id="tTz" min="0.2" max="1.6" step="0.01" value="0.8"></label>
+        <label class="slider"><span>Tray tilt</span> <output id="oTr">0°</output><input type="range" id="tTr" min="-40" max="40" step="1" value="0"></label>
+        <div class="readouts" style="grid-template-columns:1fr 1fr">
+          <div class="ro frozen"><span class="lab">phone, LOCAL (from tray)</span><span class="val mono">(0.30, 0.05)</span> <span class="unit">m</span></div>
+          <div class="ro" id="tW"><span class="lab">phone, WORLD (from room corner)</span><span class="val mono" id="tWv">—</span> <span class="unit">m</span></div>
+        </div>
+        <p class="caption">Tilt the tray and the phone's world position changes in a curved way. The local position still never changes. Section 4 explains why the tilt matters.</p>
+      </div>
+    </div>
+  </div>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">Rule to remember</span><strong>You write local positions. MuJoCo computes world positions.</strong> Every <code>pos</code> in your XML is local: measured from the parent body. World positions only appear after MuJoCo does the maths.</div>
+</section>
+
+<!-- ============ 2 ============ -->
+<section class="step" id="s-axes">
+  <span class="lvl lvl-pic">● Picture</span>
+  <h2>2. Meet x, y and z</h2>
+  <p>To give a position you need three directions. MuJoCo always uses the same ones and the same colours:</p>
+  <div class="grid3">
+    <div class="card"><span class="callout-title" style="color:var(--x)">x — red</span>Forward / right. In the side views on this page, x points to the right.</div>
+    <div class="card"><span class="callout-title" style="color:var(--y)">y — green</span>Sideways. In the side views, y points <em>away from you</em>, into the screen.</div>
+    <div class="card"><span class="callout-title" style="color:var(--z)">z — blue</span><strong>Up.</strong> Gravity pulls along −z. That's why gravity is <code>0 0 -9.81</code>.</div>
+  </div>
+  <p>A set of three arrows like this, stuck to a point, is called a <dfn class="term" tabindex="0" data-def="A frame (coordinate frame) is an origin point plus three direction arrows x, y, z. Every body has one. Positions are always measured in some frame.">frame</dfn>. The world has one frame, fixed forever. Every body carries its own frame, which moves and turns with the body.</p>
+  <div class="card">
+    <canvas id="cv3" aria-label="3D view of the world frame and a body frame; drag to orbit" role="img"></canvas>
+    <div class="btnrow" style="align-items:center">
+      <label class="slider" style="flex:1;min-width:220px"><span>Turn the body frame (about its y axis)</span> <output id="o3">0.00 rad</output><input type="range" id="s3" min="-3.14" max="3.14" step="0.01" value="0.6"></label>
+      <button id="b3side" type="button">Side view</button><button id="b3iso" type="button">3D view</button>
+    </div>
+    <p class="caption">Drag the picture to look around. The faint frame at the origin is the <strong>world</strong>. The bright frame is a <strong>body</strong>. When it turns, its own x and z arrows turn with it. That is why "1 m along the body's x" is not the same as "1 m along the world's x".</p>
+  </div>
+  <details class="math"><summary>Why y points into the screen: the right-hand rule</summary><div>
+    <p>MuJoCo uses a <dfn class="term" tabindex="0" data-def="A right-handed frame: point your right hand's fingers along x, curl them toward y, and your thumb points along z.">right-handed</dfn> frame. Point the fingers of your right hand along x (right). Curl them toward y. Your thumb then points along z (up). The only way this works with x right and z up is if y points <em>away from you</em>.</p>
+    <p>This matters in section 5, where the same rule tells you which way a hinge turns.</p>
+  </div></details>
+  <p class="newwords">New words: <span class="chip">frame</span><span class="chip">x · y · z axes</span><span class="chip">right-handed</span></p>
+</section>
+
+<!-- ============ 3 ============ -->
+<section class="step" id="s-words">
+  <span class="lvl lvl-words">● MuJoCo words</span>
+  <h2>3. Local numbers live in the model, world numbers live in the data</h2>
+  <p>This links straight back to Lesson 1. Local positions are part of the design, so they live in <code>model</code>. World positions depend on the current joint angles, so they live in <code>data</code>.</p>
+  <table>
+    <thead><tr><th>You want…</th><th>Measured from</th><th>Where to read it</th><th>Who sets it</th></tr></thead>
+    <tbody>
+      <tr><td>A body's position</td><td>its parent (local)</td><td><code>model.body_pos[id]</code></td><td>You, in the XML <code>pos</code></td></tr>
+      <tr><td>A body's position</td><td>the world</td><td><code>data.xpos[id]</code></td><td>MuJoCo, in <code>mj_forward</code></td></tr>
+      <tr><td>A body's directions (orientation)</td><td>the world</td><td><code>data.xmat[id]</code> or <code>data.xquat[id]</code></td><td>MuJoCo</td></tr>
+      <tr><td>A geom's position</td><td>its body (local)</td><td><code>model.geom_pos[id]</code></td><td>You (or <code>fromto</code>)</td></tr>
+      <tr><td>A geom's position</td><td>the world</td><td><code>data.geom_xpos[id]</code></td><td>MuJoCo</td></tr>
+      <tr><td>A hinge's turning line</td><td>its body (local)</td><td><code>model.jnt_axis[id]</code></td><td>You, in the XML <code>axis</code></td></tr>
+    </tbody>
+  </table>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">Naming trick</span>In <code>data</code>, an <strong>x</strong> at the front means "in world coordinates": <code>xpos</code>, <code>xmat</code>, <code>xquat</code>, <code>geom_xpos</code>. No x means local.</div>
+  <div class="card warn"><span class="callout-title" style="color:var(--orange)">Common mistake</span>If you change <code>data.qpos</code> and read <code>data.xpos</code> straight away, you get the <em>old</em> world positions. World positions are only refreshed when you call <code>mj_forward</code> (or <code>mj_step</code>). <strong>Prevention rule: change qpos → call mj_forward → then read xpos.</strong></div>
+  <p class="newwords">New words: <span class="chip">body_pos</span><span class="chip">xpos</span><span class="chip">xmat · xquat</span><span class="chip">geom_xpos</span><span class="chip">jnt_axis</span><span class="chip">orientation</span></p>
+</section>
+
+<!-- ============ 4 ============ -->
+<section class="step" id="s-chain">
+  <span class="lvl lvl-pic">● Picture</span> <span class="lvl lvl-math">● a little maths</span>
+  <h2>4. How MuJoCo finds a world position: follow the chain of arrows</h2>
+  <p>This is the model from your Lesson 2 script. Seen from the side (x right, z up):</p>
+<pre><code><span class="t">&lt;body</span> <span class="a">name</span>=<span class="s">"base"</span> <span class="a">pos</span>=<span class="s">"0 0 1"</span><span class="t">&gt;</span>                      <span class="c">&lt;!-- 1 m above the world origin --&gt;</span>
+  <span class="t">&lt;body</span> <span class="a">name</span>=<span class="s">"link"</span> <span class="a">pos</span>=<span class="s">"0 0 0.6"</span><span class="t">&gt;</span>                  <span class="c">&lt;!-- 0.6 m above BASE --&gt;</span>
+    <span class="t">&lt;joint</span> <span class="a">name</span>=<span class="s">"hinge"</span> <span class="a">type</span>=<span class="s">"hinge"</span> <span class="a">axis</span>=<span class="s">"0 1 0"</span><span class="t">/&gt;</span>
+    <span class="t">&lt;geom</span> <span class="a">name</span>=<span class="s">"link_geom"</span> <span class="a">type</span>=<span class="s">"capsule"</span> <span class="a">fromto</span>=<span class="s">"0 0 0 0 0 -0.8"</span><span class="t">/&gt;</span>  <span class="c">&lt;!-- centre is 0.4 m below LINK --&gt;</span>
+  <span class="t">&lt;/body&gt;</span>
+<span class="t">&lt;/body&gt;</span></code></pre>
+  <p>To find where the capsule's centre is in the world, MuJoCo walks from the world to the capsule. It adds one arrow per step. Each arrow is a local <code>pos</code>, <strong>turned to match its parent's current direction</strong>.</p>
+  <div class="card">
+    <div class="grid2">
+      <canvas id="cvC" aria-label="Chain of arrows from world to base to link to geom" role="img"></canvas>
+      <div>
+        <label class="slider"><span>① base <code>pos</code> z (XML)</span> <output id="oBz">1.00 m</output><input type="range" id="cBz" min="0.4" max="2" step="0.05" value="1"></label>
+        <label class="slider"><span>② link <code>pos</code> z (XML, in base frame)</span> <output id="oLz">0.60 m</output><input type="range" id="cLz" min="0" max="1.2" step="0.05" value="0.6"></label>
+        <label class="slider"><span>③ hinge angle <code>qpos[0]</code> (data)</span> <output id="oTh">0.00 rad</output><input type="range" id="cTh" min="-3.14" max="3.14" step="0.01" value="0"></label>
+        <label class="slider"><span>④ base tilt — XML <code>euler="0 … 0"</code></span> <output id="oBr">0°</output><input type="range" id="cBr" min="-60" max="60" step="1" value="0"></label>
+        <div class="btnrow"><button id="cScript" type="button" class="primary">Use the script's values (θ = 0.7)</button><button id="cReset" type="button">↺ Reset</button><button id="cPlay" type="button">▶ Animate the sum</button></div>
+      </div>
+    </div>
+    <div class="readouts">
+      <div class="ro" id="rL"><span class="lab">link world position (data.xpos)</span><span class="val mono" id="rLv">—</span></div>
+      <div class="ro" id="rG"><span class="lab">geom world position (data.geom_xpos)</span><span class="val mono" id="rGv">—</span></div>
+      <div class="ro" id="rZ"><span class="lab">link's z arrow in world (xmat column 3)</span><span class="val mono" id="rZv">—</span></div>
+    </div>
+    <div class="eq" id="cEq" aria-live="polite"></div>
+    <p class="caption">Orange arrow = base's local <code>pos</code>. Teal = link's local <code>pos</code>. Purple = the geom centre, measured from the link. The thin dashed arrow is their sum: the world position. All numbers are (x, y, z) in metres, measured in the world frame.</p>
+  </div>
+  <div class="predict">
+    <h4>🔮 Predict: hinge at 0, tilt the base by +30°. Does the link stay at (0, 0, 1.6)?</h4>
+    <textarea aria-label="Your prediction about tilting the base"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer"><p><strong>No — it moves to (0.30, 0, 1.52).</strong> The link's local <code>pos</code> is still "0.6 m along the base's z arrow". But the base's z arrow now leans 30° toward +x. So the teal arrow leans too. I checked this with real MuJoCo, using <code>euler="0 30 0"</code> on the base: <code>link xpos = [0.3, 0, 1.5196]</code>.</p>
+    <p>This is why "world = parent + local" is only true when nothing is rotated. The full rule is <strong>world = parent's world position + (local offset turned by the parent's orientation)</strong>.</p></div>
+  </div>
+</section>
+
+<!-- ============ 5 ============ -->
+<section class="step" id="s-axis">
+  <span class="lvl lvl-pic">● Picture</span>
+  <h2>5. A joint's axis is the line it turns around</h2>
+  <p>A hinge is like a door hinge, or a skewer through a chicken on a rotisserie. The <code>axis</code> attribute tells MuJoCo which way the skewer points. It's written in the body's own (local) directions:</p>
+  <ul>
+    <li><code>axis="0 1 0"</code> — the skewer points along y (into the screen). The rod swings left/right in the picture, like a playground swing.</li>
+    <li><code>axis="1 0 0"</code> — the skewer points along x. The rod swings toward or away from you.</li>
+    <li><code>axis="0 0 1"</code> — the skewer points straight up, along the rod itself…</li>
+  </ul>
+  <div class="card">
+    <canvas id="cvJ" aria-label="3D view of the link swinging about the chosen hinge axis" role="img"></canvas>
+    <div class="btnrow" style="align-items:center">
+      <span style="font-size:14px;color:var(--dim)">axis =</span>
+      <button type="button" class="axbtn primary" data-ax="0">"0 1 0" (y)</button>
+      <button type="button" class="axbtn" data-ax="1">"1 0 0" (x)</button>
+      <button type="button" class="axbtn" data-ax="2">"0 0 1" (z)</button>
+      <label class="slider" style="flex:1;min-width:200px;margin:0"><span>angle qpos[0]</span> <output id="oJ">0.70 rad</output><input type="range" id="sJ" min="-3.14" max="3.14" step="0.01" value="0.7"></label>
+      <button id="jPlay" type="button">▶ Swing</button>
+    </div>
+    <div class="readouts">
+      <div class="ro" id="jG"><span class="lab">geom centre, world (x, y, z)</span><span class="val mono" id="jGv">—</span> <span class="unit">m</span></div>
+    </div>
+    <p class="caption">The thick dashed line is the hinge axis. The curved arrow shows which way a <em>positive</em> angle turns. Drag to look around.</p>
+  </div>
+  <div class="card analogy"><strong>Right-hand rule for turning.</strong> Point your right thumb along the axis arrow. Your fingers curl in the direction of a <em>positive</em> angle. With <code>axis="0 1 0"</code> your thumb points into the screen. Your fingers curl clockwise as you look at it, so up turns toward +x. That means a rod hanging <em>down</em> swings toward <strong>−x</strong> (left).</div>
+  <div class="predict">
+    <h4>🔮 Predict: with axis="0 0 1" and angle 0.7 rad, where does the capsule centre go?</h4>
+    <textarea aria-label="Your prediction about the vertical axis"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer"><p><strong>Nowhere — it stays at (0, 0, 1.2).</strong> The axis runs straight along the rod. Spinning a rod around its own length is like twirling a pencil between your fingers: it turns, but its centre doesn't move. I checked with real MuJoCo: <code>geom_xpos = [0, 0, 1.2]</code>. With <code>axis="1 0 0"</code> it becomes <code>[0, 0.258, 1.294]</code>. That is the same swing as before, but toward +y instead of −x.</p></div>
+  </div>
+  <p class="newwords">New words: <span class="chip">axis</span><span class="chip">positive rotation</span><span class="chip">right-hand rule</span></p>
+</section>
+
+<!-- ============ 6 ============ -->
+<section class="step" id="s-math">
+  <span class="lvl lvl-math">● Maths (optional)</span>
+  <h2>6. The maths, one step at a time</h2>
+  <p>Each box builds on the one before. Stop whenever you like — you can use MuJoCo without any of this.</p>
+
+  <details class="math"><summary>Step 1 — no turning: just add the arrows</summary><div>
+    <p>When no body is rotated, world positions are plain additions. Add the x parts together, then the y parts, then the z parts:</p>
+    <div class="eq">link world = base pos + link pos
+           = (0, 0, 1)  + (0, 0, 0.6)
+           = (0, 0, 1.6)      ← matches "link world position: [0. 0. 1.6]"</div>
+    <div class="eq">geom world = link world + geom centre (local)
+           = (0, 0, 1.6) + (0, 0, −0.4)
+           = (0, 0, 1.2)      ← matches "geom world position: [0. 0. 1.2]"</div>
+  </div></details>
+
+  <details class="math"><summary>Step 2 — turning in a flat picture: sin and cos</summary><div>
+    <p>When the hinge turns by angle θ, the geom's local arrow (0, −0.4) must be turned before we add it. In the side view (x right, z up), a turn about +y moves a local point (x, z) to:</p>
+    <div class="eq">x' =  x·cos θ + z·sin θ
+z' = −x·sin θ + z·cos θ</div>
+    <p><em>cos</em> and <em>sin</em> are just "how much of the arrow ends up pointing each way" after the turn. Put in the script's numbers, θ = 0.7 rad, local point (0, −0.4):</p>
+    <div class="eq">cos 0.7 = 0.765     sin 0.7 = 0.644
+x' =  0·0.765 + (−0.4)·0.644 = −0.258
+z' = −0·0.644 + (−0.4)·0.765 = −0.306
+geom world = (0, 1.6) + (−0.258, −0.306) = (−0.258, 1.294)   ✓</div>
+    <p>That matches your script's <code>geom world position: [-0.258 0. 1.294]</code> exactly.</p>
+  </div></details>
+
+  <details class="math"><summary>Step 3 — in 3D: rotation matrices (what xmat is)</summary><div>
+    <p>In 3D the same turn is written as a 3×3 grid of numbers, called a <dfn class="term" tabindex="0" data-def="A 3×3 table of numbers that turns arrows. Multiplying it by a vector rotates that vector. Its columns are where the x, y, z arrows end up.">rotation matrix</dfn>. For a turn θ about y:</p>
+    <div class="eq">          ┌  cos θ   0   sin θ ┐
+R_y(θ) =  │    0     1     0   │
+          └ −sin θ   0   cos θ ┘</div>
+    <p>The general rule MuJoCo applies down the whole tree:</p>
+    <div class="eq">child world position    = parent world position + R_parent · (child local pos)
+child world orientation = R_parent · R_local · R_joint(qpos)</div>
+    <p><strong>A neat fact:</strong> the columns of a rotation matrix are the body's own x, y, z arrows, written in world coordinates. Column 3 of the link's <code>xmat</code> is its z arrow:</p>
+    <div class="eq">(sin 0.7, 0, cos 0.7) = (0.644, 0, 0.765)   ← "link world axis z: [0.644 0. 0.765]"</div>
+  </div></details>
+
+  <details class="math"><summary>Step 4 — quaternions: four numbers for a turn (xquat)</summary><div>
+    <p>A rotation matrix uses 9 numbers. MuJoCo also stores turns as a <dfn class="term" tabindex="0" data-def="Four numbers [w, x, y, z] that describe a 3D turn: w = cos(angle/2), and (x, y, z) = sin(angle/2) × the axis direction.">quaternion</dfn>, which uses only 4. Think of it as "an axis plus how far to turn around it", packed cleverly:</p>
+    <div class="eq">quaternion = [ w, x, y, z ] = [ cos(θ/2),  sin(θ/2)·axis ]</div>
+    <p>For the link: θ = 0.7 rad about axis (0, 1, 0):</p>
+    <div class="eq">cos(0.35) = 0.9394    sin(0.35) = 0.3429
+xquat = [0.9394, 0, 0.3429, 0]      ← real MuJoCo: [0.93937 0. 0.34290 0.]</div>
+    <p>"No turn" is always <code>[1, 0, 0, 0]</code>. Quaternions show up again with ball and free joints. That's why those joints have 4 or 7 numbers in <code>qpos</code>.</p>
+  </div></details>
+
+  <details class="math"><summary>Gotcha — the XML uses degrees, qpos uses radians</summary><div>
+    <p>By default, MJCF reads angles written in the XML (like <code>euler="0 30 0"</code> or a joint <code>range</code>) as <strong>degrees</strong>. Everything in <code>data</code>, including <code>qpos</code>, is <strong>radians</strong>. You can change the XML unit with <code>&lt;compiler angle="radian"/&gt;</code>.</p>
+    <div class="eq">30° = 30 × π/180 = 0.524 rad</div>
+  </div></details>
+</section>
+
+<!-- ============ 7 ============ -->
+<section class="step" id="s-code">
+  <span class="lvl lvl-code">● Code</span>
+  <h2>7. Your script, line by line</h2>
+  <table>
+    <thead><tr><th style="width:48%">Code in <code>02_frames_and_axes.py</code></th><th>Physical meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>link_id = mj_name2id(model, mjOBJ_BODY, "link")</code></td><td>MuJoCo stores bodies by number. This asks "which number is the body called link?" (answer: 2).</td></tr>
+      <tr><td><code>model.body_pos[link_id]</code></td><td>The link's <strong>local</strong> position, exactly as written in the XML: (0, 0, 0.6) from the base. Part of the design.</td></tr>
+      <tr><td><code>model.jnt_axis[joint_id]</code></td><td>The hinge's turning line in the link's own frame: (0, 1, 0).</td></tr>
+      <tr><td><code>data.qpos[model.jnt_qposadr[joint_id]] = angle</code></td><td>Set the hinge angle. <code>jnt_qposadr</code> says where this joint's slot is inside <code>qpos</code>. Here it is slot 0.</td></tr>
+      <tr><td><code>mujoco.mj_forward(model, data)</code></td><td>Walk the chain of arrows and refresh every world position. Time does not move.</td></tr>
+      <tr><td><code>data.xpos[link_id]</code></td><td>The link's <strong>world</strong> position, in metres.</td></tr>
+      <tr><td><code>data.xmat[link_id].reshape(3,3)[:, 2]</code></td><td><code>xmat</code> is stored as 9 numbers in a row. <code>reshape</code> turns them into a 3×3 grid, and <code>[:, 2]</code> takes column 3: the link's z arrow in world coordinates.</td></tr>
+      <tr><td><code>data.geom_xpos[geom_id]</code></td><td>The capsule centre's <strong>world</strong> position.</td></tr>
+    </tbody>
+  </table>
+<pre><code><span class="c"># Your output, with meanings added (all world frame, metres)</span>
+θ = 0.00 rad:  link xpos = [ 0.     0.  1.6  ]   <span class="c"># 1 + 0.6 straight up</span>
+               link z    = [ 0.     0.  1.   ]   <span class="c"># link's z arrow points straight up</span>
+               geom xpos = [ 0.     0.  1.2  ]   <span class="c"># 0.4 m below the link</span>
+θ = 0.70 rad:  link xpos = [ 0.     0.  1.6  ]   <span class="c"># unchanged! the hinge is AT the link origin</span>
+               link z    = [ 0.644  0.  0.765]   <span class="c"># tilted 0.7 rad toward +x</span>
+               geom xpos = [-0.258  0.  1.294]   <span class="c"># hanging part swung toward −x</span></code></pre>
+  <div class="card analogy"><strong>Why didn't the link move when the hinge turned?</strong> A hinge spins its body around the body's own origin. The link's origin <em>is</em> the hinge point, so it stays put. Only the things hanging off it (the capsule) move. It's like a door: the hinge itself doesn't move, the far edge does.</div>
+</section>
+
+<!-- ============ 8 ============ -->
+<section class="step" id="s-check">
+  <span class="lvl lvl-plain">● Check yourself</span>
+  <h2>8. Your lesson's three questions</h2>
+  <div class="predict">
+    <h4>Q1. base pos changes from "0 0 1" to "0 0 2". What is the link's world position (hinge at 0)?</h4>
+    <textarea aria-label="Answer to question 1"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>(0, 0, 2.6).</strong> The link's local position is still 0.6 above the base, and the base is now 2 m up. The link's <code>model.body_pos</code> doesn't change at all.</p></div>
+  </div>
+  <div class="predict">
+    <h4>Q2. The axis changes from "0 1 0" to "1 0 0". Which way does the rod swing now?</h4>
+    <textarea aria-label="Answer to question 2"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>It swings in the <strong>y–z plane</strong>, toward or away from you, instead of left and right. At +0.7 rad the capsule centre is at <strong>(0, +0.258, 1.294)</strong>. In a pure side view the rod seems to just get shorter, because it is leaning toward you.</p></div>
+  </div>
+  <div class="predict">
+    <h4>Q3. The link's local pos changes from "0 0 0.6" to "0 0 1.2". Does the link move in the world?</h4>
+    <textarea aria-label="Answer to question 3"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>Yes</strong>, up to (0, 0, 2.2). Changing a local position moves that body <em>and all its children</em> in the world. Changing it never changes <code>nq</code>, <code>nbody</code> or <code>njnt</code>.</p></div>
+  </div>
+
+  <h3>Glossary — new words from this page</h3>
+  <dl class="glossary">
+    <dt>frame</dt><dd>An origin point plus x, y, z arrows. The world has one; every body has one.</dd>
+    <dt>local position</dt><dd>Measured from the parent body's frame. What you write in the XML <code>pos</code>.</dd>
+    <dt>world position</dt><dd>Measured from the fixed world origin. Computed by MuJoCo.</dd>
+    <dt>body_pos / geom_pos</dt><dd>Local positions stored in the model.</dd>
+    <dt>xpos / geom_xpos</dt><dd>World positions stored in the data, refreshed by mj_forward.</dd>
+    <dt>orientation, xmat, xquat</dt><dd>Which way a body faces in the world: as a 3×3 rotation matrix, or as a 4-number quaternion [w, x, y, z].</dd>
+    <dt>axis / jnt_axis</dt><dd>The line a hinge turns around, written in the body's local frame.</dd>
+    <dt>right-hand rule</dt><dd>Thumb along the axis; fingers curl in the positive direction.</dd>
+    <dt>mj_name2id</dt><dd>Turns a name like "link" into the ID number used to index arrays.</dd>
+  </dl>
+  <footer class="next">
+    <a href="../01-mjcf-hierarchy/01-mjcf-hierarchy-explained.html">← Lesson 01 explained</a>
+    <a href="../03-state-and-stepping/03-state-and-stepping-explained.html">Next: Lesson 03 explained — state and stepping →</a>
+  </footer>
+</section>
+</main>
+
+<script>
+// ---- shared helpers (theme, ladder, predictions, canvas) ----
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+(function theme(){
+  const root=document.documentElement, saved=localStorage.getItem('mjx-theme');
+  root.dataset.theme = saved || (matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');
+  const b=document.getElementById('themeBtn');
+  const label=()=>b.textContent = root.dataset.theme==='dark'?'☀ Light':'☾ Dark';
+  label();
+  b.addEventListener('click',()=>{root.dataset.theme=root.dataset.theme==='dark'?'light':'dark';localStorage.setItem('mjx-theme',root.dataset.theme);label();window.dispatchEvent(new Event('themechange'));});
+})();
+(function ladder(){
+  const links=[...document.querySelectorAll('.ladder a')];
+  const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){links.forEach(l=>l.classList.toggle('on',l.getAttribute('href')==='#'+e.target.id));}}),{rootMargin:'-40% 0px -55% 0px'});
+  document.querySelectorAll('section.step').forEach(s=>io.observe(s));
+})();
+document.querySelectorAll('.predict').forEach(p=>{
+  const ta=p.querySelector('textarea'), lock=p.querySelector('.lock'), skip=p.querySelector('.skip');
+  if(!ta||!lock)return;
+  const upd=()=>lock.disabled=!ta.value.trim();
+  ta.addEventListener('input',upd); upd();
+  lock.addEventListener('click',()=>{p.classList.add('revealed');lock.textContent='Guess locked ✓';lock.disabled=true;ta.readOnly=true;});
+  skip&&skip.addEventListener('click',()=>{p.classList.add('revealed');});
+});
+function css(name){return getComputedStyle(document.documentElement).getPropertyValue(name).trim();}
+function fit(canvas,aspect){
+  const dpr=Math.min(devicePixelRatio||1,2), w=canvas.clientWidth, h=Math.round(w*aspect);
+  canvas.style.height=h+'px'; canvas.width=w*dpr; canvas.height=h*dpr;
+  const ctx=canvas.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); return {ctx,w,h};
+}
+function arrow(ctx,x1,y1,x2,y2,color,width=2,head=8){
+  const a=Math.atan2(y2-y1,x2-x1); ctx.strokeStyle=color; ctx.fillStyle=color; ctx.lineWidth=width;
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(x2,y2);ctx.lineTo(x2-head*Math.cos(a-.4),y2-head*Math.sin(a-.4));ctx.lineTo(x2-head*Math.cos(a+.4),y2-head*Math.sin(a+.4));ctx.closePath();ctx.fill();
+}
+function text(ctx,s,x,y,color,size=12,align='left',weight=600){ctx.fillStyle=color;ctx.font=`${weight} ${size}px ui-monospace,Menlo,monospace`;ctx.textAlign=align;ctx.textBaseline='middle';ctx.fillText(s,x,y);}
+function flash(el){if(!el)return;el.classList.remove('flash');void el.offsetWidth;el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),600);}
+function fmt(v,d=3){return (v>=0?'+':'')+v.toFixed(d);}
+
+// ---------- Lesson 2 page logic ----------
+// MuJoCo convention used everywhere: rotation by +th about +y maps local (x, z) to
+// (x cos th + z sin th, -x sin th + z cos th). Side views look along +y (into the screen).
+function rotY(x, z, th) { return [x * Math.cos(th) + z * Math.sin(th), -x * Math.sin(th) + z * Math.cos(th)]; }
+const f2 = v => (Math.abs(v) < 5e-4 ? 0 : v).toFixed(3);
+const vec = a => '(' + a.map(f2).join(', ') + ')';
+
+/* ---------- tiny 3D helper: orbit camera + projection ---------- */
+function make3D(cv, aspect, draw, cam) {
+  const st = Object.assign({ yaw: 0.6, pitch: 0.35, s: 0, cx: 0, cy: 0, center: [0, 0, 0.9] }, cam); let g = fit(cv, aspect);
+  st.P = p => {
+    const x = p[0] - st.center[0], y = p[1] - st.center[1], z = p[2] - st.center[2];
+    const x1 = x * Math.cos(st.yaw) + y * Math.sin(st.yaw), y1 = -x * Math.sin(st.yaw) + y * Math.cos(st.yaw);
+    const z2 = y1 * Math.sin(st.pitch) + z * Math.cos(st.pitch);
+    return [g.w / 2 + x1 * st.s, g.h / 2 - z2 * st.s];
+  };
+  st.redraw = () => { st.s = st.scaleFn ? st.scaleFn(g) : g.h / 2.6; draw(g.ctx, g.w, g.h, st); };
+  let drag = null;
+  cv.addEventListener('pointerdown', e => { drag = [e.clientX, e.clientY, st.yaw, st.pitch]; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointermove', e => { if (!drag) return; st.yaw = drag[2] + (e.clientX - drag[0]) * 0.01; st.pitch = Math.max(-1.4, Math.min(1.4, drag[3] + (e.clientY - drag[1]) * 0.01)); st.redraw(); });
+  cv.addEventListener('pointerup', () => drag = null);
+  addEventListener('resize', () => { g = fit(cv, aspect); st.redraw(); }); addEventListener('themechange', () => st.redraw());
+  return st;
+}
+function line3(ctx, P, a, b, color, w = 2, dash) { const [x1, y1] = P(a), [x2, y2] = P(b); ctx.strokeStyle = color; ctx.lineWidth = w; ctx.lineCap = 'round'; ctx.setLineDash(dash || []); ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.setLineDash([]); }
+function arrow3(ctx, P, a, b, color, w = 2, label) { const [x1, y1] = P(a), [x2, y2] = P(b); arrow(ctx, x1, y1, x2, y2, color, w, 7); if (label) text(ctx, label, x2 + (x2 - x1) * 0.12, y2 + (y2 - y1) * 0.12, color, 11, 'center'); }
+function frame3(ctx, P, o, R, len, alpha, labels) { // R columns = body axes in world
+  ctx.globalAlpha = alpha;
+  [['--x', 'x'], ['--y', 'y'], ['--z', 'z']].forEach(([c, n], i) => arrow3(ctx, P, o, [o[0] + R[0][i] * len, o[1] + R[1][i] * len, o[2] + R[2][i] * len], css(c), 2.5, labels ? n : ''));
+  ctx.globalAlpha = 1;
+}
+const Ry = t => [[Math.cos(t), 0, Math.sin(t)], [0, 1, 0], [-Math.sin(t), 0, Math.cos(t)]];
+function floor3(ctx, P, n = 4, step = 0.5) { ctx.strokeStyle = css('--grid'); ctx.lineWidth = 1; for (let i = -n; i <= n; i++) { line3(ctx, P, [i * step, -n * step, 0], [i * step, n * step, 0], css('--grid'), 1); line3(ctx, P, [-n * step, i * step, 0], [n * step, i * step, 0], css('--grid'), 1); } }
+
+/* ---------- Section 1: tray ---------- */
+(() => {
+  const cv = document.getElementById('cvT'); let g = fit(cv, 0.72);
+  const $ = id => document.getElementById(id), LOC = [0.30, 0.05];
+  const S = () => g.w / 3.6, W = (x, z) => [14 + x * S(), g.h - 16 - z * S()];
+  function draw() {
+    const tx = +$('tTx').value, tz = +$('tTz').value, tr = +$('tTr').value * Math.PI / 180, c = g.ctx;
+    $('oTx').textContent = tx.toFixed(2) + ' m'; $('oTz').textContent = tz.toFixed(2) + ' m'; $('oTr').textContent = $('tTr').value + '°';
+    c.clearRect(0, 0, g.w, g.h);
+    c.strokeStyle = css('--grid'); c.lineWidth = 1; for (let x = 0; x <= 3.5; x += 0.5) { const [a] = W(x, 0); c.beginPath(); c.moveTo(a, 0); c.lineTo(a, g.h); c.stroke(); }
+    for (let z = 0; z <= 2.5; z += 0.5) { const [, b] = W(0, z); c.beginPath(); c.moveTo(0, b); c.lineTo(g.w, b); c.stroke(); }
+    const [ox, oy] = W(0, 0); c.strokeStyle = css('--dim'); c.lineWidth = 2; c.beginPath(); c.moveTo(0, oy); c.lineTo(g.w, oy); c.stroke();
+    arrow(c, ox, oy, ox + 40, oy, css('--x'), 2.5); arrow(c, ox, oy, ox, oy - 40, css('--z'), 2.5);
+    text(c, 'room corner = world origin', ox + 48, oy - 9, css('--dim'), 10);
+    // tray
+    const [tX, tY] = W(tx, tz), ends = [rotY(-0.4, 0, tr), rotY(0.4, 0, tr)];
+    c.strokeStyle = css('--dim'); c.setLineDash([4, 4]); c.lineWidth = 1.5; c.beginPath(); c.moveTo(tX, tY); c.lineTo(tX, oy); c.stroke(); c.setLineDash([]);
+    c.strokeStyle = css('--teal'); c.lineWidth = 8; c.lineCap = 'round'; c.beginPath();
+    c.moveTo(...W(tx + ends[0][0], tz + ends[0][1])); c.lineTo(...W(tx + ends[1][0], tz + ends[1][1])); c.stroke();
+    const ax = rotY(1, 0, tr), az = rotY(0, 1, tr);
+    arrow(c, tX, tY, tX + ax[0] * 30, tY - ax[1] * 30, css('--x'), 2); arrow(c, tX, tY, tX + az[0] * 30, tY - az[1] * 30, css('--z'), 2);
+    text(c, 'tray frame', tX - 8, tY + 18, css('--teal'), 10, 'right');
+    // phone
+    const off = rotY(LOC[0], LOC[1], tr), wx = tx + off[0], wz = tz + off[1], [pX, pY] = W(wx, wz);
+    c.setLineDash([3, 3]); arrow(c, tX, tY, pX, pY, css('--yellow'), 1.5, 6); c.setLineDash([]);
+    c.save(); c.translate(pX, pY); c.rotate(tr); c.fillStyle = css('--orange'); c.fillRect(-9, -16, 18, 28); c.restore();
+    text(c, 'phone', pX + 14, pY - 18, css('--orange'), 11);
+    $('tWv').textContent = '(' + wx.toFixed(2) + ', ' + wz.toFixed(2) + ')'; flash($('tW'));
+  }
+  ['tTx', 'tTz', 'tTr'].forEach(i => $(i).addEventListener('input', draw));
+  let drag = false;
+  const toWorld = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left - 14) / S(), (g.h - 16 - (e.clientY - r.top)) / S()]; };
+  cv.addEventListener('pointerdown', e => { drag = true; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointermove', e => { if (!drag) return; const [x, z] = toWorld(e); $('tTx').value = Math.max(0.3, Math.min(3.2, x)); $('tTz').value = Math.max(0.2, Math.min(1.6, z)); draw(); });
+  cv.addEventListener('pointerup', () => drag = false);
+  addEventListener('resize', () => { g = fit(cv, 0.72); draw(); }); addEventListener('themechange', draw);
+  draw();
+})();
+
+/* ---------- Section 2: 3D frames ---------- */
+(() => {
+  const cv = document.getElementById('cv3'), s = document.getElementById('s3');
+  const v = make3D(cv, 0.5, (ctx, w, h, st) => {
+    ctx.clearRect(0, 0, w, h); floor3(ctx, st.P, 3, 0.5);
+    frame3(ctx, st.P, [0, 0, 0], Ry(0), 0.6, 0.45, true); text(ctx, 'world', ...st.P([0, 0, -0.12]), css('--dim'), 11, 'center');
+    const o = [0.9, 0, 0.6], th = +s.value;
+    line3(ctx, st.P, [0, 0, 0], o, css('--dim'), 1, [3, 4]);
+    frame3(ctx, st.P, o, Ry(th), 0.5, 1, true); text(ctx, 'body', ...st.P([o[0], o[1], o[2] + 0.62]), css('--bright'), 11, 'center');
+    document.getElementById('o3').textContent = th.toFixed(2) + ' rad';
+  }, { yaw: 0.55, pitch: 0.3, center: [0.45, 0, 0.4] });
+  v.scaleFn = g => g.h / 1.6;
+  s.addEventListener('input', v.redraw);
+  document.getElementById('b3side').onclick = () => { v.yaw = 0; v.pitch = 0; v.redraw(); };
+  document.getElementById('b3iso').onclick = () => { v.yaw = 0.55; v.pitch = 0.3; v.redraw(); };
+  v.redraw();
+})();
+
+/* ---------- Section 4: chain of arrows ---------- */
+(() => {
+  const cv = document.getElementById('cvC'); let g = fit(cv, 1.0);
+  const $ = id => document.getElementById(id); let prog = 3, anim = 0;
+  const D = { cBz: 1, cLz: 0.6, cTh: 0, cBr: 0 };
+  function draw() {
+    const bz = +$('cBz').value, lz = +$('cLz').value, th = +$('cTh').value, br = +$('cBr').value * Math.PI / 180, c = g.ctx;
+    $('oBz').textContent = bz.toFixed(2) + ' m'; $('oLz').textContent = lz.toFixed(2) + ' m'; $('oTh').textContent = th.toFixed(2) + ' rad'; $('oBr').textContent = $('cBr').value + '°';
+    const s = (g.h - 30) / 3.4, W = (x, z) => [g.w / 2 + x * s, g.h - 14 - (z + 0.35) * s];
+    // forward kinematics, exactly as mj_forward would do it in this plane
+    const base = [0, bz];
+    const lo = rotY(0, lz, br), link = [base[0] + lo[0], base[1] + lo[1]];
+    const go = rotY(0, -0.4, br + th), geom = [link[0] + go[0], link[1] + go[1]];
+    const tip = rotY(0, -0.8, br + th), zax = rotY(0, 1, br + th);
+    c.clearRect(0, 0, g.w, g.h);
+    c.strokeStyle = css('--grid'); c.lineWidth = 1;
+    for (let z = 0; z <= 3; z += 0.5) { const [, y] = W(0, z); c.beginPath(); c.moveTo(0, y); c.lineTo(g.w, y); c.stroke(); text(c, z.toFixed(1), 4, y - 7, css('--dim'), 9); }
+    for (let x = -1.5; x <= 1.5; x += 0.5) { const [X] = W(x, 0); c.beginPath(); c.moveTo(X, 0); c.lineTo(X, g.h); c.stroke(); }
+    const O = W(0, 0); arrow(c, ...O, O[0] + 34, O[1], css('--x'), 2); arrow(c, ...O, O[0], O[1] - 34, css('--z'), 2); text(c, 'world', O[0] + 6, O[1] + 10, css('--dim'), 10);
+    // base box (half sizes 0.18 x 0.08), tilted by br
+    const B = W(...base); c.save(); c.translate(...B); c.rotate(br); c.fillStyle = css('--surface'); c.strokeStyle = css('--dim'); c.lineWidth = 1.5; c.fillRect(-0.18 * s, -0.08 * s, 0.36 * s, 0.16 * s); c.strokeRect(-0.18 * s, -0.08 * s, 0.36 * s, 0.16 * s); c.restore();
+    // capsule
+    const L = W(...link); c.strokeStyle = css('--teal'); c.globalAlpha = .35; c.lineWidth = 0.16 * s; c.lineCap = 'round'; c.beginPath(); c.moveTo(...L); c.lineTo(...W(link[0] + tip[0], link[1] + tip[1])); c.stroke(); c.globalAlpha = 1;
+    // chain arrows (animated)
+    const seg = (a, b, col, k, lab) => { const t = Math.max(0, Math.min(1, prog - k)); if (t <= 0) return; const A = W(...a), Bp = W(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t); arrow(c, ...A, ...Bp, col, 3, 9); if (t >= 1 && lab) text(c, lab, (A[0] + Bp[0]) / 2 + 10, (A[1] + Bp[1]) / 2, col, 11); };
+    seg([0, 0], base, css('--orange'), 0, '① base pos');
+    seg(base, link, css('--teal'), 1, '② link pos');
+    seg(link, geom, css('--purple'), 2, '③ geom centre');
+    if (prog >= 3) { c.setLineDash([6, 5]); arrow(c, ...O, ...W(...geom), css('--bright'), 1.5, 8); c.setLineDash([]); }
+    // link frame
+    const zx = rotY(0, 1, br + th), xx = rotY(1, 0, br + th);
+    arrow(c, ...L, L[0] + xx[0] * 26, L[1] - xx[1] * 26, css('--x'), 2, 6); arrow(c, ...L, L[0] + zx[0] * 26, L[1] - zx[1] * 26, css('--z'), 2, 6);
+    c.fillStyle = css('--purple'); c.beginPath(); c.arc(...L, 4, 0, 7); c.fill();
+    c.fillStyle = css('--bright'); c.beginPath(); c.arc(...W(...geom), 4, 0, 7); c.fill();
+    $('rLv').textContent = vec([link[0], 0, link[1]]); $('rGv').textContent = vec([geom[0], 0, geom[1]]); $('rZv').textContent = vec([zax[0], 0, zax[1]]);
+    const rotNote = (br || th) ? '\n           (② and ③ are first turned to match their parent\'s current direction)' : '';
+    $('cEq').textContent =
+      'geom world = ① base pos     + ② link pos   + ③ geom centre' + rotNote + '\n' +
+      '           = ' + vec([0, 0, bz]) + ' + ' + vec([lo[0], 0, lo[1]]) + ' + ' + vec([go[0], 0, go[1]]) + '\n' +
+      '           = ' + vec([geom[0], 0, geom[1]]);
+  }
+  Object.keys(D).forEach(k => $(k).addEventListener('input', () => { prog = 3; draw(); }));
+  $('cScript').onclick = () => { Object.entries(D).forEach(([k, v]) => $(k).value = v); $('cTh').value = 0.7; prog = 3; draw(); ['rL', 'rG', 'rZ'].forEach(i => flash($(i))); };
+  $('cReset').onclick = () => { Object.entries(D).forEach(([k, v]) => $(k).value = v); prog = 3; draw(); };
+  $('cPlay').onclick = () => { cancelAnimationFrame(anim); if (RM) { prog = 3; draw(); return; } const t0 = performance.now(); const f = ts => { prog = (ts - t0) / 900; draw(); if (prog < 3) anim = requestAnimationFrame(f); else { prog = 3; draw(); } }; anim = requestAnimationFrame(f); };
+  addEventListener('resize', () => { g = fit(cv, 1.0); draw(); }); addEventListener('themechange', draw);
+  draw();
+})();
+
+/* ---------- Section 5: joint axis in 3D ---------- */
+(() => {
+  const cv = document.getElementById('cvJ'), sl = document.getElementById('sJ');
+  const AX = [[0, 1, 0], [1, 0, 0], [0, 0, 1]], UV = [[[0, 0, 1], [1, 0, 0]], [[0, 1, 0], [0, 0, 1]], [[1, 0, 0], [0, 1, 0]]];
+  let ax = 0, anim = 0;
+  const add = (a, b, k = 1) => [a[0] + b[0] * k, a[1] + b[1] * k, a[2] + b[2] * k];
+  function rod(v, a, t) { // Rodrigues rotation of v about unit axis a by t
+    const c = Math.cos(t), s = Math.sin(t), d = a[0] * v[0] + a[1] * v[1] + a[2] * v[2];
+    const cr = [a[1] * v[2] - a[2] * v[1], a[2] * v[0] - a[0] * v[2], a[0] * v[1] - a[1] * v[0]];
+    return [0, 1, 2].map(i => v[i] * c + cr[i] * s + a[i] * d * (1 - c));
+  }
+  const v = make3D(cv, 0.55, (ctx, w, h, st) => {
+    const th = +sl.value, a = AX[ax], O = [0, 0, 1.6], P = st.P;
+    document.getElementById('oJ').textContent = th.toFixed(2) + ' rad';
+    ctx.clearRect(0, 0, w, h); floor3(ctx, P, 2, 0.5);
+    frame3(ctx, P, [0, 0, 0], Ry(0), 0.35, 0.5, true);
+    // base box outline
+    const bx = [[-.18, -.18], [.18, -.18], [.18, .18], [-.18, .18]];
+    [0.92, 1.08].forEach(z => bx.forEach((p, i) => line3(ctx, P, [p[0], p[1], z], [bx[(i + 1) % 4][0], bx[(i + 1) % 4][1], z], css('--dim'), 1.2)));
+    bx.forEach(p => line3(ctx, P, [p[0], p[1], .92], [p[0], p[1], 1.08], css('--dim'), 1.2));
+    line3(ctx, P, [0, 0, 1.08], O, css('--dim'), 1, [2, 3]);
+    // hanging rest pose ghost
+    line3(ctx, P, O, [0, 0, 0.8], css('--dim'), 6, [2, 7]); text(ctx, 'rest pose (qpos = 0)', ...P([0.08, 0, 0.72]), css('--dim'), 10);
+    // axis line
+    line3(ctx, P, add(O, a, -0.55), add(O, a, 0.55), css('--purple'), 2.5, [8, 6]);
+    arrow3(ctx, P, add(O, a, 0.45), add(O, a, 0.6), css('--purple'), 2.5, 'axis');
+    // positive-direction curl
+    const [u, vv] = UV[ax]; let prev = null;
+    for (let k = 0; k <= 24; k++) { const f = k / 24 * 1.6, p = add(add(O, u, 0.22 * Math.cos(f)), vv, 0.22 * Math.sin(f)); if (prev) line3(ctx, P, prev, p, css('--yellow'), 2); prev = p; }
+    const f1 = 1.6, f0 = 1.45, pA = add(add(O, u, .22 * Math.cos(f0)), vv, .22 * Math.sin(f0)), pB = add(add(O, u, .22 * Math.cos(f1)), vv, .22 * Math.sin(f1));
+    arrow3(ctx, P, pA, pB, css('--yellow'), 2); text(ctx, '+', ...P(add(add(O, u, .3 * Math.cos(.8)), vv, .3 * Math.sin(.8))), css('--yellow'), 14, 'center', 800);
+    // rotated capsule + stripe so a spin about its own length is visible
+    const end = add(O, rod([0, 0, -0.8], a, th)), cen = add(O, rod([0, 0, -0.4], a, th));
+    line3(ctx, P, O, end, css('--teal'), 14);
+    line3(ctx, P, add(O, rod([0.0, 0, -0.15], a, th)), add(O, rod([0.09, 0, -0.15], a, th)), css('--orange'), 4);
+    line3(ctx, P, add(O, rod([0.0, 0, -0.65], a, th)), add(O, rod([0.09, 0, -0.65], a, th)), css('--orange'), 4);
+    const C = P(cen); ctx.fillStyle = css('--bright'); ctx.beginPath(); ctx.arc(C[0], C[1], 4, 0, 7); ctx.fill();
+    const Op = P(O); ctx.fillStyle = css('--purple'); ctx.beginPath(); ctx.arc(Op[0], Op[1], 5, 0, 7); ctx.fill();
+    document.getElementById('jGv').textContent = vec(cen);
+  }, { yaw: 0.6, pitch: 0.28, center: [0, 0, 0.95] });
+  v.scaleFn = g => g.h / 2.1;
+  sl.addEventListener('input', v.redraw);
+  document.querySelectorAll('.axbtn').forEach(b => b.onclick = () => { ax = +b.dataset.ax; document.querySelectorAll('.axbtn').forEach(x => x.classList.toggle('primary', x === b)); v.redraw(); flash(document.getElementById('jG')); });
+  document.getElementById('jPlay').onclick = () => {
+    cancelAnimationFrame(anim); const t0 = performance.now();
+    const f = ts => { const t = (ts - t0) / 1000; sl.value = (1.0 * Math.sin(t * 2.2)).toFixed(2); v.redraw(); if (t < 6 && !RM) anim = requestAnimationFrame(f); };
+    anim = requestAnimationFrame(f);
+  };
+  v.redraw();
+})();
+
+</script>
+</body>
+</html>

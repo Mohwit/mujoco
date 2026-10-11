@@ -1,0 +1,439 @@
+<div class="lesson-content xp" id="lesson6">
+  <header class="lesson-header-block">
+    <p class="lesson-num-label">Lesson 06</p>
+    <h1 class="lesson-title">Sensors and Observation</h1>
+    <p class="lesson-subtitle">A real robot cannot peek inside the simulator. It only knows what its sensors report. In this lesson you add five sensors to the course pendulum, read them from one array, and pack them into the short list of numbers a control policy sees.</p>
+    <p class="lesson-legend"><dfn class="term" tabindex="0" data-def="Technical words look like this. Hover or focus one to read a plain-English definition.">Dotted words</dfn> show a definition on hover. <span class="lg-math">Maths boxes</span> are optional. <span class="lg-pred">Predict boxes</span> hide the answer until you guess.</p>
+  </header>
+  <nav class="lesson-toc" aria-label="Sections in lesson 6"><a href="#l6-s-idea">Dashboard</a><a href="#l6-s-words">Sensor block</a><a href="#l6-s-read">Reading it</a><a href="#l6-s-acc">Accelerometer</a><a href="#l6-s-obs">Observation</a><a href="#l6-s-math">Maths</a><a href="#l6-s-code">The script</a><a href="#l6-s-check">Check yourself</a><a href="#l6-recap">Recap</a></nav>
+
+<section class="step" id="l6-s-idea">
+  <span class="lvl lvl-plain">Plain words</span> <span class="lvl lvl-pic">Picture</span>
+  <h2>1. A robot only knows what its sensors tell it</h2>
+  <p>In lessons 3 and 5 you read the pendulum's angle straight from MuJoCo's memory. A real robot cannot do that. It has no memory of the true state to look at.</p>
+  <p>A real robot has sensors instead. Each sensor measures one thing and reports a number. The robot's brain only ever sees those numbers.</p>
+  <div class="card analogy"><strong>Analogy: a car dashboard.</strong> Each gauge measures one thing: speed, engine revs, fuel, temperature. All gauges sit together on one panel. The driver never looks at the engine. The driver looks at the panel and decides what to do.</div>
+  <div class="grid3">
+    <div class="card"><span class="callout-title" style="color:var(--teal)">Gauge = one sensor</span>One sensor measures one quantity. Some give one number (an angle). Some give three (a position x, y, z).</div>
+    <div class="card"><span class="callout-title" style="color:var(--orange)">Panel = one array</span>MuJoCo puts every sensor's numbers side by side in one long list. Each sensor owns a fixed slice of that list.</div>
+    <div class="card"><span class="callout-title" style="color:var(--purple)">Driver = the policy</span>The controller (later, a learned policy) reads a few of those numbers and picks the motor command.</div>
+  </div>
+
+  <h3>Watch the panel fill up</h3>
+  <p>Press <kbd>Play</kbd>. The pendulum starts at 0.7 rad and swings freely. Each gauge on the right lights up in turn. At the same moment, the cells of the long list that belong to it light up too. Click a sensor name to keep one lit.</p>
+  <div class="card">
+    <canvas id="l6cvDash" role="img" aria-label="Pendulum, five sensor gauges, and the sensordata list with each sensor's slice highlighted"></canvas>
+    <div class="btnrow">
+      <button class="primary" id="l6dPlay" type="button">Play</button>
+      <button id="l6dReset" type="button">Reset to 0.7 rad</button>
+      <span style="flex-basis:100%;height:0"></span>
+      <button class="l6dPick" type="button" data-k="0">angle</button>
+      <button class="l6dPick" type="button" data-k="1">spin</button>
+      <button class="l6dPick" type="button" data-k="2">motor_force</button>
+      <button class="l6dPick" type="button" data-k="3">tip_pos</button>
+      <button class="l6dPick" type="button" data-k="4">tip_acc</button>
+      <button class="l6dPick" type="button" data-k="-1">cycle all</button>
+    </div>
+    <p class="caption">This page runs its own small copy of the pendulum and sensor maths. It was checked against real MuJoCo 3.15 with <code>check_browser_match.py</code>: every one of the 9 numbers agrees to better than 1e-13 over 5000 steps (largest gap 3.9e-14). The motor is off here (ctrl = 0).</p>
+  </div>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">Rule to remember</span><strong>Sensors are the robot's only window.</strong> Whatever your controller reads should come from sensors, because that is all a real robot will have.</div>
+  <p class="newwords">New words: <span class="chip">sensor</span><span class="chip">policy</span><span class="chip">observation</span></p>
+</section>
+
+<section class="step" id="l6-s-words">
+  <span class="lvl lvl-words">MuJoCo words</span>
+  <h2>2. The sensor block: five gauges in the XML</h2>
+  <p>You declare sensors in the XML, inside a <code>&lt;sensor&gt;</code> block. MuJoCo then fills one array, <dfn class="term" tabindex="0" data-def="data.sensordata: one flat array of floats in MjData holding every sensor's current reading, sensor after sensor, in XML order.">sensordata</dfn>, with all their readings.</p>
+  <p>First, the pendulum needs a place to mount sensors on. A <dfn class="term" tabindex="0" data-def="A site is a massless marker point with its own frame, attached to a body. It has no effect on physics. Sensors and tools are often mounted on sites.">site</dfn> is a weightless marker point fixed to a body. We put one called <code>tip</code> at the rod's end, <code>pos="0 0 -1"</code> in the pendulum's frame, because the rod is 1 m long.</p>
+  <div class="grid2">
+<pre><code><span class="t">&lt;body</span> <span class="a">name</span>=<span class="s">"pendulum"</span> <span class="a">pos</span>=<span class="s">"0 0 1"</span><span class="t">&gt;</span>
+  <span class="t">&lt;joint</span> <span class="a">name</span>=<span class="s">"hinge"</span> <span class="a">axis</span>=<span class="s">"0 1 0"</span><span class="t">/&gt;</span>
+  <span class="t">&lt;geom</span> <span class="a">type</span>=<span class="s">"capsule"</span> <span class="a">fromto</span>=<span class="s">"0 0 0 0 0 -1"</span> <span class="a">size</span>=<span class="s">"0.08"</span><span class="t">/&gt;</span>
+  <span class="t">&lt;site</span> <span class="a">name</span>=<span class="s">"tip"</span> <span class="a">pos</span>=<span class="s">"0 0 -1"</span><span class="t">/&gt;</span>   <span class="c">&lt;!-- rod end --&gt;</span>
+<span class="t">&lt;/body&gt;</span>
+<span class="t">&lt;motor</span> <span class="a">name</span>=<span class="s">"motor"</span> <span class="a">joint</span>=<span class="s">"hinge"</span> <span class="a">gear</span>=<span class="s">"100"</span> <span class="a">ctrlrange</span>=<span class="s">"-1 1"</span> <span class="a">ctrllimited</span>=<span class="s">"true"</span><span class="t">/&gt;</span>
+
+<span class="t">&lt;sensor&gt;</span>
+  <span class="t">&lt;jointpos</span>      <span class="a">name</span>=<span class="s">"angle"</span>        <span class="a">joint</span>=<span class="s">"hinge"</span><span class="t">/&gt;</span>
+  <span class="t">&lt;jointvel</span>      <span class="a">name</span>=<span class="s">"spin"</span>         <span class="a">joint</span>=<span class="s">"hinge"</span><span class="t">/&gt;</span>
+  <span class="t">&lt;actuatorfrc</span>   <span class="a">name</span>=<span class="s">"motor_force"</span>  <span class="a">actuator</span>=<span class="s">"motor"</span><span class="t">/&gt;</span>
+  <span class="t">&lt;framepos</span>      <span class="a">name</span>=<span class="s">"tip_pos"</span>  <span class="a">objtype</span>=<span class="s">"site"</span> <span class="a">objname</span>=<span class="s">"tip"</span><span class="t">/&gt;</span>
+  <span class="t">&lt;accelerometer</span> <span class="a">name</span>=<span class="s">"tip_acc"</span>      <span class="a">site</span>=<span class="s">"tip"</span><span class="t">/&gt;</span>
+<span class="t">&lt;/sensor&gt;</span></code></pre>
+<pre><code><span class="c"># fixed facts about the sensors live in the MODEL</span>
+model.nsensor        <span class="c"># 5   how many sensors</span>
+model.nsensordata    <span class="c"># 9   how long sensordata is</span>
+model.sensor_adr     <span class="c"># [0 1 2 3 6]  where each slice starts</span>
+model.sensor_dim     <span class="c"># [1 1 1 3 3]  how many numbers each owns</span>
+model.sensor_type    <span class="c"># [9 10 15 26 1] type codes</span>
+
+<span class="c"># the readings live in the DATA, after mj_forward / mj_step</span>
+data.sensordata      <span class="c"># shape (9,)</span>
+data.sensordata[3:6] <span class="c"># tip_pos: x, y, z</span>
+data.sensor(<span class="s">"tip_pos"</span>).data   <span class="c"># same 3 numbers, by name</span></code></pre>
+  </div>
+  <p>The motor is exactly the lesson 5 motor: <code>ctrl</code> is a throttle from -1 to +1, and <code>gear="100"</code> turns it into up to 100 N m at the hinge.</p>
+
+  <div class="predict">
+    <h3>Predict: five sensors are declared. How long is <code>data.sensordata</code>? And which index holds the tip's z (height)?</h3>
+    <textarea aria-label="Your prediction for the length of sensordata and the tip z index"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p>It has <strong>9</strong> numbers, not 5. Three sensors give one number each. <code>tip_pos</code> and <code>tip_acc</code> give three each: 1 + 1 + 1 + 3 + 3 = 9.</p>
+      <p>The tip z is at <strong>index 5</strong>. <code>tip_pos</code> starts at address 3, so x is 3, y is 4 and z is 5. MuJoCo printed <code>nsensordata 9</code> and <code>sensor_adr [0 1 2 3 6]</code>.</p>
+    </div>
+  </div>
+
+  <h3>Which XML line owns which cells</h3>
+  <p>Sensors are packed in the order you wrote them. Each one starts where the last one ended.</p>
+  <table>
+    <thead><tr><th>id</th><th>XML element</th><th>What it measures</th><th>dim</th><th>Frame</th><th>Unit</th><th>adr</th><th>Slice</th></tr></thead>
+    <tbody>
+      <tr><td>0</td><td><dfn class="term" tabindex="0" data-def="A sensor that reports a joint's position. For a hinge: the angle in radians, the same number as qpos for that joint.">jointpos</dfn> <code>angle</code></td><td>Hinge angle from hanging down</td><td>1</td><td>joint</td><td>rad</td><td>0</td><td><code>[0]</code></td></tr>
+      <tr><td>1</td><td><dfn class="term" tabindex="0" data-def="A sensor that reports a joint's velocity. For a hinge: spin speed in rad/s, the same number as qvel for that joint.">jointvel</dfn> <code>spin</code></td><td>How fast the angle changes</td><td>1</td><td>joint</td><td>rad/s</td><td>1</td><td><code>[1]</code></td></tr>
+      <tr><td>2</td><td><dfn class="term" tabindex="0" data-def="A sensor that reports data.actuator_force: the actuator output BEFORE the gear. For this motor it equals ctrl. The hinge torque is gear x that, in data.qfrc_actuator.">actuatorfrc</dfn> <code>motor_force</code></td><td>Motor output before the gear (equals ctrl here)</td><td>1</td><td>actuator</td><td>ctrl units (x100 = N m at hinge)</td><td>2</td><td><code>[2]</code></td></tr>
+      <tr><td>3</td><td><dfn class="term" tabindex="0" data-def="A sensor that reports where an object (site, body, geom) is, as x, y, z. By default in the world frame.">framepos</dfn> <code>tip_pos</code></td><td>Where the tip site is</td><td>3</td><td>world</td><td>m</td><td>3</td><td><code>[3:6]</code></td></tr>
+      <tr><td>4</td><td><dfn class="term" tabindex="0" data-def="A sensor that reports the linear acceleration of a site minus gravity, in the site's own frame. At rest it reads +9.81 m/s^2 pointing up, like a phone lying on a table.">accelerometer</dfn> <code>tip_acc</code></td><td>Acceleration felt at the tip (section 4)</td><td>3</td><td>tip site</td><td>m/s²</td><td>6</td><td><code>[6:9]</code></td></tr>
+    </tbody>
+  </table>
+  <div class="card warn"><span class="callout-title" style="color:var(--orange)">Common mistake</span>Using the sensor id as the index. <code>tip_acc</code> is sensor id 4, but its numbers start at index 6. Always slice from <code>sensor_adr[i]</code>, taking <code>sensor_dim[i]</code> numbers, or read it by name.</div>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">actuatorfrc reads the motor side of the gear</span>Think of the gear as a gearbox. <code>motor_force</code> reports <code>data.actuator_force</code>, the output before the gearbox. For this motor that is simply ctrl. The hinge feels 100 times more, stored in <code>data.qfrc_actuator</code>. With <code>ctrl = 0.5</code> the script printed <code>motor_force = 0.500</code> and <code>qfrc_actuator = 50.0</code> N m.</div>
+  <p class="newwords">New words: <span class="chip">site</span><span class="chip">sensordata</span><span class="chip">nsensor</span><span class="chip">nsensordata</span><span class="chip">sensor_adr</span><span class="chip">sensor_dim</span><span class="chip">jointpos</span><span class="chip">jointvel</span><span class="chip">actuatorfrc</span><span class="chip">framepos</span><span class="chip">accelerometer</span></p>
+</section>
+
+<section class="step" id="l6-s-read">
+  <span class="lvl lvl-pic">Picture</span> <span class="lvl lvl-code">Code</span>
+  <h2>3. Reading the panel: sensors update only when MuJoCo computes</h2>
+  <p>A dashboard gauge only moves when the car's computer refreshes it. MuJoCo is the same. <code>sensordata</code> is filled in by <code>mj_forward</code> and by <code>mj_step</code>. Nothing else touches it.</p>
+  <p>Try it below. Move the angle slider (that is <code>data.qpos[0] = ...</code> in Python). The sensor readings stay frozen until you press <kbd>mj_forward()</kbd>.</p>
+  <div class="card">
+    <div class="grid2">
+      <div>
+        <canvas id="l6cvRead" role="img" aria-label="Pendulum showing the true angle and the angle the sensor last reported" style="max-width:460px;margin-inline:auto"></canvas>
+        <p class="caption">Solid rod = the true state, <code>qpos[0]</code>. Dashed rod = what the <code>angle</code> sensor last reported.</p>
+      </div>
+      <div>
+        <div class="readouts" style="grid-template-columns:1fr 1fr">
+          <div class="ro" id="l6rQ"><span class="lab">data.qpos[0] (truth)</span><span class="val">0.00000</span> <span class="unit">rad</span></div>
+          <div class="ro" id="l6rS0"><span class="lab">sensordata[0] angle</span><span class="val">0.00000</span> <span class="unit">rad</span></div>
+          <div class="ro" id="l6rX"><span class="lab">site_xpos tip z (world)</span><span class="val">0.00000</span> <span class="unit">m</span></div>
+          <div class="ro" id="l6rS5"><span class="lab">sensordata[5] tip z (world)</span><span class="val">0.00000</span> <span class="unit">m</span></div>
+          <div class="ro" id="l6rS8"><span class="lab">sensordata[8] tip_acc z (site)</span><span class="val">0.00000</span> <span class="unit">m/s²</span></div>
+        </div>
+        <p style="margin:4px 0 8px"><span id="l6rStale" style="font:700 11px ui-monospace,monospace;color:var(--orange)">STALE: sensordata describes an older state</span></p>
+        <label class="slider"><span>Set <code>data.qpos[0]</code> by hand</span> <output id="l6rOq">0.00 rad</output><input type="range" id="l6rQs" min="-2.5" max="2.5" step="0.05" value="0"></label>
+        <div class="btnrow">
+          <button id="l6rFwd" type="button" class="primary">mj_forward()</button>
+          <button id="l6rStep" type="button">mj_step()</button>
+          <button id="l6rReset" type="button">mj_resetData()</button>
+        </div>
+        <pre id="l6rLog" style="height:150px;overflow:auto;font-size:12px" aria-live="polite" tabindex="0"></pre>
+      </div>
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="card rule"><span class="callout-title" style="color:var(--teal)">After mj_forward: sensor = truth</span>Your script printed <code>sensordata[0] = 0.70000</code> and <code>qpos[0] = 0.70000</code>. It printed <code>sensordata[3:6] = (-0.64422, 0, 0.23516)</code> and <code>site_xpos</code> of the tip = the same three numbers. A simulated sensor with no noise copies the true value.</div>
+    <div class="card warn"><span class="callout-title" style="color:var(--orange)">After mj_step: one step behind</span><code>mj_step</code> computes the sensors first, then moves the pendulum. So after one step from 0.7 rad, <code>qpos[0] = 0.69996</code> but the angle sensor still says <code>0.70000</code>. The sensors describe the <em>start</em> of the step. Call <code>mj_forward</code> if you need them for the new state.</div>
+  </div>
+  <h3>Two ways to read a slice</h3>
+<pre><code><span class="c"># 1. by address: fast, but you must know the layout</span>
+adr, dim = model.sensor_adr[3], model.sensor_dim[3]      <span class="c"># 3, 3</span>
+tip = data.sensordata[adr:adr + dim]                    <span class="c"># world x, y, z in m</span>
+
+<span class="c"># 2. by name: safer, survives adding sensors earlier in the XML</span>
+tip = data.sensor(<span class="s">"tip_pos"</span>).data                         <span class="c"># the same 3 numbers</span></code></pre>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">Prevention rule</span><strong>After you set qpos or qvel by hand, call mj_forward before reading sensordata.</strong> This is the same rule as lesson 3, now for sensors.</div>
+  <p class="newwords">New words: <span class="chip">data.sensor(name)</span><span class="chip">stale</span><span class="chip">site_xpos</span></p>
+</section>
+
+<section class="step" id="l6-s-acc">
+  <span class="lvl lvl-plain">Plain words</span> <span class="lvl lvl-pic">Picture</span>
+  <h2>4. The accelerometer feels the push, not the pull</h2>
+  <p>Put a phone flat on a table. Its accelerometer does not read zero. It reads about 9.81 m/s² pointing <em>up</em>.</p>
+  <p>Why? An accelerometer cannot feel gravity itself. Gravity pulls on every part of it equally. What it feels is the table pushing it up, stopping it from falling.</p>
+  <p>So MuJoCo's accelerometer reports <strong>its real acceleration minus gravity</strong>. At rest the real acceleration is zero. Zero minus (0, 0, -9.81) gives (0, 0, +9.81).</p>
+  <div class="card analogy"><strong>Analogy: a lift.</strong> When a lift starts going up, you feel heavier. When it drops fast, you feel lighter. In free fall you feel nothing at all, and an accelerometer would read zero. It measures that "feeling of weight", not the pull of the Earth.</div>
+  <p>One more detail: the reading is in the <strong>site's own frame</strong>. The tip site turns with the rod. Its z axis always points from the tip back up the rod, toward the hinge. Its x axis points across the rod.</p>
+
+  <div class="predict">
+    <h3>Predict: the pendulum hangs straight down and does not move. What three numbers does <code>tip_acc</code> read?</h3>
+    <textarea aria-label="Your prediction for the accelerometer reading at rest"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p><strong>(0, 0, +9.81) m/s²</strong>, in the tip site frame. The script printed <code>sensordata[6:9] = 0.00000, 0.00000, 9.81000</code>. The site's z axis points up the rod, which is straight up when hanging, so the push from the hinge shows up as +9.81 on z.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="grid2">
+      <canvas id="l6cvAcc" role="img" aria-label="Pendulum with the tip site frame and the accelerometer reading drawn as an arrow" style="max-width:460px;margin-inline:auto"></canvas>
+      <div>
+        <label class="slider"><span>Angle <code>qpos[0]</code></span> <output id="l6aOq">0.00 rad</output><input type="range" id="l6aQ" min="-3.1" max="3.1" step="0.05" value="0"></label>
+        <label class="slider"><span>Spin speed <code>qvel[0]</code></span> <output id="l6aOv">0.00 rad/s</output><input type="range" id="l6aV" min="-4" max="4" step="0.1" value="0"></label>
+        <div class="btnrow">
+          <button class="l6aPre" type="button" data-q="0" data-v="0">Hanging, at rest</button>
+          <button class="l6aPre" type="button" data-q="0" data-v="2">Bottom, 2 rad/s</button>
+          <button class="l6aPre" type="button" data-q="0.7" data-v="0">Tilted 0.7 rad, at rest</button>
+        </div>
+        <div class="readouts">
+          <div class="ro" id="l6aX"><span class="lab">tip_acc x (site)</span><span class="val">0.00000</span> <span class="unit">m/s²</span></div>
+          <div class="ro" id="l6aZ"><span class="lab">tip_acc z (site)</span><span class="val">9.81000</span> <span class="unit">m/s²</span></div>
+          <div class="ro" id="l6aA"><span class="lab">qacc[0]</span><span class="val">0.00000</span> <span class="unit">rad/s²</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="caption">Red and blue arrows: the tip site's x and z axes. Yellow arrow: the accelerometer reading. Each slider change is like setting qpos and qvel and then calling <code>mj_forward</code>; motor off. y is always 0 here, because the pendulum swings in the x-z plane.</p>
+  </div>
+  <p>Try the "Bottom, 2 rad/s" button. The tip is moving in a circle, so it accelerates toward the hinge. That extra push adds to the 9.81: the script printed <code>tip_acc = (0, 0, 13.81)</code>. The maths section shows where 13.81 comes from.</p>
+  <p class="newwords">New words: <span class="chip">accelerometer</span><span class="chip">site frame</span><span class="chip">centripetal acceleration</span></p>
+</section>
+
+<section class="step" id="l6-s-obs">
+  <span class="lvl lvl-words">MuJoCo words</span> <span class="lvl lvl-pic">Picture</span>
+  <h2>5. From sensors to an observation vector</h2>
+  <p>A <dfn class="term" tabindex="0" data-def="The function that picks the control command from what the robot observes. It can be hand-written (a PD controller) or learned (a neural network).">policy</dfn> is the driver: a function that reads some numbers and returns <code>ctrl</code>. The short list of numbers it reads is the <dfn class="term" tabindex="0" data-def="The fixed-length array of numbers given to a policy at each step. Usually built from sensor readings, sometimes transformed (cos and sin of angles, scaled forces).">observation</dfn>, usually called <code>obs</code>.</p>
+
+  <h3>Why build it from sensors, if sensors equal the truth?</h3>
+  <div class="grid3">
+    <div class="card"><span class="callout-title" style="color:var(--blue)">Same interface as a robot</span>A real pendulum has an encoder (angle) and maybe an IMU (accelerometer). Reading <code>sensordata</code> in simulation means your code only uses what the real one will have.</div>
+    <div class="card"><span class="callout-title" style="color:var(--orange)">You choose what is visible</span>The policy cannot cheat with numbers no real sensor gives, such as the exact contact forces inside a joint.</div>
+    <div class="card"><span class="callout-title" style="color:var(--purple)">Room for noise</span>Real sensors are a bit wrong every reading. Each sensor has a <code>noise</code> attribute to record how wrong.</div>
+  </div>
+  <div class="card warn"><span class="callout-title" style="color:var(--orange)">Noise: MuJoCo stores it, it does not add it</span>The script declares <code>noise="0.01"</code> on <code>angle</code>, <code>0.05</code> on <code>spin</code> and <code>0.2</code> on <code>tip_acc</code>. MuJoCo 3.15 keeps these in <code>model.sensor_noise</code>, but <code>sensordata</code> stays clean: three <code>mj_forward</code> calls at rest all gave tip z = 9.81000. If you want noisy readings, add them yourself:
+<pre style="margin-top:8px"><code>rng = np.random.default_rng(0)                          <span class="c"># fixed seed: same noise every run</span>
+noise_std = np.repeat(model.sensor_noise, model.sensor_dim)  <span class="c"># (9,) one std per cell</span>
+noisy = data.sensordata + rng.normal(0, 1, model.nsensordata) * noise_std
+<span class="c"># seed 0 gives: angle 0.0013 rad, spin -0.0066 rad/s, tip_acc z 9.6693 m/s^2</span></code></pre></div>
+
+  <h3>Why cos and sin, and not the angle itself?</h3>
+  <p>An angle wraps around. One full turn, 2π = 6.28319 rad, puts the pendulum exactly where 0 rad does. But to a policy, 0 and 6.28319 look like very different numbers.</p>
+  <p>The fix is to give the policy a point on a circle instead: <code>(cos θ, sin θ)</code>. The same pose always gives the same point, however many turns came before.</p>
+  <div class="card">
+    <div class="grid2">
+      <canvas id="l6cvWrap" role="img" aria-label="The raw angle on a number line next to the same angle as a point on a circle" style="max-width:460px;margin-inline:auto"></canvas>
+      <div>
+        <label class="slider"><span>Hinge angle θ</span> <output id="l6wO">0.00 rad</output><input type="range" id="l6wQ" min="-7" max="7" step="0.01" value="0"></label>
+        <div class="btnrow">
+          <button class="l6wPre" type="button" data-q="0">0</button>
+          <button class="l6wPre" type="button" data-q="6.28319">2π (one turn)</button>
+          <button class="l6wPre" type="button" data-q="3.14159">π (upright)</button>
+          <button class="l6wPre" type="button" data-q="-3.14159">-π (upright)</button>
+        </div>
+        <div class="readouts">
+          <div class="ro" id="l6wC"><span class="lab">obs[0] = cos θ</span><span class="val">1.00000</span></div>
+          <div class="ro" id="l6wS"><span class="lab">obs[1] = sin θ</span><span class="val">0.00000</span></div>
+        </div>
+        <p class="caption">Press 0, then 2π. The number line marker jumps far away. The circle point does not move at all. π and -π are both "pointing straight up": same circle point too.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="predict">
+    <h3>Predict: the pendulum hangs at rest and the motor is set to <code>ctrl = 0.5</code>. After 0.5 s, is <code>spin</code> (obs[2]) positive or negative? Is the angle above or below 0.476 rad, the angle where the motor could hold it still?</h3>
+    <textarea aria-label="Your prediction for the sign of the spin after 0.5 s"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p><strong>Positive, and above.</strong> ctrl = 0.5 gives 0.5 x 100 = 50 N m at the hinge. Gravity can only match that at sin θ = 50 / 109.14, so θ = 0.476 rad. The pendulum is still moving fast when it gets there, so it overshoots. The script printed obs at t = 0.5 s as <code>[0.82879, 0.55957, 1.67319]</code>: angle 0.59386 rad, still rising.</p>
+    </div>
+  </div>
+  <p>Here is the rollout from your script. <code>obs = [cos(angle), sin(angle), spin]</code>, shape <code>(3,)</code>, dtype <code>float64</code>, built only from sensors:</p>
+  <table>
+    <thead><tr><th>time (s)</th><th>angle sensor (rad)</th><th>obs[0] cos</th><th>obs[1] sin</th><th>obs[2] spin (rad/s)</th><th>motor_force</th><th>qfrc_actuator (N m)</th></tr></thead>
+    <tbody>
+      <tr><td>0.000</td><td>0.00000</td><td>1.00000</td><td>0.00000</td><td>0.00000</td><td>0.50</td><td>50.0</td></tr>
+      <tr><td>0.100</td><td>0.03200</td><td>0.99949</td><td>0.03199</td><td>0.62026</td><td>0.50</td><td>50.0</td></tr>
+      <tr><td>0.200</td><td>0.12236</td><td>0.99252</td><td>0.12206</td><td>1.15567</td><td>0.50</td><td>50.0</td></tr>
+      <tr><td>0.300</td><td>0.25879</td><td>0.96670</td><td>0.25591</td><td>1.53434</td><td>0.50</td><td>50.0</td></tr>
+      <tr><td>0.400</td><td>0.42299</td><td>0.91186</td><td>0.41049</td><td>1.71044</td><td>0.50</td><td>50.0</td></tr>
+      <tr><td>0.500</td><td>0.59386</td><td>0.82879</td><td>0.55957</td><td>1.67319</td><td>0.50</td><td>50.0</td></tr>
+    </tbody>
+  </table>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">Want the motor force in obs too?</span>Append <code>motor_force</code> as a 4th element. It is already between -1 and 1, because it equals ctrl. The script printed <code>obs4 = [0.82879, 0.55957, 1.67319, 0.5]</code>. Keeping every input roughly the same size helps learned policies. That is one reason to read the force before the gear (0.5) rather than the hinge torque (50 N m).</div>
+  <p class="newwords">New words: <span class="chip">policy</span><span class="chip">observation (obs)</span><span class="chip">noise</span><span class="chip">sensor_noise</span><span class="chip">angle wrapping</span></p>
+</section>
+
+<section class="step" id="l6-s-math">
+  <span class="lvl lvl-math">Maths (optional)</span>
+  <h2>6. The maths behind the sensor numbers</h2>
+
+  <details class="math"><summary>Step 1: where is the tip? (framepos)</summary><div>
+    <p>The hinge is at (0, 0, 1) in the world. The tip is 1 m down the rod. Turning by θ about the y axis swings the tip toward -x:</p>
+    <div class="eq">tip x = 0 - 1 · sin θ
+tip y = 0
+tip z = 1 - 1 · cos θ</div>
+    <p>At θ = 0.7 rad: sin 0.7 = 0.64422 and cos 0.7 = 0.76484.</p>
+    <div class="eq">tip = (-0.64422, 0, 1 - 0.76484) = (-0.64422, 0, 0.23516) m, world frame
+script: sensordata[3:6] = -0.64422, 0.00000, 0.23516   (matches)</div>
+  </div></details>
+
+  <details class="math"><summary>Step 2: the accelerometer at rest</summary><div>
+    <p>Accelerometer = (real acceleration of the site) - (gravity), turned into the site's frame.</p>
+    <div class="eq">at rest:  real acceleration = (0, 0, 0)
+gravity = (0, 0, -9.81) m/s²
+reading = (0, 0, 0) - (0, 0, -9.81) = (0, 0, +9.81) m/s²</div>
+    <p>Hanging straight down, the site frame lines up with the world frame, so no turning is needed. Script: <code>sensordata[6:9] = 0.00000, 0.00000, 9.81000</code>.</p>
+  </div></details>
+
+  <details class="math"><summary>Step 3: at the bottom of the swing, moving (the centripetal term)</summary><div>
+    <p>Anything moving in a circle accelerates toward the centre, even at constant speed. Its size is speed² / radius. For a spinning rod, that is ω² · L, with ω the spin speed in rad/s and L = 1 m.</p>
+    <div class="eq">ω = qvel = 2.0 rad/s,   L = 1.0 m
+centripetal = ω² · L = 2.0² × 1.0 = 4.0 m/s², pointing up the rod (toward the hinge)
+reading z = 9.81 + 4.0 = 13.81 m/s²
+script: tip_acc = (0, 0, 13.81)   (matches)</div>
+    <p>At the bottom there is no sideways push (sin 0 = 0 and the motor is off), so x stays 0. At 3 rad/s it would be 9.81 + 9 = 18.81 m/s² (checked in MuJoCo).</p>
+  </div></details>
+
+  <details class="math"><summary>Step 4: tilted, at rest, and the general formula</summary><div>
+    <p>In the tip site's frame, with L = 1 m, the two non-zero readings are:</p>
+    <div class="eq">acc x = -L · qacc - g · sin θ        (sideways: rod speeding up, plus the tilted share of gravity)
+acc z =  g · cos θ + L · qvel²       (along the rod: support push, plus centripetal)</div>
+    <p>At θ = 0.7 rad, at rest, motor off, the script printed <code>qacc = -8.92670</code> rad/s²:</p>
+    <div class="eq">acc x = -1 × (-8.92670) - 9.81 × 0.64422 = 8.92670 - 6.31978 = 2.60692 m/s²
+acc z = 9.81 × 0.76484 + 0 = 7.50310 m/s²
+script: sensordata[6:9] = 2.60692, 0.00000, 7.50310   (matches)</div>
+    <p>Why is x not zero? A single point mass on a string would fall with qacc = -g sin θ / L, and x would cancel to 0. Our rod's mass is spread along it, so the tip falls faster than that. The tip "feels" pushed sideways by the rest of the rod.</p>
+  </div></details>
+
+  <details class="math"><summary>Step 5: what the page computes each step</summary><div>
+    <p>The sandbox and pictures use MuJoCo's own numbers for this rod: I = 7.87639 kg m² about the hinge and m g d = 109.14044 N m (both read from MuJoCo by <code>check_browser_match.py</code>).</p>
+    <div class="eq">qacc = (-109.14044 · sin(qpos) + 100 · ctrl) / 7.87639
+sensordata = [qpos, qvel, ctrl, -sin qpos, 0, 1 - cos qpos, acc x, 0, acc z]   (from the OLD state)
+new qvel = qvel + 0.002 · qacc
+new qpos = qpos + 0.002 · new qvel</div>
+    <p>The sensors are computed before the update, exactly as <code>mj_step</code> does. Over 5000 steps with ctrl switching between 0, +1, -1, +0.5 and -0.3, the largest difference from MuJoCo was 3.9e-14.</p>
+  </div></details>
+</section>
+
+<section class="step" id="l6-s-code">
+  <span class="lvl lvl-code">Code</span>
+  <h2>7. Your script, line by line</h2>
+  <table>
+    <thead><tr><th style="width:44%">Code in <code>06_sensors_and_observation.py</code></th><th>Physical meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>&lt;site name="tip" pos="0 0 -1"/&gt;</code></td><td>A weightless mounting point at the rod's end, 1 m below the hinge in the pendulum frame.</td></tr>
+      <tr><td><code>&lt;sensor&gt; ... &lt;/sensor&gt;</code></td><td>Five gauges. Their order here fixes their order in <code>sensordata</code>.</td></tr>
+      <tr><td><code>model.nsensor, model.nsensordata</code></td><td>5 sensors, 9 numbers. Fixed facts, so they live in the model.</td></tr>
+      <tr><td><code>model.sensor_adr, model.sensor_dim</code></td><td>Where each sensor's slice starts and how long it is: [0 1 2 3 6] and [1 1 1 3 3].</td></tr>
+      <tr><td><code>mujoco.mj_forward(model, data)</code></td><td>Compute everything for the current state, including every sensor reading. Time does not move.</td></tr>
+      <tr><td><code>data.sensor("angle").data[0]</code></td><td>Read one sensor by name. Returns a view of its slice of <code>sensordata</code>.</td></tr>
+      <tr><td><code>data.site("tip").xpos</code></td><td>The "ground truth" tip position in the world frame, to compare with <code>tip_pos</code>.</td></tr>
+      <tr><td><code>rng.normal(0, 1, 9) * noise_std</code></td><td>Our own noise, scaled by the stored <code>sensor_noise</code>. Fixed seed 0, so every run gives the same noise.</td></tr>
+      <tr><td><code>np.array([cos(q), sin(q), qd])</code></td><td>The observation: a point on the circle for the angle, plus the spin speed.</td></tr>
+      <tr><td><code>mj_step</code> 50 times, then <code>mj_forward</code></td><td>Advance 0.1 s (50 × 0.002 s), then refresh the sensors so they describe the new state.</td></tr>
+    </tbody>
+  </table>
+<pre><code><span class="c"># == 1. What the model declares (MjModel, fixed) ==</span>
+nsensor      (number of sensors)          5
+nsensordata  (length of data.sensordata)  9
+id  name          type                  adr  dim  noise
+0   angle         mjSENS_JOINTPOS       0    1    0.01
+1   spin          mjSENS_JOINTVEL       1    1    0.05
+2   motor_force   mjSENS_ACTUATORFRC    2    1    0.00
+3   tip_pos       mjSENS_FRAMEPOS       3    3    0.00   <span class="c"># 3 numbers: [3:6]</span>
+4   tip_acc       mjSENS_ACCELEROMETER  6    3    0.20   <span class="c"># 3 numbers: [6:9]</span>
+
+<span class="c"># == 2. Hanging at rest, after mj_forward ==</span>
+  sensordata[0]  angle         hinge angle                 (joint   )  0.00000 rad
+  sensordata[2]  motor_force   actuator_force, before gear (actuator)  0.00000 ctrl units
+  sensordata[5]  tip_pos       tip z                       (world   )  0.00000 m      <span class="c"># hinge at z = 1, rod 1 m long</span>
+  sensordata[8]  tip_acc       accel z                     (tip site)  9.81000 m/s^2  <span class="c"># +9.81 up: the support push</span>
+
+<span class="c"># == 3. Stale values ==</span>
+set qpos[0] = 0.7, no mj_forward:  angle sensor = 0.00000 rad  (stale)
+after mj_forward:                  angle sensor = 0.70000 rad
+  sensordata[3]  tip_pos       tip x                       (world   ) -0.64422 m      <span class="c"># = -sin 0.7</span>
+  sensordata[5]  tip_pos       tip z                       (world   )  0.23516 m      <span class="c"># = 1 - cos 0.7</span>
+  sensordata[6]  tip_acc       accel x                     (tip site)  2.60692 m/s^2  <span class="c"># maths step 4</span>
+  sensordata[8]  tip_acc       accel z                     (tip site)  7.50310 m/s^2
+qpos[0]           = 0.70000 rad   (same as sensordata[0])
+site_xpos['tip']  = [-0.64422  0.       0.23516] m world (same as sensordata[3:6])
+qacc[0]           = -8.92670 rad/s^2
+ctrl = 0.5: motor_force sensor = 0.500 (= actuator_force, before gear), qfrc_actuator = 50.0 N m at the hinge (gear 100)
+after one mj_step:
+  qpos[0] = 0.69996 rad, angle sensor = 0.70000 rad  (sensors describe the START of the step)
+
+<span class="c"># == 4. Bottom of the swing, qvel = 2.0 rad/s ==</span>
+tip_acc (tip site frame) = [ 0.    0.   13.81] m/s^2       <span class="c"># 9.81 + 2.0^2 x 1.0</span>
+
+<span class="c"># == 5. Noise ==</span>
+tip_acc z, three mj_forward calls at rest: ['9.81000', '9.81000', '9.81000']  <span class="c"># MuJoCo adds none</span>
+
+<span class="c"># == 6. Rollout from rest, ctrl = 0.5 ==</span>
+obs shape (3,), dtype float64
+ time   angle(rad)   obs = [cos(angle), sin(angle), spin rad/s]    motor_force  qfrc_actuator
+ 0.000   0.00000    [ 1.00000,  0.00000,  0.00000]     0.50         50.0 N m
+ 0.500   0.59386    [ 0.82879,  0.55957,  1.67319]     0.50         50.0 N m  <span class="c"># overshot 0.476 rad, still rising</span></code></pre>
+  <p>Run it yourself: <code>uv run --python .venv/bin/python lessons/06-sensors-and-observation/06_sensors_and_observation.py</code></p>
+</section>
+
+<section class="step" id="l6-s-check">
+  <span class="lvl lvl-plain">Check yourself</span>
+  <h2>8. Your lesson's checkpoint questions</h2>
+  <p>Answer them here, then tell me your answers in the chat so I can update your progress.</p>
+  <div class="predict">
+    <h3>Q1. You add <code>&lt;gyro site="tip"/&gt;</code> as the last sensor. A gyro gives 3 numbers. What are nsensor, nsensordata, and the gyro's sensor_adr?</h3>
+    <textarea aria-label="Answer to question 1"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>nsensor = 6, nsensordata = 12, adr = 9.</strong> It starts right after <code>tip_acc</code>, which ended at index 8. Checked in MuJoCo: <code>sensor_adr = [0 1 2 3 6 9]</code>.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q2. After a step, you set <code>data.qpos[0] = 1.0</code> and immediately read <code>data.sensor("angle").data</code>. What do you get?</h3>
+    <textarea aria-label="Answer to question 2"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>The old reading, not 1.0.</strong> Sensors are only filled in by <code>mj_forward</code> or <code>mj_step</code>. Call <code>mj_forward</code> first, and it will say 1.0.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q3. The pendulum passes the bottom at 3 rad/s, motor off. What does <code>tip_acc</code> z read?</h3>
+    <textarea aria-label="Answer to question 3"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>18.81 m/s²</strong>: 9.81 for the support push plus 3² × 1 m = 9 for the circular motion. MuJoCo gives exactly 18.81.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q4. Why does the observation contain cos(angle) and sin(angle) instead of the angle?</h3>
+    <textarea aria-label="Answer to question 4"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>Because the angle wraps.</strong> 0 and 2π rad are the same pose but very different numbers. cos and sin give the same pair (1, 0) for both, so the policy sees one pose as one input.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q5. You set <code>noise="0.05"</code> on a sensor. Does MuJoCo 3.15 make <code>sensordata</code> noisy?</h3>
+    <textarea aria-label="Answer to question 5"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>No.</strong> It only stores 0.05 in <code>model.sensor_noise</code>. Add noise yourself in Python, for example with <code>np.random.default_rng(0)</code>, so runs stay repeatable.</p></div>
+  </div>
+
+  <h3>Glossary: new words from this lesson</h3>
+  <dl class="glossary">
+    <dt>sensor</dt><dd>A declared measurement in the XML. Each one reports a fixed number of floats.</dd>
+    <dt>site</dt><dd>A weightless marker point with its own frame, fixed to a body. Sensors mount on sites.</dd>
+    <dt>data.sensordata</dt><dd>One flat array (here shape (9,)) holding all sensor readings, in XML order.</dd>
+    <dt>nsensor / nsensordata</dt><dd>Number of sensors (5) and total number of readings (9). Model constants.</dd>
+    <dt>sensor_adr / sensor_dim</dt><dd>Start index and length of each sensor's slice in sensordata.</dd>
+    <dt>data.sensor(name).data</dt><dd>One sensor's slice, looked up by name.</dd>
+    <dt>jointpos / jointvel</dt><dd>Joint angle (rad) and spin speed (rad/s). Equal to qpos and qvel after mj_forward.</dd>
+    <dt>actuatorfrc</dt><dd>The actuator output before the gear (data.actuator_force). Here it equals ctrl; the hinge torque is 100 times it, in qfrc_actuator.</dd>
+    <dt>framepos</dt><dd>Position of a site or body, world frame, metres. Equal to site_xpos.</dd>
+    <dt>accelerometer</dt><dd>Real acceleration minus gravity, in the site frame. Reads +9.81 m/s² up at rest.</dd>
+    <dt>centripetal acceleration</dt><dd>Acceleration toward the centre of a circle: ω² · L.</dd>
+    <dt>noise / sensor_noise</dt><dd>Stored standard deviation of sensor error. MuJoCo 3.15 does not add it for you.</dd>
+    <dt>policy</dt><dd>The function that turns an observation into a ctrl command.</dd>
+    <dt>observation (obs)</dt><dd>The fixed-length array the policy reads, here [cos θ, sin θ, spin], shape (3,).</dd>
+    <dt>stale</dt><dd>A sensor value left over from an older state, because mj_forward has not been called.</dd>
+  </dl>
+</section>
+
+<section class="step recap" id="l6-recap">
+  <h2>Recap: the lesson in one minute</h2>
+  <div class="mental-model">
+    <p><strong>Sensors</strong> are declared in the MJCF <code>&lt;sensor&gt;</code> block. Each one reads a joint, actuator, site or body. MuJoCo packs all readings, in XML order, into <code>data.sensordata</code>. Sensor <code>i</code> owns the slice that starts at <code>sensor_adr[i]</code> and is <code>sensor_dim[i]</code> long. Here that is 5 sensors and 9 numbers. <code>data.sensor("name").data</code> reads a slice by name.</p>
+    <p><strong>sensordata is computed</strong> by <code>mj_forward</code> and <code>mj_step</code> only. After <code>mj_step</code> it describes the start of that step. Without noise, <code>jointpos</code> equals <code>qpos</code> and <code>framepos</code> equals <code>site_xpos</code>. <code>actuatorfrc</code> reads the force before the gear (here equal to ctrl); the hinge torque is gear x that. The <code>accelerometer</code> reports acceleration minus gravity in the site frame: (0, 0, 9.81) at rest, plus ω² L at the bottom of a swing.</p>
+    <p><strong>An observation</strong> is the policy's input, built from sensors: <code>[cos θ, sin θ, θ̇]</code>, shape (3,). cos and sin remove the 2π wrap. The <code>noise</code> attribute is only stored in <code>model.sensor_noise</code>; add noise yourself with a seeded generator.</p>
+  </div>
+  <div class="checkpoint">
+    <p>Open the sensor sandbox: push the motor, watch each slice of sensordata light up, and switch on the noise to see what a real robot would read.</p>
+    <div class="btn-row">
+      <button class="btn btn-primary btn-sm" type="button" onclick="markComplete(6)">Mark lesson complete</button>
+      <button class="btn btn-sm" type="button" onclick="switchLesson(7)">Next: Contact and Constraints</button>
+    </div>
+  </div>
+</section>
+</div>

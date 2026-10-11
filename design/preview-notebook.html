@@ -1,0 +1,1598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MuJoCo Learning Lab</title>
+<style>
+/* ── Reset & Base ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #fafaf9;
+  --bg-card: #fffdf8;
+  --bg-mental: #fef9ef;
+  --bg-code: #f5f3ef;
+  --bg-exercise: #f0fdf4;
+  --bg-checkpoint: #eff6ff;
+  --bg-widget: #fefefe;
+  --text: #1c1917;
+  --text-secondary: #57534e;
+  --text-muted: #a8a29e;
+  --accent: #047857;
+  --accent-light: #d1fae5;
+  --amber: #d97706;
+  --amber-light: #fef3c7;
+  --border: #e7e5e4;
+  --border-light: #f5f5f4;
+  --shadow-sm: 0 1px 2px rgba(28,25,23,0.04);
+  --shadow: 0 1px 3px rgba(28,25,23,0.06), 0 1px 2px rgba(28,25,23,0.04);
+  --shadow-md: 0 4px 6px rgba(28,25,23,0.04), 0 2px 4px rgba(28,25,23,0.03);
+  --radius: 8px;
+  --radius-lg: 12px;
+  --mono: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --timeline-x: 28px;
+  --timeline-dot: 14px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1a1a19;
+    --bg-card: #242321;
+    --bg-mental: #2a2518;
+    --bg-code: #1e1d1b;
+    --bg-exercise: #162016;
+    --bg-checkpoint: #191e28;
+    --bg-widget: #201f1d;
+    --text: #e7e5e4;
+    --text-secondary: #a8a29e;
+    --text-muted: #78716c;
+    --accent: #34d399;
+    --accent-light: #064e3b;
+    --amber: #fbbf24;
+    --amber-light: #451a03;
+    --border: #3a3836;
+    --border-light: #2a2928;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
+    --shadow: 0 1px 3px rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.2);
+    --shadow-md: 0 4px 6px rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.15);
+  }
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Header ── */
+.site-header {
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  padding: 20px 24px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(12px);
+}
+
+.header-inner {
+  max-width: 860px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-icon {
+  width: 36px;
+  height: 36px;
+  background: var(--accent);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brand-icon svg { width: 20px; height: 20px; }
+
+.brand-title {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.brand-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+/* ── Nav Pills ── */
+.nav-pills {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  background: var(--bg);
+  border-radius: 10px;
+  border: 1px solid var(--border-light);
+}
+
+.nav-pill {
+  padding: 6px 14px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  font-family: var(--sans);
+}
+
+.nav-pill:hover {
+  color: var(--text);
+  background: var(--bg-card);
+}
+
+.nav-pill.active {
+  color: var(--accent);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ── Layout ── */
+.page-wrapper {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 0 24px 80px;
+  position: relative;
+}
+
+/* ── Timeline ── */
+.timeline {
+  position: fixed;
+  left: calc(50% - 430px - 40px);
+  top: 140px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  z-index: 50;
+}
+
+@media (max-width: 1020px) {
+  .timeline { display: none; }
+}
+
+.timeline-line {
+  width: 2px;
+  height: 48px;
+  background: var(--border);
+}
+
+.timeline-dot {
+  width: var(--timeline-dot);
+  height: var(--timeline-dot);
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--bg);
+  cursor: pointer;
+  transition: all 0.25s ease;
+  position: relative;
+}
+
+.timeline-dot.completed {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.timeline-dot.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-light);
+}
+
+.timeline-dot .dot-label {
+  position: absolute;
+  left: 24px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+
+.timeline-dot:hover .dot-label { opacity: 1; }
+
+/* ── Intro ── */
+.intro {
+  text-align: center;
+  padding: 56px 0 40px;
+}
+
+.intro h1 {
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+  margin-bottom: 12px;
+}
+
+.intro p {
+  font-size: 17px;
+  color: var(--text-secondary);
+  max-width: 540px;
+  margin: 0 auto;
+  line-height: 1.65;
+}
+
+/* ── Lesson Section ── */
+.lesson {
+  margin-top: 48px;
+  padding-top: 24px;
+}
+
+.lesson-number {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+.lesson h2 {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  margin-bottom: 8px;
+}
+
+.lesson-lead {
+  font-size: 16px;
+  color: var(--text-secondary);
+  margin-bottom: 32px;
+  line-height: 1.65;
+}
+
+/* ── Cards ── */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow);
+}
+
+.card-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+/* Mental Model */
+.mental-model {
+  background: var(--bg-mental);
+  border-color: #e8dcc8;
+}
+
+@media (prefers-color-scheme: dark) {
+  .mental-model { border-color: #3d3520; }
+}
+
+.mental-model .card-label {
+  color: var(--amber);
+  background: var(--amber-light);
+}
+
+.mental-model h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  letter-spacing: -0.01em;
+}
+
+.mental-model p {
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.mental-model p:last-child { margin-bottom: 0; }
+
+.tree-diagram {
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  background: var(--bg-code);
+  padding: 16px 20px;
+  border-radius: var(--radius);
+  margin: 16px 0;
+  overflow-x: auto;
+}
+
+.tree-diagram .tag { color: var(--accent); font-weight: 600; }
+.tree-diagram .attr { color: var(--amber); }
+
+/* ── Widget Area ── */
+.widget-area {
+  background: var(--bg-widget);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow);
+}
+
+.widget-header {
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border-light);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.widget-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.widget-badge {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.widget-canvas {
+  padding: 24px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 280px;
+  background: var(--bg);
+}
+
+.widget-controls {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border-light);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.control-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.control-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  min-width: 100px;
+  font-family: var(--mono);
+}
+
+.control-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+  outline: none;
+  cursor: pointer;
+}
+
+.control-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg-card);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  cursor: pointer;
+}
+
+.control-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg-card);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  cursor: pointer;
+}
+
+.control-value {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--accent);
+  min-width: 56px;
+  text-align: right;
+  font-weight: 500;
+}
+
+/* ── Readout ── */
+.readout {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-light);
+  background: var(--bg-code);
+}
+
+.readout-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.readout-key {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.readout-val {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ── Code Block ── */
+.code-block {
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-sm);
+}
+
+.code-header {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-light);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.code-filename {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.code-lang {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-light);
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.03em;
+}
+
+.code-block pre {
+  padding: 20px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--text);
+  margin: 0;
+}
+
+.code-block .kw { color: var(--accent); font-weight: 600; }
+.code-block .fn { color: #7c3aed; }
+.code-block .str { color: var(--amber); }
+.code-block .cmt { color: var(--text-muted); font-style: italic; }
+.code-block .num { color: #dc2626; }
+
+@media (prefers-color-scheme: dark) {
+  .code-block .fn { color: #a78bfa; }
+  .code-block .num { color: #f87171; }
+}
+
+/* ── Exercise Callout ── */
+.exercise {
+  background: var(--bg-exercise);
+  border: 1px solid #bbf7d0;
+  border-left: 4px solid var(--accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  padding: 24px 24px 24px 28px;
+  margin-bottom: 24px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .exercise { border-color: #064e3b; border-left-color: var(--accent); }
+}
+
+.exercise .card-label {
+  color: var(--accent);
+  background: var(--accent-light);
+}
+
+.exercise h4 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.exercise p {
+  color: var(--text-secondary);
+  font-size: 15px;
+  margin-bottom: 10px;
+}
+
+.exercise p:last-child { margin-bottom: 0; }
+
+.exercise-prompt {
+  font-family: var(--mono);
+  font-size: 13px;
+  background: var(--bg-card);
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  margin-top: 12px;
+  color: var(--text);
+}
+
+.reveal-btn {
+  margin-top: 12px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: var(--sans);
+  transition: all 0.15s;
+}
+
+.reveal-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.reveal-answer {
+  display: none;
+  margin-top: 12px;
+  padding: 12px 16px;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.reveal-answer.visible { display: block; }
+
+/* ── Checkpoint ── */
+.checkpoint {
+  background: var(--bg-checkpoint);
+  border: 1px solid #bfdbfe;
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+@media (prefers-color-scheme: dark) {
+  .checkpoint { border-color: #1e3a5f; }
+}
+
+.checkpoint .card-label {
+  color: #2563eb;
+  background: #dbeafe;
+}
+
+@media (prefers-color-scheme: dark) {
+  .checkpoint .card-label { background: #1e3a5f; }
+}
+
+.checkpoint h4 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.checkpoint p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+}
+
+.checkpoint-btn {
+  padding: 8px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  font-family: var(--sans);
+  transition: opacity 0.15s;
+}
+
+.checkpoint-btn:hover { opacity: 0.9; }
+
+.checkpoint-btn.done {
+  background: #d1fae5;
+  color: var(--accent);
+}
+
+@media (prefers-color-scheme: dark) {
+  .checkpoint-btn.done { background: #064e3b; }
+}
+
+/* ── Sim Buttons ── */
+.sim-buttons {
+  display: flex;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-light);
+}
+
+.sim-btn {
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: var(--sans);
+  transition: all 0.15s;
+}
+
+.sim-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.sim-btn.primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.sim-btn.primary:hover { opacity: 0.9; }
+
+/* ── Footer ── */
+.site-footer {
+  text-align: center;
+  padding: 32px 24px;
+  color: var(--text-muted);
+  font-size: 13px;
+  border-top: 1px solid var(--border-light);
+  margin-top: 48px;
+}
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+  .header-inner { flex-direction: column; gap: 12px; }
+  .nav-pills { width: 100%; justify-content: center; }
+  .intro h1 { font-size: 26px; }
+  .card { padding: 20px; }
+  .widget-canvas { min-height: 220px; padding: 16px; }
+  .control-row { flex-wrap: wrap; }
+  .control-label { min-width: auto; }
+  .readout { flex-direction: column; gap: 8px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header class="site-header">
+  <div class="header-inner">
+    <div class="brand">
+      <div class="brand-icon">
+        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="10" cy="6" r="3" fill="white"/>
+          <rect x="7" y="9" width="6" height="7" rx="1" fill="white" opacity="0.7"/>
+          <rect x="4" y="14" width="4" height="3" rx="1" fill="white" opacity="0.5" transform="rotate(-20 6 15.5)"/>
+          <rect x="12" y="14" width="4" height="3" rx="1" fill="white" opacity="0.5" transform="rotate(20 14 15.5)"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-title">MuJoCo Learning Lab</div>
+        <div class="brand-subtitle">Notebook Explorer</div>
+      </div>
+    </div>
+    <nav class="nav-pills" id="navPills">
+      <button class="nav-pill active" onclick="scrollToLesson(0)">01 MJCF</button>
+      <button class="nav-pill" onclick="scrollToLesson(1)">02 Frames</button>
+      <button class="nav-pill" onclick="scrollToLesson(2)">03 State</button>
+    </nav>
+  </div>
+</header>
+
+<!-- ── Timeline ── -->
+<aside class="timeline" id="timeline">
+  <div class="timeline-dot active" onclick="scrollToLesson(0)">
+    <span class="dot-label">MJCF Hierarchy</span>
+  </div>
+  <div class="timeline-line"></div>
+  <div class="timeline-dot" onclick="scrollToLesson(1)">
+    <span class="dot-label">Frames &amp; Axes</span>
+  </div>
+  <div class="timeline-line"></div>
+  <div class="timeline-dot" onclick="scrollToLesson(2)">
+    <span class="dot-label">State &amp; Stepping</span>
+  </div>
+</aside>
+
+<!-- ── Page Content ── -->
+<main class="page-wrapper">
+
+  <!-- Intro -->
+  <section class="intro">
+    <h1>Simulation from First Principles</h1>
+    <p>Three lessons that build your intuition for MuJoCo. Read the theory, adjust the instruments, predict what happens next.</p>
+  </section>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- LESSON 01 -->
+  <!-- ═══════════════════════════════════════════ -->
+  <section class="lesson" id="lesson-0">
+    <div class="lesson-number">Lesson 01</div>
+    <h2>MJCF Hierarchy</h2>
+    <p class="lesson-lead">How XML becomes a physics model. Bodies contain geoms for shape and joints for motion. Everything nests inside a single world body.</p>
+
+    <!-- Mental Model -->
+    <div class="card mental-model">
+      <div class="card-label">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a2.5 2.5 0 00-2.5 2.5c0 .87.44 1.63 1.11 2.08L6 7.5V9h4V7.5l-.61-1.92A2.49 2.49 0 0010.5 3.5 2.5 2.5 0 008 1zM6 10v1h4v-1H6zm1 2v1h2v-1H7z"/></svg>
+        Mental Model
+      </div>
+      <h3>A tree of bodies, not a bag of shapes</h3>
+      <p>An MJCF file describes a kinematic tree. The <code>&lt;worldbody&gt;</code> is the root. Each <code>&lt;body&gt;</code> inside it defines a rigid link. Geoms give that body a shape and collision surface. Joints define how the body moves relative to its parent.</p>
+      <p>The key insight: child bodies inherit their parent's coordinate frame. When you rotate the shoulder, the elbow and hand move with it. That is not because of code; it is the tree structure doing the work.</p>
+      <div class="tree-diagram">
+<span class="tag">&lt;mujoco&gt;</span>
+  <span class="tag">&lt;worldbody&gt;</span>                  <span class="attr"># fixed root</span>
+    <span class="tag">&lt;body</span> <span class="attr">name="mount"</span> <span class="attr">pos="0 0 1.5"</span><span class="tag">&gt;</span>
+      <span class="tag">&lt;geom</span> <span class="attr">type="sphere"</span> <span class="attr">size="0.05"</span><span class="tag">/&gt;</span>  <span class="attr"># pivot point</span>
+      <span class="tag">&lt;body</span> <span class="attr">name="rod"</span> <span class="attr">pos="0 0 -0.5"</span><span class="tag">&gt;</span>
+        <span class="tag">&lt;joint</span> <span class="attr">type="hinge"</span> <span class="attr">axis="0 1 0"</span><span class="tag">/&gt;</span>
+        <span class="tag">&lt;geom</span> <span class="attr">type="capsule"</span> <span class="attr">size="0.02 0.5"</span><span class="tag">/&gt;</span>
+      <span class="tag">&lt;/body&gt;</span>
+    <span class="tag">&lt;/body&gt;</span>
+  <span class="tag">&lt;/worldbody&gt;</span>
+<span class="tag">&lt;/mujoco&gt;</span>
+      </div>
+    </div>
+
+    <!-- Interactive Widget -->
+    <div class="widget-area">
+      <div class="widget-header">
+        <span class="widget-title">Interactive Pendulum</span>
+        <span class="widget-badge">SVG</span>
+      </div>
+      <div class="widget-canvas">
+        <svg id="svg1" viewBox="0 0 400 320" width="400" height="320">
+          <!-- grid -->
+          <defs>
+            <pattern id="grid1" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="var(--border-light)" stroke-width="0.5"/>
+            </pattern>
+          </defs>
+          <rect width="400" height="320" fill="url(#grid1)"/>
+          <!-- mount structure -->
+          <line id="p1-ceiling" x1="120" y1="20" x2="280" y2="20" stroke="var(--text-muted)" stroke-width="2"/>
+          <!-- mount point -->
+          <circle id="p1-pivot" cx="200" cy="40" r="6" fill="var(--accent)" stroke="var(--bg-card)" stroke-width="2"/>
+          <!-- rod -->
+          <line id="p1-rod" x1="200" y1="40" x2="200" y2="220" stroke="var(--text)" stroke-width="3" stroke-linecap="round"/>
+          <!-- bob -->
+          <circle id="p1-bob" cx="200" cy="220" r="16" fill="var(--amber)" stroke="var(--text)" stroke-width="2"/>
+          <!-- angle arc -->
+          <path id="p1-arc" d="" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="3,3" opacity="0.7"/>
+          <!-- labels -->
+          <text id="p1-angle-label" x="210" y="80" font-size="12" font-family="var(--mono)" fill="var(--accent)" opacity="0.8"></text>
+          <text id="p1-length-label" x="0" y="0" font-size="11" font-family="var(--mono)" fill="var(--text-muted)"></text>
+        </svg>
+      </div>
+      <div class="widget-controls">
+        <div class="control-row">
+          <span class="control-label">height</span>
+          <input type="range" class="control-slider" id="p1-height" min="20" max="80" value="40" step="1">
+          <span class="control-value" id="p1-height-val">1.50 m</span>
+        </div>
+        <div class="control-row">
+          <span class="control-label">rod_length</span>
+          <input type="range" class="control-slider" id="p1-length" min="60" max="200" value="180" step="1">
+          <span class="control-value" id="p1-length-val">0.90 m</span>
+        </div>
+        <div class="control-row">
+          <span class="control-label">angle</span>
+          <input type="range" class="control-slider" id="p1-angle" min="-90" max="90" value="30" step="1">
+          <span class="control-value" id="p1-angle-val">30.0 deg</span>
+        </div>
+      </div>
+      <div class="readout">
+        <div class="readout-item"><span class="readout-key">bob_x:</span> <span class="readout-val" id="p1-bx">0.45</span></div>
+        <div class="readout-item"><span class="readout-key">bob_z:</span> <span class="readout-val" id="p1-bz">0.72</span></div>
+        <div class="readout-item"><span class="readout-key">PE:</span> <span class="readout-val" id="p1-pe">0.00 J</span></div>
+      </div>
+    </div>
+
+    <!-- Code Block -->
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-filename">pendulum.py</span>
+        <span class="code-lang">Python</span>
+      </div>
+      <pre><code><span class="kw">import</span> mujoco
+
+MJCF = <span class="str">"""
+&lt;mujoco&gt;
+  &lt;worldbody&gt;
+    &lt;body name="mount" pos="0 0 1.5"&gt;
+      &lt;body name="rod" pos="0 0 -0.5"&gt;
+        &lt;joint name="hinge" type="hinge" axis="0 1 0"/&gt;
+        &lt;geom type="capsule" size="0.02 0.5"/&gt;
+        &lt;body name="bob" pos="0 0 -0.5"&gt;
+          &lt;geom type="sphere" size="0.08" mass="1.0"/&gt;
+        &lt;/body&gt;
+      &lt;/body&gt;
+    &lt;/body&gt;
+  &lt;/worldbody&gt;
+&lt;/mujoco&gt;
+"""</span>
+
+model = mujoco.<span class="fn">MjModel</span>.from_xml_string(MJCF)
+data  = mujoco.<span class="fn">MjData</span>(model)
+
+<span class="cmt"># Set the hinge to 30 degrees</span>
+data.qpos[<span class="num">0</span>] = <span class="num">0.5236</span>  <span class="cmt"># radians</span>
+mujoco.<span class="fn">mj_forward</span>(model, data)
+
+<span class="kw">print</span>(<span class="str">"bob position:"</span>, data.xpos[<span class="num">2</span>])</code></pre>
+    </div>
+
+    <!-- Exercise -->
+    <div class="exercise">
+      <div class="card-label">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM7 5h2v4H7V5zm0 5h2v2H7v-2z"/></svg>
+        Prediction Exercise
+      </div>
+      <h4>What happens to bob_z when you double the rod length?</h4>
+      <p>Before touching the slider, write down your prediction. Think about how the body tree unfolds: the bob is a child of the rod, so its position is <em>relative</em> to the rod frame.</p>
+      <div class="exercise-prompt">
+        If rod_length goes from 0.5 to 1.0, I predict bob_z will ____.
+      </div>
+      <button class="reveal-btn" onclick="toggleReveal(this)">Show answer</button>
+      <div class="reveal-answer">
+        The bob sits at the end of the rod. Doubling the rod length doubles the vertical drop (at zero angle). At angle=0, bob_z goes from mount_height - rod_length to mount_height - 2*rod_length. The bob does not simply "double its z" because z is measured from the ground. Try it with the slider to confirm.
+      </div>
+    </div>
+
+    <!-- Checkpoint -->
+    <div class="checkpoint">
+      <div class="card-label">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm3.35 5.35l-4 4a.5.5 0 01-.7 0l-2-2a.5.5 0 01.7-.7L7 9.29l3.65-3.64a.5.5 0 01.7.7z"/></svg>
+        Checkpoint
+      </div>
+      <h4>Lesson 01 Complete</h4>
+      <p>You can describe how MJCF nests bodies, geoms, and joints into a kinematic tree.</p>
+      <button class="checkpoint-btn" onclick="completeLesson(0, this)">Mark complete</button>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- LESSON 02 -->
+  <!-- ═══════════════════════════════════════════ -->
+  <section class="lesson" id="lesson-1">
+    <div class="lesson-number">Lesson 02</div>
+    <h2>Frames &amp; Axes</h2>
+    <p class="lesson-lead">Local versus world coordinates. Every body carries its own frame. Transformations chain from parent to child through the tree.</p>
+
+    <!-- Mental Model -->
+    <div class="card mental-model">
+      <div class="card-label">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a2.5 2.5 0 00-2.5 2.5c0 .87.44 1.63 1.11 2.08L6 7.5V9h4V7.5l-.61-1.92A2.49 2.49 0 0010.5 3.5 2.5 2.5 0 008 1zM6 10v1h4v-1H6zm1 2v1h2v-1H7z"/></svg>
+        Mental Model
+      </div>
+      <h3>Stacking coordinate frames</h3>
+      <p>In MuJoCo, when you write <code>pos="0 0 -0.5"</code> inside a child body, that offset is in the <em>parent's</em> local frame. The simulator chains all these local transforms to compute the world position you see in <code>data.xpos</code>.</p>
+      <p>Think of it like giving directions: "go 3 blocks north, then 2 blocks east" works because each instruction uses the current heading. The world position is the sum of all those relative moves, rotated by all the joints along the way.</p>
+      <p>This lesson's widget lets you see both frames at once. The colored axes are the local frame; the dotted axes are the world frame. Watch how they diverge as you change the hinge angle.</p>
+    </div>
+
+    <!-- Interactive Widget -->
+    <div class="widget-area">
+      <div class="widget-header">
+        <span class="widget-title">Frame Explorer</span>
+        <span class="widget-badge">SVG</span>
+      </div>
+      <div class="widget-canvas">
+        <svg id="svg2" viewBox="0 0 400 320" width="400" height="320">
+          <defs>
+            <pattern id="grid2" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="var(--border-light)" stroke-width="0.5"/>
+            </pattern>
+            <marker id="arrowR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,1 L9,5 L0,9" fill="#dc2626"/></marker>
+            <marker id="arrowB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,1 L9,5 L0,9" fill="#2563eb"/></marker>
+            <marker id="arrowRd" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,1 L9,5 L0,9" fill="#dc2626" opacity="0.35"/></marker>
+            <marker id="arrowBd" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,1 L9,5 L0,9" fill="#2563eb" opacity="0.35"/></marker>
+          </defs>
+          <rect width="400" height="320" fill="url(#grid2)"/>
+          <!-- ground -->
+          <line x1="0" y1="290" x2="400" y2="290" stroke="var(--text-muted)" stroke-width="1" stroke-dasharray="4,4"/>
+          <!-- base body -->
+          <rect id="f2-base" x="175" y="200" width="50" height="80" rx="4" fill="var(--accent)" opacity="0.15" stroke="var(--accent)" stroke-width="1.5"/>
+          <!-- link body -->
+          <g id="f2-link-group">
+            <line id="f2-link" x1="200" y1="200" x2="200" y2="120" stroke="var(--amber)" stroke-width="4" stroke-linecap="round"/>
+            <circle id="f2-tip" cx="200" cy="120" r="8" fill="var(--amber)" opacity="0.8"/>
+            <!-- local frame at tip -->
+            <line id="f2-local-x" x1="200" y1="120" x2="250" y2="120" stroke="#dc2626" stroke-width="2" marker-end="url(#arrowR)"/>
+            <line id="f2-local-z" x1="200" y1="120" x2="200" y2="70" stroke="#2563eb" stroke-width="2" marker-end="url(#arrowB)"/>
+            <text id="f2-lx-label" x="254" y="124" font-size="11" fill="#dc2626" font-family="var(--mono)" font-weight="600">x_local</text>
+            <text id="f2-lz-label" x="204" y="66" font-size="11" fill="#2563eb" font-family="var(--mono)" font-weight="600">z_local</text>
+          </g>
+          <!-- world frame at tip (ghost) -->
+          <line id="f2-world-x" x1="200" y1="120" x2="250" y2="120" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.35" marker-end="url(#arrowRd)"/>
+          <line id="f2-world-z" x1="200" y1="120" x2="200" y2="70" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.35" marker-end="url(#arrowBd)"/>
+          <!-- joint indicator -->
+          <circle id="f2-joint" cx="200" cy="200" r="5" fill="none" stroke="var(--accent)" stroke-width="2"/>
+          <!-- angle arc -->
+          <path id="f2-arc" d="" fill="none" stroke="var(--accent)" stroke-width="1.5" opacity="0.6"/>
+        </svg>
+      </div>
+      <div class="widget-controls">
+        <div class="control-row">
+          <span class="control-label">base_height</span>
+          <input type="range" class="control-slider" id="f2-base-h" min="40" max="140" value="80" step="1">
+          <span class="control-value" id="f2-base-h-val">0.80 m</span>
+        </div>
+        <div class="control-row">
+          <span class="control-label">link_offset</span>
+          <input type="range" class="control-slider" id="f2-link-off" min="40" max="160" value="80" step="1">
+          <span class="control-value" id="f2-link-off-val">0.80 m</span>
+        </div>
+        <div class="control-row">
+          <span class="control-label">hinge_angle</span>
+          <input type="range" class="control-slider" id="f2-angle" min="-90" max="90" value="0" step="1">
+          <span class="control-value" id="f2-angle-val">0.0 deg</span>
+        </div>
+      </div>
+      <div class="readout">
+        <div class="readout-item"><span class="readout-key">world_x:</span> <span class="readout-val" id="f2-wx">0.00</span></div>
+        <div class="readout-item"><span class="readout-key">world_z:</span> <span class="readout-val" id="f2-wz">1.60</span></div>
+        <div class="readout-item"><span class="readout-key">local_offset:</span> <span class="readout-val" id="f2-lo">(0, 0, 0.80)</span></div>
+      </div>
+    </div>
+
+    <!-- Code Block -->
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-filename">frames.py</span>
+        <span class="code-lang">Python</span>
+      </div>
+      <pre><code><span class="kw">import</span> mujoco
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+
+MJCF = <span class="str">"""
+&lt;mujoco&gt;
+  &lt;worldbody&gt;
+    &lt;body name="base" pos="0 0 0.8"&gt;
+      &lt;geom type="box" size="0.1 0.1 0.4"/&gt;
+      &lt;body name="link" pos="0 0 0.8"&gt;
+        &lt;joint name="hinge" type="hinge" axis="0 1 0"/&gt;
+        &lt;geom type="capsule" size="0.03 0.4"/&gt;
+      &lt;/body&gt;
+    &lt;/body&gt;
+  &lt;/worldbody&gt;
+&lt;/mujoco&gt;
+"""</span>
+
+model = mujoco.<span class="fn">MjModel</span>.from_xml_string(MJCF)
+data  = mujoco.<span class="fn">MjData</span>(model)
+
+<span class="cmt"># Rotate hinge 45 degrees</span>
+data.qpos[<span class="num">0</span>] = np.radians(<span class="num">45</span>)
+mujoco.<span class="fn">mj_forward</span>(model, data)
+
+<span class="cmt"># data.xpos gives world coordinates</span>
+<span class="kw">print</span>(<span class="str">"link world pos:"</span>, data.<span class="fn">xpos</span>[<span class="num">2</span>])
+<span class="cmt"># data.xmat gives the 3x3 rotation matrix</span>
+<span class="kw">print</span>(<span class="str">"link frame:"</span>, data.<span class="fn">xmat</span>[<span class="num">2</span>].reshape(<span class="num">3</span>,<span class="num">3</span>))</code></pre>
+    </div>
+
+    <!-- Exercise -->
+    <div class="exercise">
+      <div class="card-label">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM7 5h2v4H7V5zm0 5h2v2H7v-2z"/></svg>
+        Prediction Exercise
+      </div>
+      <h4>At hinge_angle = 90, where does the local x-axis point in world coordinates?</h4>
+      <p>The local x-axis starts pointing to the right (world +x). The hinge rotates around the y-axis. Think about what a 90-degree rotation around y does to the x-axis.</p>
+      <div class="exercise-prompt">
+        At hinge_angle = 90, local x_axis in world coords = (____, ____, ____)
+      </div>
+      <button class="reveal-btn" onclick="toggleReveal(this)">Show answer</button>
+      <div class="reveal-answer">
+        A 90-degree rotation around the y-axis maps +x to -z in world coordinates. So local x_axis = (0, 0, -1) in world frame. Set the slider to 90 and watch the red arrow: it points straight down, which is the -z direction. The blue z_local arrow points to the right, which is +x in world.
+      </div>
+    </div>
+
+    <!-- Checkpoint -->
+    <div class="checkpoint">
+      <div class="card-label">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm3.35 5.35l-4 4a.5.5 0 01-.7 0l-2-2a.5.5 0 01.7-.7L7 9.29l3.65-3.64a.5.5 0 01.7.7z"/></svg>
+        Checkpoint
+      </div>
+      <h4>Lesson 02 Complete</h4>
+      <p>You understand how local frames chain through the body tree to produce world coordinates.</p>
+      <button class="checkpoint-btn" onclick="completeLesson(1, this)">Mark complete</button>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- LESSON 03 -->
+  <!-- ═══════════════════════════════════════════ -->
+  <section class="lesson" id="lesson-2">
+    <div class="lesson-number">Lesson 03</div>
+    <h2>State &amp; Stepping</h2>
+    <p class="lesson-lead">What <code>mj_forward</code> and <code>mj_step</code> actually compute. The state vector holds position, velocity, and acceleration. Stepping integrates forward in time.</p>
+
+    <!-- Mental Model -->
+    <div class="card mental-model">
+      <div class="card-label">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a2.5 2.5 0 00-2.5 2.5c0 .87.44 1.63 1.11 2.08L6 7.5V9h4V7.5l-.61-1.92A2.49 2.49 0 0010.5 3.5 2.5 2.5 0 008 1zM6 10v1h4v-1H6zm1 2v1h2v-1H7z"/></svg>
+        Mental Model
+      </div>
+      <h3>Two functions, two purposes</h3>
+      <p><strong>mj_forward(model, data)</strong> takes the current qpos and qvel and computes everything that depends on them: body positions, contact forces, sensor readings, accelerations. It does not advance time. Use it when you set a state and want to see the consequences.</p>
+      <p><strong>mj_step(model, data)</strong> does everything mj_forward does, then integrates the equations of motion to advance qpos and qvel by one timestep. It also increments <code>data.time</code>.</p>
+      <p>The state of a MuJoCo simulation is fully captured by (time, qpos, qvel, act). Everything else is derived. That means you can save and restore states by copying just those four arrays.</p>
+    </div>
+
+    <!-- Interactive Widget -->
+    <div class="widget-area">
+      <div class="widget-header">
+        <span class="widget-title">State Sandbox</span>
+        <span class="widget-badge">Simulation</span>
+      </div>
+      <div class="widget-canvas">
+        <svg id="svg3" viewBox="0 0 400 320" width="400" height="320">
+          <defs>
+            <pattern id="grid3" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="var(--border-light)" stroke-width="0.5"/>
+            </pattern>
+          </defs>
+          <rect width="400" height="320" fill="url(#grid3)"/>
+          <!-- mount -->
+          <line x1="120" y1="30" x2="280" y2="30" stroke="var(--text-muted)" stroke-width="2"/>
+          <circle id="s3-pivot" cx="200" cy="40" r="5" fill="var(--accent)"/>
+          <!-- trail -->
+          <g id="s3-trail"></g>
+          <!-- rod -->
+          <line id="s3-rod" x1="200" y1="40" x2="200" y2="220" stroke="var(--text)" stroke-width="3" stroke-linecap="round"/>
+          <!-- bob -->
+          <circle id="s3-bob" cx="200" cy="220" r="14" fill="var(--amber)" stroke="var(--text)" stroke-width="2"/>
+          <!-- velocity arrow -->
+          <line id="s3-vel" x1="200" y1="220" x2="200" y2="220" stroke="#dc2626" stroke-width="2" marker-end="url(#arrowR)" opacity="0.7"/>
+          <!-- time display -->
+          <text id="s3-time" x="16" y="310" font-size="12" font-family="var(--mono)" fill="var(--text-muted)">t = 0.000 s</text>
+        </svg>
+      </div>
+      <div class="widget-controls">
+        <div class="control-row">
+          <span class="control-label">init_angle</span>
+          <input type="range" class="control-slider" id="s3-angle" min="-90" max="90" value="45" step="1">
+          <span class="control-value" id="s3-angle-val">45.0 deg</span>
+        </div>
+        <div class="control-row">
+          <span class="control-label">init_vel</span>
+          <input type="range" class="control-slider" id="s3-vel-in" min="-5" max="5" value="0" step="0.1">
+          <span class="control-value" id="s3-vel-val">0.0 rad/s</span>
+        </div>
+      </div>
+      <div class="readout">
+        <div class="readout-item"><span class="readout-key">time:</span> <span class="readout-val" id="s3-t">0.000</span></div>
+        <div class="readout-item"><span class="readout-key">qpos:</span> <span class="readout-val" id="s3-qpos">0.785</span></div>
+        <div class="readout-item"><span class="readout-key">qvel:</span> <span class="readout-val" id="s3-qvel">0.000</span></div>
+        <div class="readout-item"><span class="readout-key">qacc:</span> <span class="readout-val" id="s3-qacc">0.000</span></div>
+      </div>
+      <div class="sim-buttons">
+        <button class="sim-btn primary" id="s3-step-btn" onclick="stepSim()">Step (1x)</button>
+        <button class="sim-btn" id="s3-run-btn" onclick="toggleRun()">Run</button>
+        <button class="sim-btn" onclick="resetSim()">Reset</button>
+        <button class="sim-btn" onclick="stepN(10)">Step 10x</button>
+      </div>
+    </div>
+
+    <!-- Code Block -->
+    <div class="code-block">
+      <div class="code-header">
+        <span class="code-filename">stepping.py</span>
+        <span class="code-lang">Python</span>
+      </div>
+      <pre><code><span class="kw">import</span> mujoco
+
+model = mujoco.<span class="fn">MjModel</span>.from_xml_string(MJCF)
+data  = mujoco.<span class="fn">MjData</span>(model)
+
+<span class="cmt"># Set initial state</span>
+data.qpos[<span class="num">0</span>] = <span class="num">0.7854</span>   <span class="cmt"># 45 degrees</span>
+data.qvel[<span class="num">0</span>] = <span class="num">0.0</span>
+
+<span class="cmt"># Compute derived quantities (no time advance)</span>
+mujoco.<span class="fn">mj_forward</span>(model, data)
+<span class="kw">print</span>(<span class="str">"qacc after forward:"</span>, data.qacc[<span class="num">0</span>])
+
+<span class="cmt"># Step the simulation 100 times</span>
+<span class="kw">for</span> i <span class="kw">in</span> <span class="fn">range</span>(<span class="num">100</span>):
+    mujoco.<span class="fn">mj_step</span>(model, data)
+
+<span class="kw">print</span>(<span class="str">"time:"</span>, data.time)
+<span class="kw">print</span>(<span class="str">"qpos:"</span>, data.qpos[<span class="num">0</span>])
+<span class="kw">print</span>(<span class="str">"qvel:"</span>, data.qvel[<span class="num">0</span>])</code></pre>
+    </div>
+
+    <!-- Exercise -->
+    <div class="exercise">
+      <div class="card-label">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM7 5h2v4H7V5zm0 5h2v2H7v-2z"/></svg>
+        Prediction Exercise
+      </div>
+      <h4>After mj_forward with angle=45, what sign is qacc?</h4>
+      <p>Gravity pulls the bob down. At 45 degrees, the pendulum is displaced to one side. Think about which direction gravity's torque wants to rotate the hinge.</p>
+      <div class="exercise-prompt">
+        qacc after mj_forward at 45 deg is (positive / negative / zero): ____
+      </div>
+      <button class="reveal-btn" onclick="toggleReveal(this)">Show answer</button>
+      <div class="reveal-answer">
+        Negative. Gravity creates a restoring torque that accelerates the pendulum back toward the hanging position (angle = 0). At positive angles, the angular acceleration is negative. Click "Step 1x" a few times and watch qvel go negative, confirming the pendulum swings back toward center.
+      </div>
+    </div>
+
+    <!-- Checkpoint -->
+    <div class="checkpoint">
+      <div class="card-label">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm3.35 5.35l-4 4a.5.5 0 01-.7 0l-2-2a.5.5 0 01.7-.7L7 9.29l3.65-3.64a.5.5 0 01.7.7z"/></svg>
+        Checkpoint
+      </div>
+      <h4>Lesson 03 Complete</h4>
+      <p>You know the difference between mj_forward and mj_step, and can read qpos, qvel, and qacc.</p>
+      <button class="checkpoint-btn" onclick="completeLesson(2, this)">Mark complete</button>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  MuJoCo Learning Lab / Notebook Explorer Preview
+</footer>
+
+<script>
+/* ════════════════════════════════════════════
+   LESSON 01: Pendulum
+   ════════════════════════════════════════════ */
+(function() {
+  const hSlider  = document.getElementById('p1-height');
+  const lSlider  = document.getElementById('p1-length');
+  const aSlider  = document.getElementById('p1-angle');
+  const hVal     = document.getElementById('p1-height-val');
+  const lVal     = document.getElementById('p1-length-val');
+  const aVal     = document.getElementById('p1-angle-val');
+  const rod      = document.getElementById('p1-rod');
+  const bob      = document.getElementById('p1-bob');
+  const pivot    = document.getElementById('p1-pivot');
+  const ceiling  = document.getElementById('p1-ceiling');
+  const arc      = document.getElementById('p1-arc');
+  const angLabel = document.getElementById('p1-angle-label');
+  const lenLabel = document.getElementById('p1-length-label');
+  const bxEl     = document.getElementById('p1-bx');
+  const bzEl     = document.getElementById('p1-bz');
+  const peEl     = document.getElementById('p1-pe');
+
+  function update() {
+    const pivotY = +hSlider.value;
+    const len    = +lSlider.value;
+    const deg    = +aSlider.value;
+    const rad    = deg * Math.PI / 180;
+    const cx     = 200;
+    const cy     = pivotY;
+    const ex     = cx + len * Math.sin(rad);
+    const ey     = cy + len * Math.cos(rad);
+
+    pivot.setAttribute('cy', cy);
+    ceiling.setAttribute('y1', cy - 20);
+    ceiling.setAttribute('y2', cy - 20);
+    rod.setAttribute('x1', cx);
+    rod.setAttribute('y1', cy);
+    rod.setAttribute('x2', ex);
+    rod.setAttribute('y2', ey);
+    bob.setAttribute('cx', ex);
+    bob.setAttribute('cy', ey);
+
+    // Angle arc
+    if (Math.abs(deg) > 1) {
+      const ar = 30;
+      const sa = Math.min(0, rad);
+      const ea = Math.max(0, rad);
+      const sx = cx + ar * Math.sin(sa);
+      const sy = cy + ar * Math.cos(sa);
+      const ex2 = cx + ar * Math.sin(ea);
+      const ey2 = cy + ar * Math.cos(ea);
+      arc.setAttribute('d', 'M' + sx + ',' + sy + ' A' + ar + ',' + ar + ' 0 0,' + (deg > 0 ? '1' : '0') + ' ' + ex2 + ',' + ey2);
+    } else {
+      arc.setAttribute('d', '');
+    }
+
+    angLabel.setAttribute('x', cx + 8);
+    angLabel.setAttribute('y', cy + 45);
+    angLabel.textContent = deg + '\u00b0';
+
+    const mx = (cx + ex) / 2 + 8;
+    const my = (cy + ey) / 2;
+    lenLabel.setAttribute('x', mx);
+    lenLabel.setAttribute('y', my);
+    lenLabel.textContent = (len / 200).toFixed(2) + 'm';
+
+    hVal.textContent = (pivotY / 200 * 3).toFixed(2) + ' m';
+    lVal.textContent = (len / 200).toFixed(2) + ' m';
+    aVal.textContent = deg.toFixed(1) + ' deg';
+
+    // Readouts (simulated world coordinates)
+    const worldX = (len / 200) * Math.sin(rad);
+    const worldZ = (pivotY / 200 * 3) - (len / 200) * Math.cos(rad);
+    const g = 9.81;
+    const mass = 1.0;
+    const refZ = (pivotY / 200 * 3) - (len / 200);
+    const pe = mass * g * (worldZ - refZ);
+
+    bxEl.textContent = worldX.toFixed(3);
+    bzEl.textContent = worldZ.toFixed(3);
+    peEl.textContent = pe.toFixed(3) + ' J';
+  }
+
+  [hSlider, lSlider, aSlider].forEach(s => s.addEventListener('input', update));
+  update();
+})();
+
+/* ════════════════════════════════════════════
+   LESSON 02: Frames
+   ════════════════════════════════════════════ */
+(function() {
+  const bhSlider = document.getElementById('f2-base-h');
+  const loSlider = document.getElementById('f2-link-off');
+  const anSlider = document.getElementById('f2-angle');
+  const bhVal    = document.getElementById('f2-base-h-val');
+  const loVal    = document.getElementById('f2-link-off-val');
+  const anVal    = document.getElementById('f2-angle-val');
+
+  const base     = document.getElementById('f2-base');
+  const link     = document.getElementById('f2-link');
+  const tip      = document.getElementById('f2-tip');
+  const joint    = document.getElementById('f2-joint');
+  const localX   = document.getElementById('f2-local-x');
+  const localZ   = document.getElementById('f2-local-z');
+  const lxLabel  = document.getElementById('f2-lx-label');
+  const lzLabel  = document.getElementById('f2-lz-label');
+  const worldX   = document.getElementById('f2-world-x');
+  const worldZ   = document.getElementById('f2-world-z');
+  const arcEl    = document.getElementById('f2-arc');
+  const wxEl     = document.getElementById('f2-wx');
+  const wzEl     = document.getElementById('f2-wz');
+  const loEl     = document.getElementById('f2-lo');
+
+  const groundY = 290;
+  const cx = 200;
+  const axisLen = 50;
+
+  function update() {
+    const bh  = +bhSlider.value;
+    const lo  = +loSlider.value;
+    const deg = +anSlider.value;
+    const rad = deg * Math.PI / 180;
+
+    const baseTop = groundY - bh;
+    base.setAttribute('x', cx - 25);
+    base.setAttribute('y', baseTop);
+    base.setAttribute('height', bh);
+
+    const jx = cx;
+    const jy = baseTop;
+    joint.setAttribute('cx', jx);
+    joint.setAttribute('cy', jy);
+
+    // Tip in rotated frame
+    const tipX = jx + lo * Math.sin(rad);
+    const tipY = jy - lo * Math.cos(rad);
+
+    link.setAttribute('x1', jx);
+    link.setAttribute('y1', jy);
+    link.setAttribute('x2', tipX);
+    link.setAttribute('y2', tipY);
+    tip.setAttribute('cx', tipX);
+    tip.setAttribute('cy', tipY);
+
+    // Local axes (rotated)
+    const cosR = Math.cos(rad);
+    const sinR = Math.sin(rad);
+    // local x: rotate (1,0) by angle around y -> in 2D screen: (cos, sin)
+    localX.setAttribute('x1', tipX);
+    localX.setAttribute('y1', tipY);
+    localX.setAttribute('x2', tipX + axisLen * cosR);
+    localX.setAttribute('y2', tipY + axisLen * sinR);
+    lxLabel.setAttribute('x', tipX + axisLen * cosR + 4);
+    lxLabel.setAttribute('y', tipY + axisLen * sinR + 4);
+
+    // local z: rotate (0,-1) by angle -> (-sin, -cos) in screen
+    localZ.setAttribute('x1', tipX);
+    localZ.setAttribute('y1', tipY);
+    localZ.setAttribute('x2', tipX - axisLen * sinR);
+    localZ.setAttribute('y2', tipY - axisLen * cosR);
+    lzLabel.setAttribute('x', tipX - axisLen * sinR + 4);
+    lzLabel.setAttribute('y', tipY - axisLen * cosR - 4);
+
+    // World axes (always aligned)
+    worldX.setAttribute('x1', tipX);
+    worldX.setAttribute('y1', tipY);
+    worldX.setAttribute('x2', tipX + axisLen);
+    worldX.setAttribute('y2', tipY);
+    worldZ.setAttribute('x1', tipX);
+    worldZ.setAttribute('y1', tipY);
+    worldZ.setAttribute('x2', tipX);
+    worldZ.setAttribute('y2', tipY - axisLen);
+
+    // Angle arc
+    if (Math.abs(deg) > 1) {
+      const ar = 20;
+      const sy = jy - ar;
+      const eax = jx + ar * Math.sin(rad);
+      const eay = jy - ar * Math.cos(rad);
+      const sweep = deg > 0 ? 1 : 0;
+      arcEl.setAttribute('d', 'M' + jx + ',' + sy + ' A' + ar + ',' + ar + ' 0 0,' + sweep + ' ' + eax + ',' + eay);
+    } else {
+      arcEl.setAttribute('d', '');
+    }
+
+    bhVal.textContent = (bh / 100).toFixed(2) + ' m';
+    loVal.textContent = (lo / 100).toFixed(2) + ' m';
+    anVal.textContent = deg.toFixed(1) + ' deg';
+
+    // World position readouts
+    const wX = (lo / 100) * Math.sin(rad);
+    const wZ = (bh / 100) + (lo / 100) * Math.cos(rad);
+    wxEl.textContent = wX.toFixed(3);
+    wzEl.textContent = wZ.toFixed(3);
+    loEl.textContent = '(0, 0, ' + (lo / 100).toFixed(2) + ')';
+  }
+
+  [bhSlider, loSlider, anSlider].forEach(s => s.addEventListener('input', update));
+  update();
+})();
+
+/* ════════════════════════════════════════════
+   LESSON 03: State & Stepping
+   ════════════════════════════════════════════ */
+const sim = {
+  time: 0,
+  qpos: 0,
+  qvel: 0,
+  qacc: 0,
+  dt: 0.002,
+  g: 9.81,
+  L: 0.9,
+  running: false,
+  animId: null,
+  trail: []
+};
+
+const s3AngleSlider = document.getElementById('s3-angle');
+const s3VelSlider   = document.getElementById('s3-vel-in');
+const s3AngleVal    = document.getElementById('s3-angle-val');
+const s3VelVal      = document.getElementById('s3-vel-val');
+const s3Rod         = document.getElementById('s3-rod');
+const s3Bob         = document.getElementById('s3-bob');
+const s3VelArrow    = document.getElementById('s3-vel');
+const s3Time        = document.getElementById('s3-time');
+const s3TrailG      = document.getElementById('s3-trail');
+const s3tEl         = document.getElementById('s3-t');
+const s3qposEl      = document.getElementById('s3-qpos');
+const s3qvelEl      = document.getElementById('s3-qvel');
+const s3qaccEl      = document.getElementById('s3-qacc');
+
+function simForward() {
+  sim.qacc = -(sim.g / sim.L) * Math.sin(sim.qpos);
+}
+
+function simStep() {
+  simForward();
+  sim.qvel += sim.qacc * sim.dt;
+  sim.qpos += sim.qvel * sim.dt;
+  sim.time += sim.dt;
+}
+
+function renderSim() {
+  const cx = 200, cy = 40;
+  const len = 180;
+  const ex = cx + len * Math.sin(sim.qpos);
+  const ey = cy + len * Math.cos(sim.qpos);
+
+  s3Rod.setAttribute('x1', cx);
+  s3Rod.setAttribute('y1', cy);
+  s3Rod.setAttribute('x2', ex);
+  s3Rod.setAttribute('y2', ey);
+  s3Bob.setAttribute('cx', ex);
+  s3Bob.setAttribute('cy', ey);
+
+  // Velocity arrow (tangential)
+  const vScale = 15;
+  const vx = ex + sim.qvel * vScale * Math.cos(sim.qpos);
+  const vy = ey - sim.qvel * vScale * Math.sin(sim.qpos);
+  s3VelArrow.setAttribute('x1', ex);
+  s3VelArrow.setAttribute('y1', ey);
+  s3VelArrow.setAttribute('x2', vx);
+  s3VelArrow.setAttribute('y2', vy);
+
+  s3Time.textContent = 't = ' + sim.time.toFixed(3) + ' s';
+  s3tEl.textContent = sim.time.toFixed(3);
+  s3qposEl.textContent = sim.qpos.toFixed(4);
+  s3qvelEl.textContent = sim.qvel.toFixed(4);
+  s3qaccEl.textContent = sim.qacc.toFixed(4);
+
+  // Trail
+  sim.trail.push({x: ex, y: ey});
+  if (sim.trail.length > 200) sim.trail.shift();
+  // Render only every 4th point
+  let pathD = '';
+  for (let i = 0; i < sim.trail.length; i += 4) {
+    const p = sim.trail[i];
+    pathD += (i === 0 ? 'M' : 'L') + p.x.toFixed(1) + ',' + p.y.toFixed(1);
+  }
+  s3TrailG.innerHTML = '<path d="' + pathD + '" fill="none" stroke="' + 'var(--amber)' + '" stroke-width="1.5" opacity="0.3"/>';
+}
+
+function resetSim() {
+  if (sim.running) toggleRun();
+  const deg = +s3AngleSlider.value;
+  sim.qpos = deg * Math.PI / 180;
+  sim.qvel = +s3VelSlider.value;
+  sim.time = 0;
+  sim.trail = [];
+  simForward();
+  renderSim();
+}
+
+function stepSim() {
+  simStep();
+  renderSim();
+}
+
+function stepN(n) {
+  for (let i = 0; i < n; i++) simStep();
+  renderSim();
+}
+
+function toggleRun() {
+  sim.running = !sim.running;
+  const btn = document.getElementById('s3-run-btn');
+  btn.textContent = sim.running ? 'Pause' : 'Run';
+  if (sim.running) runLoop();
+}
+
+function runLoop() {
+  if (!sim.running) return;
+  for (let i = 0; i < 10; i++) simStep();
+  renderSim();
+  sim.animId = requestAnimationFrame(runLoop);
+}
+
+s3AngleSlider.addEventListener('input', function() {
+  s3AngleVal.textContent = (+this.value).toFixed(1) + ' deg';
+  if (!sim.running) resetSim();
+});
+s3VelSlider.addEventListener('input', function() {
+  s3VelVal.textContent = (+this.value).toFixed(1) + ' rad/s';
+  if (!sim.running) resetSim();
+});
+
+// Init
+resetSim();
+
+/* ════════════════════════════════════════════
+   Navigation & Progress
+   ════════════════════════════════════════════ */
+const lessons = document.querySelectorAll('.lesson');
+const pills   = document.querySelectorAll('.nav-pill');
+const dots    = document.querySelectorAll('.timeline-dot');
+const completed = [false, false, false];
+
+function scrollToLesson(i) {
+  const el = document.getElementById('lesson-' + i);
+  if (el) {
+    const headerH = document.querySelector('.site-header').offsetHeight;
+    const top = el.getBoundingClientRect().top + window.scrollY - headerH - 16;
+    window.scrollTo({ top: top, behavior: 'smooth' });
+  }
+}
+
+function completeLesson(i, btn) {
+  completed[i] = true;
+  btn.textContent = 'Completed';
+  btn.classList.add('done');
+  btn.disabled = true;
+  dots[i].classList.add('completed');
+  updateActiveStates();
+}
+
+function updateActiveStates() {
+  const headerH = document.querySelector('.site-header').offsetHeight;
+  let activeIdx = 0;
+  lessons.forEach((lesson, i) => {
+    const rect = lesson.getBoundingClientRect();
+    if (rect.top < headerH + 120) activeIdx = i;
+  });
+  pills.forEach((p, i) => p.classList.toggle('active', i === activeIdx));
+  dots.forEach((d, i) => {
+    d.classList.toggle('active', i === activeIdx && !completed[i]);
+  });
+}
+
+window.addEventListener('scroll', updateActiveStates, { passive: true });
+
+function toggleReveal(btn) {
+  const answer = btn.nextElementSibling;
+  const visible = answer.classList.contains('visible');
+  answer.classList.toggle('visible');
+  btn.textContent = visible ? 'Show answer' : 'Hide answer';
+}
+</script>
+</body>
+</html>

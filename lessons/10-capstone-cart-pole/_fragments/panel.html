@@ -1,0 +1,516 @@
+<div class="lesson-content xp" id="lesson10">
+  <header class="lesson-header-block">
+    <p class="lesson-num-label">Capstone 1</p>
+    <h1 class="lesson-title">Balance a Cart-Pole</h1>
+    <p class="lesson-subtitle">Goal: build a model you have never seen, a pole balanced on a sliding cart, and keep it upright with a controller. There is nothing new to learn here. Every step uses a skill from Lessons 1 to 9, and each milestone says which one. The only fresh idea is that the controller must watch the cart as well as the pole.</p>
+    <p class="lesson-legend"><dfn class="term" tabindex="0" data-def="Technical words look like this. Hover or focus one to read a plain-English definition.">Dotted words</dfn> show a definition on hover. <span class="lg-math">Maths boxes</span> are optional. <span class="lg-pred">Predict boxes</span> hide the answer until you guess.</p>
+  </header>
+  <nav class="lesson-toc" aria-label="Sections in capstone 1"><a href="#l10-s-mission">The mission</a><a href="#l10-s-build">M1 Build</a><a href="#l10-s-fall">M2 Let go</a><a href="#l10-s-mass">M3 Mass matrix</a><a href="#l10-s-ctrl">M4 Controller</a><a href="#l10-s-env">M5 Gym env</a><a href="#l10-s-code">The script</a><a href="#l10-s-check">Check yourself</a><a href="#l10-recap">Recap</a></nav>
+
+<section class="step" id="l10-s-mission">
+  <span class="lvl lvl-plain">Plain words</span> <span class="lvl lvl-pic">Picture</span>
+  <h2>1. The mission: balance a broom on your hand</h2>
+  <p>Stand a broom upright on your palm. It starts to tip. You move your hand under it, and it stands again. That is the whole trick.</p>
+  <p>Now do it on a table. If you only chase the broom, your hand drifts. Soon you walk off the edge. So you have two jobs: keep the broom up, and keep your hand near the middle.</p>
+  <p>A <dfn class="term" tabindex="0" data-def="A cart that slides along a straight rail, with a pole hinged on top. The pole falls unless the cart moves under it. A classic test for controllers.">cart-pole</dfn> is that broom, made simple. A cart slides on a rail. A pole sits on a hinge on top. A motor pushes the cart left or right. Nothing else touches the pole.</p>
+  <div class="grid3">
+    <div class="card"><span class="callout-title" style="color:var(--teal)">Job 1: keep it up</span>Watch the lean and how fast it is changing. Move the cart towards the side the pole is falling. This is the Lesson 8 controller, aimed at the pole.</div>
+    <div class="card"><span class="callout-title" style="color:var(--orange)">Job 2: stay on the table</span>Watch where the cart is and how fast it moves. The rail ends at 1 m each side. A controller that ignores this drifts into the end stop.</div>
+    <div class="card"><span class="callout-title" style="color:var(--purple)">The one new idea</span>Use <strong>all four numbers at once</strong>: cart position, lean, cart speed, lean speed. This is called <dfn class="term" tabindex="0" data-def="A controller that uses every number of the state (here x, lean, x speed, lean speed), each multiplied by its own gain, then added up.">full-state feedback</dfn>.</div>
+  </div>
+  <h3>Try it: three ways to treat the broom</h3>
+  <p>Each run starts with the pole leaning 0.1 rad to the right, standing still. Watch the cart (orange trace) and the lean (teal trace).</p>
+  <div class="card">
+    <canvas id="l10cvIdea" role="img" aria-label="Cart-pole on a rail with traces of cart position and lean against time"></canvas>
+    <div class="btnrow">
+      <button id="l10IdeaFree" type="button" class="primary">Let go (no control)</button>
+      <button id="l10IdeaLean" type="button">Watch the lean only</button>
+      <button id="l10IdeaFull" type="button">Watch the lean and the cart</button>
+    </div>
+    <p class="caption">Let go: the pole falls in under half a second. Lean only: the pole stands, but the cart drifts right and hits the rail stop at 4.398 s. Lean and cart: the pole stands and the cart comes home. This page runs its own copy of the cart-pole maths. It matches real MuJoCo to 15 decimals (milestone 3 shows how).</p>
+  </div>
+  <h3>The five milestones</h3>
+  <table>
+    <thead><tr><th>Milestone</th><th>What you build or measure</th><th>Lessons it uses</th><th>Done when</th></tr></thead>
+    <tbody>
+      <tr><td>1. Build the model</td><td>MJCF with a slide joint, a hinge, a motor and sensors</td><td>1, 2, 4, 5, 6, 7</td><td>Your predicted counts match the printed ones</td></tr>
+      <tr><td>2. Let go</td><td>Time the fall, see which way the cart goes</td><td>3</td><td>You can say why the cart moves the "wrong" way</td></tr>
+      <tr><td>3. Mass matrix</td><td>Read <code>mj_fullM</code>, write the motion by hand</td><td>3, 8</td><td>Your hand <code>qacc</code> matches MuJoCo to 4 decimals</td></tr>
+      <tr><td>4. Controller</td><td>Lean-only PD, then four knobs</td><td>5, 8</td><td>Upright from 0.1 rad, cart home, ctrl never clipped</td></tr>
+      <tr><td>5. Gym environment</td><td><code>CartPoleBalanceEnv</code> with reset, step, reward</td><td>9</td><td><code>check_env</code> passes; your controller scores 500 / 500</td></tr>
+    </tbody>
+  </table>
+  <p class="newwords">New words: <span class="chip">cart-pole</span><span class="chip">full-state feedback</span></p>
+</section>
+
+<section class="step" id="l10-s-build">
+  <span class="lvl lvl-words">MuJoCo words</span> <span class="lvl lvl-code">Milestone 1</span>
+  <h2>2. Milestone 1: build the model and predict its sizes</h2>
+  <div class="card"><span class="callout-title" style="color:var(--orange)">Mission 1</span><strong>Build:</strong> a world with a rail, a cart body that slides along x, and a pole body hinged on the cart. Add a motor on the slide and sensors for both joints.<br><strong>Uses:</strong> body tree (Lesson 1), axes and right-hand rule (Lesson 2), reading sizes and masses (Lesson 4), motor (Lesson 5), sensors (Lesson 6), switching contacts off (Lesson 7).<br><strong>Done when:</strong> you wrote down nbody, njnt, nq, nv, nu and nsensordata <em>before</em> running, and they match.</div>
+  <p>Here is the XML. Every number has a reason, listed in the table under it.</p>
+  <div class="grid2">
+<pre><code><span class="t">&lt;option</span> <span class="a">timestep</span>=<span class="s">"0.002"</span> <span class="a">gravity</span>=<span class="s">"0 0 -9.81"</span><span class="t">/&gt;</span>
+<span class="t">&lt;worldbody&gt;</span>
+  <span class="t">&lt;geom</span> <span class="a">name</span>=<span class="s">"rail"</span> <span class="a">type</span>=<span class="s">"box"</span> <span class="a">size</span>=<span class="s">"1.2 0.01 0.01"</span>
+        <span class="a">pos</span>=<span class="s">"0 0 0.5"</span> <span class="a">contype</span>=<span class="s">"0"</span> <span class="a">conaffinity</span>=<span class="s">"0"</span><span class="t">/&gt;</span>
+  <span class="t">&lt;body</span> <span class="a">name</span>=<span class="s">"cart"</span> <span class="a">pos</span>=<span class="s">"0 0 0.5"</span><span class="t">&gt;</span>
+    <span class="t">&lt;joint</span> <span class="a">name</span>=<span class="s">"slider"</span> <span class="a">type</span>=<span class="s">"slide"</span> <span class="a">axis</span>=<span class="s">"1 0 0"</span>
+           <span class="a">range</span>=<span class="s">"-1 1"</span><span class="t">/&gt;</span>
+    <span class="t">&lt;geom</span> <span class="a">name</span>=<span class="s">"cart_box"</span> <span class="a">type</span>=<span class="s">"box"</span> <span class="a">size</span>=<span class="s">"0.1 0.075 0.05"</span>
+          <span class="a">mass</span>=<span class="s">"1"</span> <span class="a">contype</span>=<span class="s">"0"</span> <span class="a">conaffinity</span>=<span class="s">"0"</span><span class="t">/&gt;</span>
+    <span class="t">&lt;body</span> <span class="a">name</span>=<span class="s">"pole"</span> <span class="a">pos</span>=<span class="s">"0 0 0"</span><span class="t">&gt;</span>
+      <span class="t">&lt;joint</span> <span class="a">name</span>=<span class="s">"hinge"</span> <span class="a">type</span>=<span class="s">"hinge"</span> <span class="a">axis</span>=<span class="s">"0 1 0"</span><span class="t">/&gt;</span>
+      <span class="t">&lt;geom</span> <span class="a">name</span>=<span class="s">"pole_rod"</span> <span class="a">type</span>=<span class="s">"capsule"</span>
+            <span class="a">fromto</span>=<span class="s">"0 0 0 0 0 0.6"</span> <span class="a">size</span>=<span class="s">"0.02"</span>
+            <span class="a">contype</span>=<span class="s">"0"</span> <span class="a">conaffinity</span>=<span class="s">"0"</span><span class="t">/&gt;</span>
+      <span class="t">&lt;site</span> <span class="a">name</span>=<span class="s">"tip"</span> <span class="a">pos</span>=<span class="s">"0 0 0.6"</span><span class="t">/&gt;</span>
+    <span class="t">&lt;/body&gt;</span>
+  <span class="t">&lt;/body&gt;</span>
+<span class="t">&lt;/worldbody&gt;</span>
+<span class="t">&lt;actuator&gt;</span>
+  <span class="t">&lt;motor</span> <span class="a">name</span>=<span class="s">"push"</span> <span class="a">joint</span>=<span class="s">"slider"</span> <span class="a">gear</span>=<span class="s">"20"</span> <span class="a">ctrlrange</span>=<span class="s">"-1 1"</span><span class="t">/&gt;</span>
+<span class="t">&lt;/actuator&gt;</span>
+<span class="t">&lt;sensor&gt;</span>
+  <span class="t">&lt;jointpos</span> <span class="a">name</span>=<span class="s">"cart_x"</span>     <span class="a">joint</span>=<span class="s">"slider"</span><span class="t">/&gt;</span>
+  <span class="t">&lt;jointpos</span> <span class="a">name</span>=<span class="s">"pole_angle"</span> <span class="a">joint</span>=<span class="s">"hinge"</span><span class="t">/&gt;</span>
+  <span class="t">&lt;jointvel</span> <span class="a">name</span>=<span class="s">"cart_v"</span>     <span class="a">joint</span>=<span class="s">"slider"</span><span class="t">/&gt;</span>
+  <span class="t">&lt;jointvel</span> <span class="a">name</span>=<span class="s">"pole_spin"</span>  <span class="a">joint</span>=<span class="s">"hinge"</span><span class="t">/&gt;</span>
+  <span class="t">&lt;framepos</span> <span class="a">name</span>=<span class="s">"tip_pos"</span> <span class="a">objtype</span>=<span class="s">"site"</span> <span class="a">objname</span>=<span class="s">"tip"</span><span class="t">/&gt;</span>
+<span class="t">&lt;/sensor&gt;</span></code></pre>
+<pre><code><span class="c"># joint 0 'slider' -> qpos[0], qvel[0]</span>
+data.qpos[<span class="n">0</span>]   <span class="c"># x: cart along the rail, m</span>
+data.qvel[<span class="n">0</span>]   <span class="c"># cart speed, m/s</span>
+<span class="c"># joint 1 'hinge' -> qpos[1], qvel[1]</span>
+data.qpos[<span class="n">1</span>]   <span class="c"># lean, rad (0 = upright)</span>
+data.qvel[<span class="n">1</span>]   <span class="c"># lean speed, rad/s</span>
+
+<span class="c"># actuator 0 'push' -> ctrl[0]</span>
+data.ctrl[<span class="n">0</span>] = <span class="n">0.5</span>  <span class="c"># force = 20 x 0.5 = 10 N</span>
+
+<span class="c"># sensors, in the order written</span>
+data.sensordata[<span class="n">0</span>]    <span class="c"># cart_x, m</span>
+data.sensordata[<span class="n">1</span>]    <span class="c"># pole_angle, rad</span>
+data.sensordata[<span class="n">2</span>]    <span class="c"># cart_v, m/s</span>
+data.sensordata[<span class="n">3</span>]    <span class="c"># pole_spin, rad/s</span>
+data.sensordata[<span class="n">4</span>:<span class="n">7</span>]  <span class="c"># tip_pos (x, y, z), world, m</span>
+obs = data.sensordata[:<span class="n">4</span>]  <span class="c"># [x, lean, x speed, lean speed]</span>
+
+model.body_mass[<span class="n">2</span>]     <span class="c"># pole: 0.7875 kg</span>
+model.body_ipos[<span class="n">2</span>]     <span class="c"># pole CoM: (0, 0, 0.3) in pole frame</span>
+model.jnt_range[<span class="n">0</span>]     <span class="c"># [-1. 1.] m</span>
+data.ncon               <span class="c"># 0: no contacts ever</span></code></pre>
+  </div>
+  <table>
+    <thead><tr><th>Number</th><th>Reason</th></tr></thead>
+    <tbody>
+      <tr><td><code>timestep="0.002"</code>, gravity -9.81</td><td>The course defaults from Lesson 3. 500 steps per second.</td></tr>
+      <tr><td>rail <code>size="1.2 ..."</code></td><td>Half-length 1.2 m, a bit longer than the cart can travel, so you can see the ends.</td></tr>
+      <tr><td><code>range="-1 1"</code> on the slider</td><td>A 2 m table-top track. The cart may go 1 m each way. Past that, MuJoCo's joint limit pushes back like an end stop.</td></tr>
+      <tr><td>cart <code>pos="0 0 0.5"</code></td><td>The rail sits at table height. This only moves the picture; a slide along x does not care about height.</td></tr>
+      <tr><td>cart box <code>0.1 0.075 0.05</code>, <code>mass="1"</code></td><td>Half-sizes, so a 20 x 15 x 10 cm trolley. Mass given directly as a round 1 kg.</td></tr>
+      <tr><td>pole <code>fromto="0 0 0 0 0 0.6"</code></td><td>Points <strong>up</strong> from the hinge, 0.6 m long. So lean 0 means upright, and gravity makes it fall: an <dfn class="term" tabindex="0" data-def="A pendulum balanced above its pivot instead of hanging below it. Gravity pushes it away from upright, so it falls unless controlled.">inverted pendulum</dfn>.</td></tr>
+      <tr><td>pole <code>size="0.02"</code>, no mass given</td><td>A 4 cm thick rod. MuJoCo uses its default density of 1000 kg/m³ (water), as for every capsule in this course: 0.7875 kg.</td></tr>
+      <tr><td><code>contype="0" conaffinity="0"</code></td><td>Lesson 7's switch: these geoms never collide. The cart and pole only move through their joints. (MuJoCo skips cart-pole pairs anyway, because they are parent and child.)</td></tr>
+      <tr><td><code>gear="20"</code>, <code>ctrlrange="-1 1"</code></td><td>At most 20 N on the cart. The balance tests below ask for at most 11.21 N, so the motor is never <dfn class="term" tabindex="0" data-def="Asked for more than its limit, so it gives its maximum instead (Lesson 8).">saturated</dfn> there.</td></tr>
+    </tbody>
+  </table>
+  <div class="predict">
+    <h3>Predict first: what are nbody, njnt, nq, nv, nu and nsensordata for this model?</h3>
+    <textarea aria-label="Your prediction for the model sizes"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p><strong>nbody = 3</strong> (world, cart, pole: the world counts, Lesson 1). <strong>njnt = 2</strong>. <strong>nq = 2, nv = 2</strong>: a slide and a hinge each have one position number and one speed number. <strong>nu = 1</strong>: one motor. <strong>nsensordata = 7</strong>: four 1-number sensors plus a 3-number <code>framepos</code>. The script also prints ngeom = 3, nsite = 1, nsensor = 5.</p>
+<pre><code>nbody=3  njnt=2  nq=2  nv=2  nu=1  ngeom=3  nsite=1  nsensor=5  nsensordata=7
+body tree:
+  body 0 'world'  joints=[]  geoms=['rail']  mass=0.0000 kg
+    body 1 'cart'  joints=['slider']  geoms=['cart_box']  mass=1.0000 kg
+      body 2 'pole'  joints=['hinge']  geoms=['pole_rod']  mass=0.7875 kg</code></pre>
+      <p>Two joints but only one motor. The pole has no motor of its own: you can only move it by moving the cart. That is what makes this a puzzle.</p>
+    </div>
+  </div>
+  <h3>Try it: pose the model and read the sensors</h3>
+  <p>Move the two joints by hand. This is Lesson 2 again: the hinge axis is +y, so by the right-hand rule a <strong>positive lean tips the top towards +x</strong> (right). The tip sensor reports the world position of the <code>tip</code> site.</p>
+  <div class="card">
+    <div class="grid2">
+      <canvas id="l10cvPose" role="img" aria-label="Cart-pole posed by two sliders, with world axes and the tip site marked"></canvas>
+      <div>
+        <label class="slider"><span>Cart <code>qpos[0]</code></span> <output id="l10oPX">0.00 m</output><input type="range" id="l10PX" min="-1" max="1" step="0.01" value="0"></label>
+        <label class="slider"><span>Lean <code>qpos[1]</code></span> <output id="l10oPT">0.10 rad</output><input type="range" id="l10PT" min="-1.57" max="1.57" step="0.01" value="0.1"></label>
+        <pre id="l10PoseSens" style="font-size:12px;white-space:pre-wrap" aria-live="polite"></pre>
+      </div>
+    </div>
+    <p class="caption">tip_pos = (x + 0.6 sin(lean), 0, 0.5 + 0.6 cos(lean)) in the world frame, m. The world frame's origin is 0.5 m below the rail. At x = 0, lean = 0.1 the script prints sensordata = [0.0, 0.1, 0.0, 0.0, 0.0599, 0.0, 1.097]. The two speed sensors read 0 here because a pose set by hand has no speed.</p>
+  </div>
+  <p class="newwords">New words: <span class="chip">inverted pendulum</span><span class="chip">slide joint (again)</span><span class="chip">one motor, two joints</span></p>
+</section>
+
+<section class="step" id="l10-s-fall">
+  <span class="lvl lvl-pic">Picture</span> <span class="lvl lvl-words">Milestone 2</span>
+  <h2>3. Milestone 2: let go and watch it fall</h2>
+  <div class="card"><span class="callout-title" style="color:var(--orange)">Mission 2</span><strong>Measure:</strong> start the pole at a small lean, ctrl = 0, and time how long it takes to pass 0.5 rad.<br><strong>Uses:</strong> setting <code>qpos</code>, <code>mj_forward</code>, the <code>mj_step</code> loop (Lesson 3).<br><strong>Done when:</strong> you have the time, and you can explain which way the cart moved.</div>
+  <div class="predict">
+    <h3>Predict first: the pole leans right (+0.1 rad) and you let go. Nobody touches the cart. Does the cart move? Which way?</h3>
+    <textarea aria-label="Your prediction for the cart when the pole falls"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p>The cart <strong>moves left</strong>, the opposite way to the fall. When the pole passes 0.5 rad, at <strong>0.392 s</strong>, the cart is at <strong>x = -0.0506 m</strong>, moving at -0.3182 m/s.</p>
+      <p>Why: nothing outside pushes the machine sideways. The rail has no friction and the motor is off. So the <dfn class="term" tabindex="0" data-def="The average position of all the mass. With no outside sideways force, it cannot start moving sideways.">centre of mass</dfn> of cart plus pole cannot move sideways. The pole's mass swings right, so the cart must slide left to balance it. It is like stepping off a small boat: you go forward, the boat goes back. The script checks it: the centre of mass starts at x = +0.013195 m and is at +0.013174 m when the pole passes 0.5 rad. The tiny difference is the integrator's step error (Lesson 3).</p>
+    </div>
+  </div>
+  <div class="card">
+    <canvas id="l10cvFall" role="img" aria-label="Cart-pole falling with no control, with traces of lean and cart position for one second"></canvas>
+    <div class="btnrow"><button id="l10Fall10" type="button" class="primary">Let go from 0.1 rad</button><button id="l10Fall05" type="button">Let go from 0.05 rad</button></div>
+    <div class="readouts">
+      <div class="ro"><span class="lab">passes 0.5 rad at</span><span class="val" id="l10fT">-</span> <span class="unit">s</span></div>
+      <div class="ro"><span class="lab">cart x = qpos[0]</span><span class="val" id="l10fX">-</span> <span class="unit">m</span></div>
+      <div class="ro"><span class="lab">centre of mass x</span><span class="val" id="l10fCom">-</span> <span class="unit">m, world</span></div>
+    </div>
+    <p class="caption">Teal = lean (rad). Orange = cart x, drawn 10 times bigger so you can see it. Yellow dashed = 0.5 rad. The run lasts 0.6 s, until the pole is nearly flat (1.4343 rad). The purple triangle under the rail is the centre of mass of the whole machine: it barely moves, from 0.0132 m to 0.0128 m, while the cart slides 0.1181 m left. That small drift is the integrator's step error; it grows as the pole spins faster.</p>
+  </div>
+  <table>
+    <thead><tr><th>Start lean (rad)</th><th>passes 0.5 rad at (s)</th><th>cart x then (m)</th><th>cart speed then (m/s)</th><th>lean speed then (rad/s)</th></tr></thead>
+    <tbody>
+      <tr><td>0.05</td><td>0.510</td><td>-0.0574</td><td>-0.3238</td><td>+2.7930</td></tr>
+      <tr><td>0.1</td><td>0.392</td><td>-0.0506</td><td>-0.3182</td><td>+2.7421</td></tr>
+    </tbody>
+  </table>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">What this tells the controller designer</span>Halving the start lean only buys 0.118 s. The fall speeds up on its own: near upright, the lean is multiplied by about e (2.7) every 0.168 s (maths in milestone 4). So the controller must act within a few tenths of a second. At 500 steps per second, MuJoCo gives it plenty of chances.</div>
+  <p class="newwords">New words: <span class="chip">centre of mass</span><span class="chip">reaction</span></p>
+</section>
+
+<section class="step" id="l10-s-mass">
+  <span class="lvl lvl-words">MuJoCo words</span> <span class="lvl lvl-math">Milestone 3</span>
+  <h2>4. Milestone 3: the mass matrix ties the cart and the pole together</h2>
+  <div class="card"><span class="callout-title" style="color:var(--orange)">Mission 3</span><strong>Read:</strong> the 2 x 2 mass matrix with <code>mj_fullM</code>, and explain each entry.<br><strong>Uses:</strong> <code>mj_fullM</code> and "inertia x qacc = forces" (Lesson 8), <code>qacc</code> (Lesson 3).<br><strong>Done when:</strong> your hand-written equations give MuJoCo's <code>qacc</code> to 4 decimals.</div>
+  <p>In Lesson 8 the pendulum had one joint, so its <dfn class="term" tabindex="0" data-def="The nv x nv table that says how hard each joint is to speed up, and how speeding up one joint pushes on the others. Filled by mujoco.mj_fullM.">mass matrix</dfn> was a single number. Now there are two joints, so it is a 2 x 2 table:</p>
+<pre><code>mj_fullM at lean 0.0: [[1.787493, 0.236248], [0.236248, 0.096741]]
+mj_fullM at lean 0.3: [[1.787493, 0.225696], [0.225696, 0.096741]]</code></pre>
+  <table>
+    <thead><tr><th>Entry</th><th>Value</th><th>Plain meaning</th><th>Where it comes from</th></tr></thead>
+    <tbody>
+      <tr><td>M[0,0]</td><td>1.787493 kg</td><td>How hard the cart is to speed up along the rail. It drags the pole with it.</td><td>cart 1 kg + pole 0.787493 kg</td></tr>
+      <tr><td>M[1,1]</td><td>0.096741 kg m²</td><td>How hard the pole is to spin about the hinge</td><td>0.025867 (about its own middle) + 0.787493 x 0.3² = 0.070874</td></tr>
+      <tr><td>M[0,1] = M[1,0]</td><td>0.236248 x cos(lean) kg m</td><td><strong>The coupling</strong>: speeding up one joint pushes on the other</td><td>pole mass x 0.3 m (distance to its centre) x cos(lean)</td></tr>
+    </tbody>
+  </table>
+  <div class="card analogy"><strong>The coupling in plain words: the tablecloth trick.</strong> Jerk a tablecloth fast and the glass on it tips backwards. Jerk the cart right and the pole tips left. That is M[0,1] at work. It is also why the falling pole pushed the cart left in milestone 2. It works both ways. The coupling shrinks as the pole leans further (cos 0.3 = 0.955); with the pole lying flat it would vanish.</div>
+  <div class="predict">
+    <h3>Predict first: the pole is exactly upright and still. You push the cart right with ctrl = +0.5 (10 N). Does the pole start to tip? Which way?</h3>
+    <textarea aria-label="Your prediction for pushing the cart under an upright pole"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p><strong>Yes, it tips left.</strong> MuJoCo gives <code>qacc</code> = [+8.260626 m/s², -20.172924 rad/s²]. The cart speeds up to the right, and the pole's lean speeds up in the negative direction: its top falls behind. Gravity does nothing yet (lean is 0), so all of that comes from the coupling term. Set the sliders below to lean 0, ctrl 0.5 to see it.</p>
+      <p>This is the controller's lever. To tip the pole back to the left, it pushes the cart to the right.</p>
+    </div>
+  </div>
+  <div class="card">
+    <canvas id="l10cvMass" role="img" aria-label="Cart-pole at rest with the motor force and the resulting accelerations of the cart and the pole tip"></canvas>
+    <label class="slider"><span>Lean <code>qpos[1]</code> (at rest)</span> <output id="l10oMT">0.10 rad</output><input type="range" id="l10MT" min="-1.2" max="1.2" step="0.01" value="0.1"></label>
+    <label class="slider"><span>Motor <code>ctrl[0]</code></span> <output id="l10oMU">0.00 (0.0 N)</output><input type="range" id="l10MU" min="-1" max="1" step="0.05" value="0"></label>
+    <div class="btnrow"><button type="button" class="l10mpre" data-th="0.1" data-u="0">lean 0.1, ctrl 0 (falling)</button><button type="button" class="l10mpre" data-th="0" data-u="0.5">lean 0, ctrl 0.5 (tablecloth)</button></div>
+    <div class="readouts">
+      <div class="ro"><span class="lab">M[0,1] = 0.236248 cos(lean)</span><span class="val" id="l10mM01">-</span> <span class="unit">kg m</span></div>
+      <div class="ro frozen"><span class="lab">det M</span><span class="val" id="l10mDet">-</span></div>
+      <div class="ro"><span class="lab">qacc[0] cart</span><span class="val" id="l10mA0">-</span> <span class="unit">m/s²</span></div>
+      <div class="ro"><span class="lab">qacc[1] lean</span><span class="val" id="l10mA1">-</span> <span class="unit">rad/s²</span></div>
+    </div>
+    <p class="caption">Speeds are zero here, so only gravity and the motor act. At lean 0.1, ctrl 0 this gives [-0.462220, +3.514795], the same as MuJoCo's <code>data.qacc</code> in the script. Try lean 0.1 and find the ctrl where qacc[1] changes sign: about that much push stops the pole from speeding up its fall, for an instant.</p>
+  </div>
+  <details class="math"><summary>Step 1: the two equations of motion, in matrix form</summary><div>
+    <p>Write the cart's position as x and the lean as θ. The pole's centre is 0.3 m up the pole, at (x + 0.3 sin θ, 0.5 + 0.3 cos θ). Newton's law for the two joints, written the MuJoCo way, is "mass matrix x qacc = forces":</p>
+    <div class="eq">[ 1.787493              0.236248 cos θ ] [ qacc[0] ]   [ 20 ctrl + 0.236248 sin θ · θ̇² ]
+[ 0.236248 cos θ        0.096741       ] [ qacc[1] ] = [ 2.317591 sin θ                ]</div>
+    <p>Top row, the cart: motor force, plus a "spin" term that appears when the pole swings fast (its centre is moving on a circle). Bottom row, the hinge: gravity's turning effect. 2.317591 N m = 0.787493 kg x 9.81 m/s² x 0.3 m. It has a plus sign because it pushes the pole <em>away</em> from upright, unlike the hanging pendulum of Lesson 3.</p>
+    <p>MuJoCo keeps the same right-hand side, with the opposite sign, in <code>data.qfrc_bias</code>. At lean 0.1 at rest the script prints <code>qfrc_bias</code> = [+0.000000, -0.231373], and 2.317591 x sin(0.1) = 0.231373.</p>
+  </div></details>
+  <details class="math"><summary>Step 2: solve it by hand at lean 0.1, at rest, ctrl 0</summary><div>
+    <p>A 2 x 2 system [[a, b], [b, d]] q̈ = [r0, r1] has the answer q̈0 = (r0 d - b r1) / det, q̈1 = (a r1 - b r0) / det, with det = a d - b².</p>
+    <div class="eq">a = 1.787493   b = 0.236248 x cos 0.1 = 0.235068   d = 0.096741
+r0 = 20 x 0 + 0 = 0.000000        r1 = 2.317591 x sin 0.1 = 0.231373
+det = 1.787493 x 0.096741 - 0.235068² = 0.117668
+
+qacc[0] = (0.000000 x 0.096741 - 0.235068 x 0.231373) / 0.117668 = -0.462220 m/s²
+qacc[1] = (1.787493 x 0.231373 - 0.235068 x 0.000000) / 0.117668 = +3.514795 rad/s²
+MuJoCo data.qacc = [-0.462220, +3.514795]     difference 8.9e-16</div>
+    <p>The cart accelerates left (minus) while the pole falls right (plus): milestone 2's reaction, as a number.</p>
+  </div></details>
+  <details class="math"><summary>Step 3: a moving state, with the motor on</summary><div>
+    <p>x = 0.2 m, lean 0.3 rad, x speed -0.5 m/s, lean speed 1.2 rad/s, ctrl 0.4. Now the spin term and the motor both count:</p>
+    <div class="eq">a = 1.787493   b = 0.236248 x cos 0.3 = 0.225696   d = 0.096741
+r0 = 20 x 0.4 + 0.236248 x sin(0.3) x 1.2² = 8.100535
+r1 = 2.317591 x sin(0.3) = 0.684895            det = 0.121986
+
+qacc[0] = (8.100535 x 0.096741 - 0.225696 x 0.684895) / 0.121986 = +5.156987 m/s²
+qacc[1] = (1.787493 x 0.684895 - 0.225696 x 8.100535) / 0.121986 = -4.951526 rad/s²
+MuJoCo data.qacc = [+5.156987, -4.951526]     difference 3.6e-15</div>
+    <p>Notice x and the cart speed do not appear anywhere: the rail is the same everywhere, and there is no friction. Only the lean and the lean speed change the forces.</p>
+  </div></details>
+  <details class="math"><summary>Step 4: these equations are the web page's physics</summary><div>
+    <p>Every animation on this page, and the sandbox, does exactly this each step, like Lesson 3's pendulum: compute ctrl from the state, clip it to [-1, 1], solve the 2 x 2 system for qacc, then <code>qvel += 0.002 x qacc</code>, then <code>qpos += 0.002 x qvel</code> with the new speed.</p>
+    <p><code>10_check_browser_copy.py</code> runs the page's own JavaScript in node and compares every step with MuJoCo. Six runs (two knob sets for 2 s, a push, a start where ctrl is clipped, lean-only for 4 s, and a 1 s fall): the largest difference is <strong>8.9e-16</strong>, far better than 4 decimals.</p>
+  </div></details>
+  <p class="newwords">New words: <span class="chip">mass matrix (2 x 2)</span><span class="chip">coupling</span><span class="chip">qfrc_bias</span></p>
+</section>
+
+<section class="step" id="l10-s-ctrl">
+  <span class="lvl lvl-pic">Picture</span> <span class="lvl lvl-words">Milestone 4</span>
+  <h2>5. Milestone 4: a controller that watches the lean, then one that watches everything</h2>
+  <div class="card"><span class="callout-title" style="color:var(--orange)">Mission 4</span><strong>Build:</strong> a controller that brings the pole upright from 0.1 rad <em>and</em> brings the cart back near x = 0.<br><strong>Uses:</strong> the control loop, PD, clipping (Lesson 8); <code>ctrl</code> and gear (Lesson 5).<br><strong>Done when:</strong> after 6 s, |x| &lt; 0.01 m and |lean| &lt; 0.01 rad, the cart never reached the rail, and ctrl never needed clipping.</div>
+  <h3>First try: Lesson 8's PD, aimed at the lean</h3>
+  <p>Lesson 8 taught "push in proportion to the error, brake on the speed". Here the target lean is 0. A lean to the right needs a push to the right, so both gains are positive:</p>
+  <pre><code>ctrl = 4.1404 * lean + 0.7561 * lean_speed    <span class="c"># per rad, per rad/s; force = 20 * ctrl N</span>
+data.ctrl[<span class="n">0</span>] = np.clip(ctrl, -<span class="n">1</span>, <span class="n">1</span>)</code></pre>
+  <div class="predict">
+    <h3>Predict first: start at 0.1 rad with this lean-only controller. Does the pole stay up? What does the cart do over 10 s?</h3>
+    <textarea aria-label="Your prediction for the lean-only controller"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p><strong>The pole stays up, but the cart runs away.</strong> The lean is inside 0.01 rad from 0.488 s. To get there the cart had to dash right, and nothing in the rule asks it to stop. It keeps rolling at a steady 0.2284 m/s:</p>
+<pre><code>t=1.0 s  x=+0.2240 m  lean=+0.00071 rad  x speed=+0.2285 m/s
+t=2.0 s  x=+0.4525 m  lean=+0.00000 rad  x speed=+0.2284 m/s
+t=4.0 s  x=+0.9092 m  lean=+0.00000 rad  x speed=+0.2284 m/s
+cart reaches the 1 m rail stop at t=4.398 s</code></pre>
+      <p>At the stop, MuJoCo's joint limit (a constraint, Lesson 7) halts the cart. The sudden stop knocks the pole over: the lean reaches 18.828 rad by 10 s, so it spins round and round. To this controller, an upright pole on a moving cart looks perfect.</p>
+    </div>
+  </div>
+  <h3>The fix: four knobs</h3>
+  <p>Add two more terms that watch the cart. The controller is still one line: each number of the state times its own knob, all added up.</p>
+  <pre><code>ctrl = k_lean * lean + k_lean_speed * lean_speed + k_offset * x + k_cart_speed * x_speed</code></pre>
+  <table>
+    <thead><tr><th>Knob</th><th>Value (ctrl per unit)</th><th>In newtons</th><th>Plain meaning</th></tr></thead>
+    <tbody>
+      <tr><td>lean</td><td>4.1404 per rad</td><td>82.808 N per rad</td><td>Pole leans right: move right, under it.</td></tr>
+      <tr><td>lean speed</td><td>0.7561 per rad/s</td><td>15.123 N per rad/s</td><td>Pole falling fast: move sooner. Pole already coming back: ease off.</td></tr>
+      <tr><td>cart offset</td><td>0.9827 per m</td><td>19.654 N per m</td><td>Cart right of centre: push it <strong>further right</strong>, briefly. See below.</td></tr>
+      <tr><td>cart speed</td><td>0.8076 per m/s</td><td>16.152 N per m/s</td><td>Same idea for the cart's speed.</td></tr>
+    </tbody>
+  </table>
+  <div class="card warn"><span class="callout-title" style="color:var(--orange)">The surprising sign: to go left, first go right</span>The cart offset knob is <em>positive</em>: a cart at +x gets pushed further +x. Why? The cart cannot just drive home, or the pole falls the other way (the tablecloth trick). So it first slips right, which tips the pole left. Then it chases the leaning pole home. You do this with the broom too. Started at x = +0.5 m with the pole upright, the script measures: step-0 ctrl +0.49134, the cart first moves <strong>away</strong> to +0.5425 m at 0.218 s (lean then -0.1258 rad), and is at -0.0015 m by 3 s.</div>
+  <div class="card">
+    <canvas id="l10cvCtrl" role="img" aria-label="Cart-pole under control, with traces of cart position and lean over six seconds and the rail stops marked"></canvas>
+    <div class="btnrow">
+      <button id="l10CLean" type="button">Lean only (2 knobs)</button>
+      <button id="l10CFull" type="button" class="primary">All four knobs</button>
+      <button id="l10CPush" type="button">All four knobs + a push</button>
+    </div>
+    <div class="readouts">
+      <div class="ro"><span class="lab">settled (|x| &lt; 0.01 m, |lean| &lt; 0.01 rad) at</span><span class="val" id="l10cSettle">-</span> <span class="unit">s</span></div>
+      <div class="ro"><span class="lab">max cart travel</span><span class="val" id="l10cX">-</span> <span class="unit">m</span></div>
+      <div class="ro"><span class="lab">peak ctrl asked</span><span class="val" id="l10cU">-</span></div>
+      <div class="ro"><span class="lab">rail stop hit</span><span class="val" id="l10cRail">-</span></div>
+    </div>
+    <p class="caption">Orange = cart x (m), red dashed = rail stops at ±1 m. Teal = lean, drawn 4 times bigger. The orange arrow on the cart is the motor force; the purple arrow is the push. The page stops the lean-only run when the cart reaches 1 m: it does not simulate MuJoCo's end stop. Readouts appear when a run ends.</p>
+  </div>
+  <table>
+    <thead><tr><th>Run (real MuJoCo, 6 s)</th><th>settled at (s)</th><th>max cart travel (m)</th><th>lean range (rad)</th><th>peak ctrl (force)</th><th>clipped?</th></tr></thead>
+    <tbody>
+      <tr><td>lean only, start 0.1 rad</td><td>never (rail at 4.398 s)</td><td>reaches +1</td><td>upright from 0.488 s</td><td>0.4140 (8.28 N)</td><td>no</td></tr>
+      <tr><td>four knobs, start 0.1 rad</td><td>1.482</td><td>+0.0962</td><td>-0.0485 to +0.1000</td><td>0.4140 (8.28 N)</td><td>no</td></tr>
+      <tr><td>four knobs, start 0.2 rad</td><td>1.922</td><td>+0.1962</td><td>-0.0997 to +0.2000</td><td>0.8281 (16.56 N)</td><td>no</td></tr>
+      <tr><td>four knobs, push from upright</td><td>2.050</td><td>+0.2202</td><td>-0.1369 to +0.0285</td><td>0.5604 (11.21 N)</td><td>no</td></tr>
+    </tbody>
+  </table>
+  <p>The push is <code>data.qfrc_applied[1] = +1.0</code> N m on the hinge for 0.1 s: a flick that starts the pole tipping right (Lesson 3's "you may set forces, MuJoCo computes qacc"). It is not a speed kick. The controller dashes the cart right, at up to 0.7714 m/s at 0.2 s. It outruns the pole, so the pole ends up leaning left, -0.1341 rad at 0.5 s. Then both drift home.</p>
+  <div class="card warn"><span class="callout-title" style="color:var(--orange)">Common mistake: one sign flip and it falls at once</span>Check the sign convention every time: lean + means the top is towards +x, ctrl + pushes the cart towards +x. With all four knobs negated, the controller pushes the wrong way and the pole is spinning, |lean| = 12.311 rad, after 1 s. If your cart-pole falls faster with the controller than without it, flip the signs first.</div>
+  <details class="math"><summary>Optional maths 1: straighten the equations near upright</summary><div>
+    <p>Near upright, sin θ ≈ θ, cos θ ≈ 1, and θ̇² is tiny. Milestone 3's system becomes a straight-line rule, with the mass matrix at lean 0:</p>
+    <div class="eq">qacc = Kq [x, θ] + Ku ctrl
+Kq = [[0.0, -4.675258], [0.0, 35.373832]]      Ku = [16.521253, -40.345848]</div>
+    <p>Read the bottom row with ctrl = 0: θ̈ = 35.373832 θ. A lean that makes its own acceleration grows like exp(√35.373832 t) = exp(5.9476 t). It is multiplied by e every <strong>0.168 s</strong>. Ku's bottom number is negative: pushing the cart right tips the pole left, the tablecloth again.</p>
+  </div></details>
+  <details class="math"><summary>Optional maths 2: one MuJoCo step as a matrix</summary><div>
+    <p>Stack the state s = [x, θ, ẋ, θ̇]. One Euler step (speed first, then position with the new speed) is linear near upright:</p>
+    <div class="eq">v_new = v + h (Kq q + Ku ctrl)
+q_new = q + h v_new = q + h v + h² (Kq q + Ku ctrl)
+=>  s_new = A s + B ctrl          (h = 0.002 s, A is 4 x 4, B is 4 x 1)</div>
+    <p>MuJoCo can also linearise a model for you with <code>mujoco.mjd_transitionFD</code>, by nudging each number a little. The script compares the two: max |A - A_fd| = 4.5e-14, max |B - B_fd| = 2.7e-20. Same model.</p>
+  </div></details>
+  <details class="math"><summary>Optional maths 3: where the four knobs come from (LQR)</summary><div>
+    <p>We did not tune the knobs by hand. We asked for the cheapest way to balance, with "cost" added up over every step:</p>
+    <div class="eq">cost = sum over steps of ( x² + θ² + ctrl² )      Q = diag(1, 1, 0, 0), R = 1</div>
+    <p>Big x or θ is bad, and so is a big push. The method is called the <dfn class="term" tabindex="0" data-def="Linear Quadratic Regulator: for a straight-line model and a cost made of squares, it finds the gains that make the total cost smallest. Gives full-state feedback gains.">linear quadratic regulator (LQR)</dfn>. With numpy only, iterate this rule from P = Q until P stops changing:</p>
+    <div class="eq">K = (R + Bᵀ P B)⁻¹ Bᵀ P A
+P = Q + Aᵀ P (A - B K)
+converged after 2390 iterations
+K = [-0.9827, -4.1404, -0.8076, -0.7561]     ctrl = -K s
+knobs = -K = [0.9827 per m, 4.1404 per rad, 0.8076 per m/s, 0.7561 per rad/s]</div>
+    <p>LQR writes ctrl = -K s, so its K comes out negative. We just flip the signs and call them knobs. Check: with these knobs each step multiplies the slowest wobble by at most 0.995763 (the largest eigenvalue size of A - B K, as in Lesson 8 step 5). Below 1, so every wobble shrinks; the slowest halves every 0.327 s.</p>
+  </div></details>
+  <p class="newwords">New words: <span class="chip">four knobs (gains)</span><span class="chip">sign convention</span><span class="chip">qfrc_applied</span><span class="chip">LQR (optional)</span></p>
+</section>
+
+<section class="step" id="l10-s-env">
+  <span class="lvl lvl-code">Milestone 5</span>
+  <h2>6. Milestone 5: wrap it as a Gymnasium environment</h2>
+  <div class="card"><span class="callout-title" style="color:var(--orange)">Mission 5</span><strong>Build:</strong> <code>CartPoleBalanceEnv</code>, a <code>gymnasium.Env</code> like Lesson 9's <code>PendulumHoldEnv</code>.<br><strong>Uses:</strong> reset, step, observation, reward, terminated and truncated, <code>frame_skip</code>, <code>check_env</code>, seeds (Lesson 9); sensors as the observation (Lesson 6).<br><strong>Done when:</strong> <code>check_env</code> passes, and your four-knob controller scores the maximum on every seed.</div>
+  <table>
+    <thead><tr><th>Piece</th><th>Choice</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>observation, shape (4,)</td><td><code>sensordata[:4]</code> = [x, lean, x speed, lean speed]</td><td>Exactly what the controller reads. m, rad, m/s, rad/s.</td></tr>
+      <tr><td>action, shape (1,)</td><td>ctrl in [-1, 1]</td><td>The motor's <code>ctrlrange</code>; force = 20 x ctrl N.</td></tr>
+      <tr><td>frame_skip</td><td>10 (one action every 0.02 s)</td><td>As in Lesson 9: 50 decisions per second.</td></tr>
+      <tr><td>reward</td><td>+1 for each step that ends upright and on the rail</td><td>The simplest score: "how long did you last". A cost like Lesson 9's would also work.</td></tr>
+      <tr><td>terminated</td><td>|lean| &gt; 0.2 rad, or |x| &gt; 0.9 m</td><td>A real fall, about 11.5 degrees. 0.9 m ends the game before the 1 m end stop is ever reached.</td></tr>
+      <tr><td>truncated</td><td>after 500 steps = 10 s</td><td>The clock ran out. Not a failure.</td></tr>
+      <tr><td>reset</td><td>x, lean and both speeds each drawn from [-0.05, 0.05]</td><td>A small random start, the same for the same seed.</td></tr>
+    </tbody>
+  </table>
+<pre><code><span class="k">def</span> step(self, action):
+    self.data.ctrl[<span class="n">0</span>] = float(np.clip(action[<span class="n">0</span>], -<span class="n">1.0</span>, <span class="n">1.0</span>))
+    <span class="k">for</span> _ <span class="k">in</span> range(self.frame_skip):          <span class="c"># hold the action for 10 ticks</span>
+        mujoco.mj_step(self.model, self.data)
+    mujoco.mj_forward(self.model, self.data)     <span class="c"># sensors lag one tick after mj_step (Lesson 8)</span>
+    self.steps += <span class="n">1</span>
+    x, th = self.data.qpos
+    terminated = bool(abs(th) &gt; <span class="n">0.2</span> <span class="k">or</span> abs(x) &gt; <span class="n">0.9</span>)
+    reward = <span class="n">0.0</span> <span class="k">if</span> terminated <span class="k">else</span> <span class="n">1.0</span>
+    truncated = self.steps &gt;= self.max_steps
+    <span class="k">return</span> self.data.sensordata[:<span class="n">4</span>].astype(np.float32), reward, terminated, truncated, {<span class="s">"time"</span>: self.data.time}</code></pre>
+  <div class="predict">
+    <h3>Predict first: four players, five seeds, 500 steps max. Rank them: zero (ctrl always 0), random, lean-only PD, four knobs. Does random beat zero?</h3>
+    <textarea aria-label="Your prediction for the four players"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <table>
+        <thead><tr><th>seed</th><th>start [x, lean, x speed, lean speed]</th><th>zero</th><th>random</th><th>lean-only</th><th>four knobs</th></tr></thead>
+        <tbody>
+          <tr><td>0</td><td>[+0.0137 -0.0230 -0.0459 -0.0483]</td><td>21</td><td>30</td><td>387</td><td>500</td></tr>
+          <tr><td>1</td><td>[+0.0012 +0.0450 -0.0356 +0.0449]</td><td>16</td><td>28</td><td>500</td><td>500</td></tr>
+          <tr><td>2</td><td>[-0.0238 -0.0202 +0.0314 -0.0408]</td><td>22</td><td>11</td><td>500</td><td>500</td></tr>
+          <tr><td>3</td><td>[-0.0414 -0.0263 +0.0301 +0.0082]</td><td>23</td><td>9</td><td>500</td><td>500</td></tr>
+          <tr><td>4</td><td>[+0.0443 +0.0011 +0.0476 -0.0419]</td><td>35</td><td>8</td><td>500</td><td>500</td></tr>
+          <tr><td>mean</td><td></td><td>23.4</td><td>17.2</td><td>477.4</td><td>500.0</td></tr>
+        </tbody>
+      </table>
+      <p>The four-knob controller lasts the full 10 s every time, even though its knobs were designed for one decision per 0.002 s and here it decides only every 0.02 s. <strong>Random is worse than zero</strong> on average: full-strength random shoves knock the pole over faster than gravity alone (falls between 0.18 and 0.62 s, against 0.34 to 0.72 s for zero). Lean-only keeps the pole up every time, but on seed 0 the cart drifts past 0.9 m at 7.76 s. On the other seeds the drift is too slow to reach 0.9 m in 10 s. A short episode can hide a slow failure.</p>
+    </div>
+  </div>
+  <p><code>check_env</code> passes with 2 warnings, the same kind as Lesson 9: the observation bounds are ±infinity. That is honest here: nothing limits the speeds.</p>
+</section>
+
+<section class="step" id="l10-s-code">
+  <span class="lvl lvl-code">Code</span>
+  <h2>7. Your script, line by line</h2>
+  <table>
+    <thead><tr><th style="width:46%">Code in <code>10_capstone_cart_pole.py</code></th><th>Physical meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>model = mujoco.MjModel.from_xml_string(XML)</code></td><td>The blueprint: rail, cart, pole, motor, sensors. Fixed from now on (Lesson 1).</td></tr>
+      <tr><td><code>mujoco.mj_fullM(model, data, M)</code></td><td>Fill the 2 x 2 mass matrix at the current lean (here 0). Gives 1.787493, 0.236248, 0.096741.</td></tr>
+      <tr><td><code>data.qpos[:] = [x0, th0]</code> then <code>mj_forward</code></td><td>Place the cart and tilt the pole, then compute everything for that pose without moving time (Lesson 3).</td></tr>
+      <tr><td><code>u = k @ state()</code></td><td>The four-knob rule: each of [x, lean, x speed, lean speed] times its knob, added up.</td></tr>
+      <tr><td><code>data.ctrl[0] = np.clip(u, -1, 1)</code></td><td>Inside the motor's range: at most 20 N on the cart (Lessons 5 and 8).</td></tr>
+      <tr><td><code>data.qfrc_applied[1] = 1.0</code></td><td>The push: 1.0 N m on the hinge, while time &lt; 0.1 s. MuJoCo adds it to the forces.</td></tr>
+      <tr><td><code>mujoco.mj_step(model, data)</code></td><td>Forces to qacc (the 2 x 2 solve), then new speeds, then new positions, time + 0.002 s.</td></tr>
+      <tr><td><code>hand_qacc(x, th, xd, thd, ctrl)</code></td><td>Milestone 3's equations in numpy. Matches <code>data.qacc</code> to 1e-15.</td></tr>
+      <tr><td><code>lqr_gains(Q, R)</code></td><td>Straighten the model near upright, build A and B, iterate the Riccati rule until it settles.</td></tr>
+      <tr><td><code>mujoco.mjd_transitionFD(...)</code></td><td>MuJoCo's own linearisation, used only to check A and B.</td></tr>
+      <tr><td><code>class CartPoleBalanceEnv(gym.Env)</code></td><td>Milestone 5: reset, step, reward, terminated, truncated (Lesson 9).</td></tr>
+      <tr><td><code>check_env(CartPoleBalanceEnv(), ...)</code></td><td>Gymnasium's own test that the env follows the rules.</td></tr>
+    </tbody>
+  </table>
+<pre><code><span class="c"># Milestone 1</span>
+nbody=3  njnt=2  nq=2  nv=2  nu=1  ngeom=3  nsite=1  nsensor=5  nsensordata=7
+joint 0 'slider': type=slide  qposadr=0  dofadr=0  axis=[1. 0. 0.]  limited=True  range=[-1.  1.]
+joint 1 'hinge': type=hinge  qposadr=1  dofadr=1  axis=[0. 1. 0.]  limited=False  range=[0. 0.]
+sensors (name, adr, dim): [('cart_x', 0, 1), ('pole_angle', 1, 1), ('cart_v', 2, 1), ('pole_spin', 3, 1), ('tip_pos', 4, 3)]
+pole mass 0.7875 kg (...), CoM 0.3000 m above the hinge, inertia about its CoM (y) 0.025867 kg m^2
+ncon (contacts) = 0                                         <span class="c"># contype/conaffinity 0 everywhere</span>
+<span class="c"># Milestone 2: zero control</span>
+start theta=0.1 rad: passes 0.5 rad at t=0.392 s; then cart x=-0.0506 m, ...   <span class="c"># cart goes the other way</span>
+<span class="c"># Milestone 3</span>
+state x=0.0 th=0.1 xd=0.0 thd=0.0 ctrl=0.0: MuJoCo qacc=[-0.462220, +3.514795]  hand=[-0.462220, +3.514795]  ...  max diff 8.9e-16
+state x=0.0 th=0.0 xd=0.0 thd=0.0 ctrl=0.5: MuJoCo qacc=[+8.260626, -20.172924] ...  <span class="c"># push right, pole tips left</span>
+<span class="c"># Milestone 4</span>
+lean-only: pole upright within 0.01 rad from t=0.488 s, peak ctrl 0.4140; cart reaches the 1 m rail stop at t=4.398 s
+knobs (= -K): cart offset 0.9827 /m, lean 4.1404 /rad, cart speed 0.8076 /(m/s), lean speed 0.7561 /(rad/s)
+balance from 0.1 rad: settle (...) 1.482 s, max cart travel +0.0962 m, peak ctrl 0.4140 (8.28 N), clipped: False
+   step 0: s=[0.0, 0.1, 0.0, 0.0] -> ctrl = 4.1404 x 0.1 = 0.41404 (force 8.2808 N, towards +x)
+   lean range -0.1369 .. +0.0285 rad, max cart travel +0.2202 m, peak ctrl 0.5604 (11.21 N), settle 2.050 s   <span class="c"># the push</span>
+<span class="c"># Milestone 5</span>
+check_env: passed, 2 warning(s)
+mean                                                  23.4       17.2      477.4      500.0   <span class="c"># zero, random, lean-only, four knobs</span></code></pre>
+  <p>Run it with <code>.venv/bin/python lessons/10-capstone-cart-pole/10_capstone_cart_pole.py</code>. It takes a few seconds and needs no viewer.</p>
+</section>
+
+<section class="step" id="l10-s-check">
+  <span class="lvl lvl-plain">Check yourself</span>
+  <h2>8. Capstone questions</h2>
+  <p>Answer here, then tell me your answers in the chat so I can update your progress. Success means you can give the number and the reason.</p>
+  <div class="predict">
+    <h3>Q1. You add a second pole on top of the first: a new body with its own hinge, no new motor. What are nq, nv, nu, and the size of the mass matrix?</h3>
+    <textarea aria-label="Answer to question 1"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>nq = 3, nv = 3, nu = 1</strong>, and <code>mj_fullM</code> fills a <strong>3 x 3</strong> table. One hinge adds one position and one speed. Still one motor for three joints, so the cart must balance both poles: a much harder puzzle.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q2. The pole leans +0.1 rad, everything still, four-knob controller. What ctrl is sent at step 0, what force, and which way?</h3>
+    <textarea aria-label="Answer to question 2"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>Only the lean term is non-zero: ctrl = 4.1404 x 0.1 = <strong>0.41404</strong>, force = 20 x 0.41404 = <strong>8.2808 N towards +x</strong>, to get the cart under the pole. Not clipped.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q3. Why does the lean-only controller keep the pole up but lose the cart?</h3>
+    <textarea aria-label="Answer to question 3"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>Its rule contains no x and no x speed. Once the pole is upright, it is happy with any cart speed. Catching the pole left the cart rolling at 0.2284 m/s, and with no friction it rolls on, to the 1 m stop at 4.398 s. You must watch the cart as well as the pole.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q4. The cart sits at x = +0.5 m with the pole upright and still. Which way does the four-knob controller push first, and why?</h3>
+    <textarea aria-label="Answer to question 4"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>Right, away from home</strong>: ctrl = 0.9827 x 0.5 = +0.49134. Pushing right tips the pole left (the coupling term). Then the cart can follow the leaning pole home. The script measures the cart reaching +0.5425 m at 0.218 s before it turns back, and -0.0015 m at 3 s.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q5. In the environment, why end the episode at |x| &gt; 0.9 m instead of letting the cart hit the 1 m joint limit?</h3>
+    <textarea aria-label="Answer to question 5"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>Hitting the end stop is a failure, so the game should end and stop giving reward. Ending at 0.9 m does that before the joint-limit constraint ever acts. A learning agent then never sees the jolt of the stop, which would teach it nothing useful. It also keeps every episode in the region this page's physics copies exactly.</p></div>
+  </div>
+
+  <h3>Glossary: words used in this capstone</h3>
+  <dl class="glossary">
+    <dt>cart-pole</dt><dd>A cart on a rail with a pole hinged on top; one motor on the cart, none on the pole.</dd>
+    <dt>inverted pendulum</dt><dd>A pendulum balanced above its pivot. Gravity pushes it away from upright.</dd>
+    <dt>centre of mass</dt><dd>The average position of all the mass. With no outside sideways force it cannot start moving sideways, which is why the cart slides opposite to the falling pole.</dd>
+    <dt>mass matrix (mj_fullM)</dt><dd>The nv x nv table in "mass matrix x qacc = forces". Here 2 x 2: cart + pole mass, pole inertia about the hinge, and the coupling 0.236248 cos(lean).</dd>
+    <dt>coupling</dt><dd>The off-diagonal entry: speeding up the cart turns the pole, and the other way round.</dd>
+    <dt>qfrc_bias</dt><dd>Gravity and spin forces on each joint, with MuJoCo's sign (the minus of the right-hand side).</dd>
+    <dt>qfrc_applied</dt><dd>Extra force or torque you add on a joint yourself; here the 1.0 N m push on the hinge.</dd>
+    <dt>full-state feedback, knobs</dt><dd>ctrl = sum of each state number times its own knob (gain): lean, lean speed, cart offset, cart speed.</dd>
+    <dt>saturated</dt><dd>Asked for more than ctrlrange allows, so the motor gives its limit.</dd>
+    <dt>LQR</dt><dd>A recipe that picks the knobs that make "sum of x² + lean² + ctrl²" smallest, for the straightened model.</dd>
+    <dt>terminated / truncated</dt><dd>The game ended by failure (fell, or near the rail end) / by the clock (500 steps).</dd>
+  </dl>
+</section>
+
+<section class="step recap" id="l10-recap">
+  <h2>Recap: what you just used from each lesson</h2>
+  <table>
+    <thead><tr><th>Lesson</th><th>Where it showed up in this capstone</th></tr></thead>
+    <tbody>
+      <tr><td>1 MJCF hierarchy</td><td>world, then cart, then pole: a 3-body tree. The model is the blueprint, the data is the state.</td></tr>
+      <tr><td>2 Frames and axes</td><td>Hinge axis +y, so + lean tips the top towards +x. tip_pos in the world frame.</td></tr>
+      <tr><td>3 State and stepping</td><td><code>qpos</code> = [x, lean], <code>qvel</code>, <code>qacc</code>; the let-go experiment; speed-then-position Euler steps.</td></tr>
+      <tr><td>4 Inspection</td><td>Body tree, <code>body_mass</code>, <code>body_ipos</code>, <code>body_inertia</code>, joint addresses printed by name.</td></tr>
+      <tr><td>5 Actuators</td><td>Motor on the slider: force = gear 20 x ctrl, ctrlrange -1 to 1.</td></tr>
+      <tr><td>6 Sensors</td><td>jointpos, jointvel, framepos; <code>sensordata[:4]</code> as the observation; sensors lag after <code>mj_step</code>.</td></tr>
+      <tr><td>7 Contact and constraints</td><td>contype/conaffinity 0, so ncon = 0. The slider range is a constraint: the rail stop.</td></tr>
+      <tr><td>8 Controllers</td><td>The control loop, PD on the lean, clipping, <code>mj_fullM</code>, growth per step below 1.</td></tr>
+      <tr><td>9 Environments</td><td><code>CartPoleBalanceEnv</code>: reset with a seed, step with frame_skip 10, reward, terminated, truncated, <code>check_env</code>.</td></tr>
+    </tbody>
+  </table>
+  <div class="mental-model">
+    <p><strong>The model</strong> is a slide joint (x, m) carrying a hinge (lean, rad, 0 = upright, + towards +x), with one motor on the cart: force = 20 x ctrl N. nq = nv = 2, nu = 1. With no control a 0.1 rad lean passes 0.5 rad in 0.392 s, and the cart slides the opposite way because the centre of mass cannot move sideways.</p>
+    <p><strong>The physics</strong> is M(lean) qacc = [20 ctrl + 0.236248 sin(lean) lean_speed², 2.317591 sin(lean)], with M = [[1.787493, 0.236248 cos(lean)], [0.236248 cos(lean), 0.096741]]. The off-diagonal coupling is why pushing the cart tips the pole, and it is the controller's only lever.</p>
+    <p><strong>The controller</strong> must watch the cart too. Lean-only PD keeps the pole up but drifts into the rail at 4.398 s. Four knobs (0.9827, 4.1404, 0.8076, 0.7561 for x, lean, x speed, lean speed, from LQR) settle a 0.1 rad start in 1.482 s with 0.0962 m of travel and 8.28 N peak, and recover from a 1.0 N m, 0.1 s push.</p>
+    <p><strong>The environment</strong> wraps it for learning: obs (4,), action (1,), +1 per step, ends at |lean| &gt; 0.2 rad or |x| &gt; 0.9 m, 500 steps. Four knobs score 500 on every seed; zero 23.4, random 17.2.</p>
+  </div>
+  <div class="checkpoint">
+    <p>In the sandbox, set the cart offset and cart speed knobs to 0 and watch the drift. Then find the smallest lean knob that still balances a 0.1 rad start with the other three at their LQR values.</p>
+    <div class="btn-row">
+      <button class="btn btn-primary btn-sm" type="button" onclick="markComplete(10)">Mark lesson complete</button>
+      <button class="btn btn-sm" type="button" onclick="switchLesson(11)">Next: Building Bigger Models</button>
+    </div>
+  </div>
+</section>
+</div>

@@ -1,0 +1,555 @@
+<!--
+  Lesson 10 (capstone): Warehouse Robot Pick-and-Place
+  =====================================================
+  A mobile manipulator in a warehouse environment.
+
+  Robot: 4-wheeled differential-drive base + 6-DOF arm + 2-finger gripper.
+  Environment: ground plane, walls, two shelf units, one table, graspable objects.
+
+  Model statistics (expected):
+    bodies   ~22    joints  ~16    geoms   ~35
+    actuators 12    sensors  14    tendons   1
+    equality  1     keyframes 2
+    nq ~27          nv ~24         nu 12
+-->
+<mujoco model="warehouse_robot">
+
+  <!-- ============================================================
+       COMPILER & OPTIONS
+       angle="radian" so every joint range and axis is in radians.
+       timestep=0.002 s (500 Hz) for stable wheel-ground contacts.
+       ============================================================ -->
+  <compiler angle="radian" autolimits="true"/>
+  <option timestep="0.002" gravity="0 0 -9.81" integrator="implicit"
+          solver="Newton" iterations="30" cone="elliptic" impratio="10"/>
+  <size nconmax="200" njmax="100"/>
+
+  <!-- ============================================================
+       DEFAULTS — shared properties to keep the XML DRY
+       ============================================================ -->
+  <default>
+    <!-- Robot link defaults: dark gray, NO floor contact (only wheels touch ground) -->
+    <default class="robot">
+      <geom rgba="0.35 0.38 0.42 1" friction="0.8 0.005 0.001" condim="3"
+            contype="0" conaffinity="0"/>
+      <joint damping="2.0" armature="0.01"/>
+    </default>
+    <!-- Wheel defaults: high friction for traction on floor -->
+    <default class="wheel">
+      <geom rgba="0.15 0.15 0.15 1" friction="1.5 0.005 0.001" condim="6"
+            contype="1" conaffinity="1"/>
+      <joint damping="0.1" armature="0.005"/>
+    </default>
+    <!-- Gripper finger defaults: very high friction to hold objects -->
+    <default class="finger">
+      <geom rgba="0.7 0.25 0.1 1" friction="2.0 0.05 0.01" condim="4"
+            contype="1" conaffinity="1"/>
+      <joint damping="5.0"/>
+    </default>
+    <!-- Environment objects: moderate friction -->
+    <default class="object">
+      <geom friction="0.6 0.01 0.001" condim="3"
+            contype="1" conaffinity="1"/>
+    </default>
+    <!-- Shelf/table structure: static, no collision with robot chassis -->
+    <default class="furniture">
+      <geom contype="1" conaffinity="1" friction="0.5 0.005 0.001" condim="3"/>
+    </default>
+  </default>
+
+  <!-- ============================================================
+       ASSETS — procedural textures and materials (no external files)
+       ============================================================ -->
+  <asset>
+    <!-- Floor: checker grid, 0.3m tiles, gray/dark-gray -->
+    <texture name="grid" type="2d" builtin="checker"
+             rgb1="0.35 0.38 0.35" rgb2="0.25 0.28 0.25"
+             width="512" height="512"/>
+    <material name="floor_mat" texture="grid" texrepeat="10 10"
+              reflectance="0.1"/>
+
+    <!-- Shelf wood: warm gradient -->
+    <texture name="wood" type="2d" builtin="gradient"
+             rgb1="0.55 0.35 0.15" rgb2="0.40 0.25 0.10"
+             width="64" height="64"/>
+    <material name="shelf_mat" texture="wood" texrepeat="2 2"/>
+
+    <!-- Robot chassis metal: flat blue-gray -->
+    <texture name="metal" type="2d" builtin="flat"
+             rgb1="0.30 0.35 0.45" rgb2="0.30 0.35 0.45"
+             width="64" height="64"/>
+    <material name="robot_mat" texture="metal" reflectance="0.3"/>
+
+    <!-- Wall concrete: flat -->
+    <texture name="concrete" type="2d" builtin="flat"
+             rgb1="0.50 0.48 0.45" rgb2="0.50 0.48 0.45"
+             width="64" height="64"/>
+    <material name="wall_mat" texture="concrete"/>
+
+    <!-- Target marker: semi-transparent green -->
+    <material name="target_mat" rgba="0.1 0.9 0.3 0.3"/>
+  </asset>
+
+  <!-- ============================================================
+       WORLDBODY
+       ============================================================ -->
+  <worldbody>
+
+    <!-- ── FLOOR ── -->
+    <geom name="floor" type="plane" size="5 5 0.01"
+          material="floor_mat" contype="1" conaffinity="1"/>
+
+    <!-- ── LIGHTING ── -->
+    <!-- Main overhead light: slightly forward and right -->
+    <light name="overhead" pos="1 -1 5" dir="-0.1 0.1 -1"
+           diffuse="0.9 0.9 0.85" specular="0.3 0.3 0.3" castshadow="true"/>
+    <!-- Fill light from left: softer, no shadow -->
+    <light name="fill" pos="-3 2 3" dir="0.5 -0.3 -0.5"
+           diffuse="0.3 0.3 0.35" specular="0.0 0.0 0.0" castshadow="false"/>
+
+    <!-- ── CAMERAS ── -->
+    <!-- Bird's-eye overview -->
+    <camera name="overview" pos="0 -4.5 4.5" xyaxes="1 0 0 0 0.707 0.707"
+            fovy="60"/>
+    <!-- Side view -->
+    <camera name="side" pos="4 0 1.5" xyaxes="0 1 0 -0.25 0 0.97"
+            fovy="50"/>
+
+    <!-- ── WALLS ── four boundary walls, 0.8m tall -->
+    <body name="walls" pos="0 0 0">
+      <geom name="wall_N" class="furniture" type="box" material="wall_mat"
+            pos="0 4.5 0.4" size="5 0.05 0.4" rgba="0.50 0.48 0.45 1"/>
+      <geom name="wall_S" class="furniture" type="box" material="wall_mat"
+            pos="0 -4.5 0.4" size="5 0.05 0.4" rgba="0.50 0.48 0.45 1"/>
+      <geom name="wall_E" class="furniture" type="box" material="wall_mat"
+            pos="4.5 0 0.4" size="0.05 4.5 0.4" rgba="0.50 0.48 0.45 1"/>
+      <geom name="wall_W" class="furniture" type="box" material="wall_mat"
+            pos="-4.5 0 0.4" size="0.05 4.5 0.4" rgba="0.50 0.48 0.45 1"/>
+    </body>
+
+    <!-- ── SHELF A ── source: where the object starts
+         Located at x=-1.5, y=1.5.  Surface at z=0.55 (55 cm). -->
+    <body name="shelf_A" pos="-1.5 1.5 0">
+      <!-- Four legs -->
+      <geom name="sA_leg1" class="furniture" type="capsule" material="shelf_mat"
+            fromto="-0.35 -0.25 0  -0.35 -0.25 0.50" size="0.025"/>
+      <geom name="sA_leg2" class="furniture" type="capsule" material="shelf_mat"
+            fromto="0.35 -0.25 0  0.35 -0.25 0.50" size="0.025"/>
+      <geom name="sA_leg3" class="furniture" type="capsule" material="shelf_mat"
+            fromto="-0.35 0.25 0  -0.35 0.25 0.50" size="0.025"/>
+      <geom name="sA_leg4" class="furniture" type="capsule" material="shelf_mat"
+            fromto="0.35 0.25 0  0.35 0.25 0.50" size="0.025"/>
+      <!-- Surface -->
+      <geom name="sA_top" class="furniture" type="box" material="shelf_mat"
+            pos="0 0 0.53" size="0.40 0.30 0.03" rgba="0.55 0.35 0.15 1"/>
+      <!-- Lower shelf -->
+      <geom name="sA_low" class="furniture" type="box" material="shelf_mat"
+            pos="0 0 0.25" size="0.38 0.28 0.02" rgba="0.50 0.32 0.13 1"/>
+    </body>
+
+    <!-- NOTE: graspable objects are placed AFTER the robot body in XML
+         so that the chassis freejoint comes first in qpos (indices 0-6).
+         This makes keyframe definitions easier to read and maintain. -->
+
+    <!-- ── SHELF B ── destination: where the object goes
+         Located at x=1.5, y=-1.0.  Same height as shelf A. -->
+    <body name="shelf_B" pos="1.5 -1.0 0">
+      <geom name="sB_leg1" class="furniture" type="capsule" material="shelf_mat"
+            fromto="-0.35 -0.25 0  -0.35 -0.25 0.50" size="0.025"/>
+      <geom name="sB_leg2" class="furniture" type="capsule" material="shelf_mat"
+            fromto="0.35 -0.25 0  0.35 -0.25 0.50" size="0.025"/>
+      <geom name="sB_leg3" class="furniture" type="capsule" material="shelf_mat"
+            fromto="-0.35 0.25 0  -0.35 0.25 0.50" size="0.025"/>
+      <geom name="sB_leg4" class="furniture" type="capsule" material="shelf_mat"
+            fromto="0.35 0.25 0  0.35 0.25 0.50" size="0.025"/>
+      <geom name="sB_top" class="furniture" type="box" material="shelf_mat"
+            pos="0 0 0.53" size="0.40 0.30 0.03" rgba="0.55 0.35 0.15 1"/>
+    </body>
+
+    <!-- ── TARGET SITE ── visual marker on shelf B for placement goal -->
+    <site name="target_site" pos="1.22 -1.0 0.60" size="0.05 0.05 0.005"
+          type="box" material="target_mat" rgba="0.1 0.9 0.3 0.3"/>
+
+    <!-- ── OBSTACLE TABLE ── -->
+    <body name="table" pos="0.5 0.5 0">
+      <geom name="table_leg1" class="furniture" type="capsule" material="shelf_mat"
+            fromto="-0.25 -0.20 0  -0.25 -0.20 0.40" size="0.02"/>
+      <geom name="table_leg2" class="furniture" type="capsule" material="shelf_mat"
+            fromto="0.25 -0.20 0  0.25 -0.20 0.40" size="0.02"/>
+      <geom name="table_leg3" class="furniture" type="capsule" material="shelf_mat"
+            fromto="-0.25 0.20 0  -0.25 0.20 0.40" size="0.02"/>
+      <geom name="table_leg4" class="furniture" type="capsule" material="shelf_mat"
+            fromto="0.25 0.20 0  0.25 0.20 0.40" size="0.02"/>
+      <geom name="table_top" class="furniture" type="box" material="shelf_mat"
+            pos="0 0 0.42" size="0.30 0.25 0.02" rgba="0.60 0.40 0.18 1"/>
+    </body>
+
+    <!-- ── EXTRA SCENE DETAIL: stacked crates (static decoration) ── -->
+    <body name="crates" pos="-3 -2 0">
+      <geom name="crate1" class="furniture" type="box"
+            pos="0 0 0.15" size="0.15 0.15 0.15" rgba="0.45 0.35 0.20 1"/>
+      <geom name="crate2" class="furniture" type="box"
+            pos="0 0 0.45" size="0.14 0.14 0.14" rgba="0.40 0.30 0.18 1"/>
+      <geom name="crate3" class="furniture" type="box"
+            pos="0.32 0 0.15" size="0.15 0.15 0.15" rgba="0.42 0.33 0.19 1"/>
+    </body>
+
+    <!-- ── EXTRA SCENE DETAIL: pylons marking the aisle ── -->
+    <body name="pylons" pos="0 0 0">
+      <geom name="pylon1" class="furniture" type="cylinder"
+            pos="-2.2 0.3 0.15" size="0.04 0.15" rgba="1.0 0.7 0.0 1"/>
+      <geom name="pylon2" class="furniture" type="cylinder"
+            pos="2.2 0.3 0.15" size="0.04 0.15" rgba="1.0 0.7 0.0 1"/>
+    </body>
+
+    <!-- ════════════════════════════════════════════════════════════
+         ROBOT: Mobile Manipulator
+         ════════════════════════════════════════════════════════════
+
+         Body tree:
+           chassis (freejoint)
+             ├── wheel_FL  (hinge, velocity actuator)
+             ├── wheel_FR  (hinge, velocity actuator)
+             ├── wheel_RL  (hinge, velocity actuator)
+             ├── wheel_RR  (hinge, velocity actuator)
+             └── arm_base  (hinge yaw, motor actuator)
+                   └── upper_arm  (hinge pitch, position actuator)
+                         └── forearm  (hinge pitch, position actuator)
+                               └── wrist  (hinge roll, position actuator)
+                                     └── wrist_tilt  (hinge pitch, position actuator)
+                                           ├── finger_L  (slide, position actuator)
+                                           └── finger_R  (slide, coupled via tendon)
+    -->
+
+    <!-- Chassis: 0.25×0.15×0.05 m box, 8 kg.
+         Starts at center of warehouse facing +Y (toward Shelf A).
+         Quaternion (0.707, 0, 0, 0.707) = 90° rotation about Z,
+         which turns local +X (forward) into world +Y. -->
+    <body name="chassis" pos="0 -1.5 0.11" quat="0.707 0 0 0.707" childclass="robot">
+      <freejoint name="chassis_free"/>
+      <geom name="chassis_body" type="box" size="0.25 0.15 0.04"
+            mass="8.0" material="robot_mat"/>
+      <!-- Decorative top plate -->
+      <geom name="top_plate" type="box" size="0.20 0.12 0.005"
+            pos="0 0 0.045" rgba="0.25 0.30 0.40 1" mass="0.5"/>
+
+      <!-- IMU sensor site: center of chassis -->
+      <site name="imu_site" pos="0 0 0" size="0.01"/>
+      <!-- Forward-facing rangefinder -->
+      <site name="rangefinder_site" pos="0.26 0 0" zaxis="1 0 0" size="0.01"/>
+
+      <!-- Tracking camera: follows chassis from behind -->
+      <camera name="tracking" pos="-1.5 0 1.0" xyaxes="0 -1 0 0.5 0 0.87"
+              mode="track"/>
+
+      <!-- ── WHEELS ──
+           Each wheel is a cylinder oriented along local Y (euler="1.5708 0 0"
+           rotates the cylinder's long axis from Z to Y).
+           Hinge axis="0 1 0" lets it spin around the Y axis. -->
+
+      <!-- Front-left wheel -->
+      <body name="wheel_FL" pos="0.18 0.17 -0.05" childclass="wheel">
+        <joint name="wheel_FL_spin" type="hinge" axis="0 1 0"/>
+        <geom name="wheel_FL_geom" type="cylinder" size="0.06 0.025"
+              euler="1.5708 0 0" mass="0.3"/>
+      </body>
+
+      <!-- Front-right wheel -->
+      <body name="wheel_FR" pos="0.18 -0.17 -0.05" childclass="wheel">
+        <joint name="wheel_FR_spin" type="hinge" axis="0 1 0"/>
+        <geom name="wheel_FR_geom" type="cylinder" size="0.06 0.025"
+              euler="1.5708 0 0" mass="0.3"/>
+      </body>
+
+      <!-- Rear-left wheel -->
+      <body name="wheel_RL" pos="-0.18 0.17 -0.05" childclass="wheel">
+        <joint name="wheel_RL_spin" type="hinge" axis="0 1 0"/>
+        <geom name="wheel_RL_geom" type="cylinder" size="0.06 0.025"
+              euler="1.5708 0 0" mass="0.3"/>
+      </body>
+
+      <!-- Rear-right wheel -->
+      <body name="wheel_RR" pos="-0.18 -0.17 -0.05" childclass="wheel">
+        <joint name="wheel_RR_spin" type="hinge" axis="0 1 0"/>
+        <geom name="wheel_RR_geom" type="cylinder" size="0.06 0.025"
+              euler="1.5708 0 0" mass="0.3"/>
+      </body>
+
+      <!-- ── ARM ──
+           Mounted on top of chassis. The arm base is a turret that
+           rotates around the vertical (Z) axis. -->
+
+      <!-- Arm base / turret — mounted 12 cm forward of chassis center so the
+           arm starts closer to the shelf it is reaching into. -->
+      <body name="arm_base" pos="0.12 0 0.05">
+        <joint name="arm_yaw" type="hinge" axis="0 0 1"
+               range="-3.14 3.14" damping="5.0"/>
+        <geom name="turret" type="cylinder" size="0.045 0.03"
+              mass="0.8" rgba="0.40 0.42 0.48 1"
+              contype="1" conaffinity="1"/>
+
+        <!-- Upper arm: rises from turret, pitches forward/back.
+             30 cm long (was 22 cm) — the old arm could not reach the shelf. -->
+        <body name="upper_arm" pos="0 0 0.06">
+          <joint name="shoulder_pitch" type="hinge" axis="0 1 0"
+                 range="-0.6 2.2" damping="8.0" armature="0.02"/>
+          <geom name="upper_arm_geom" type="capsule"
+                fromto="0 0 0  0 0 0.30" size="0.03"
+                mass="0.7" rgba="0.30 0.35 0.45 1"
+                contype="1" conaffinity="1"/>
+
+          <!-- Forearm: extends from upper arm. 26 cm long (was 18 cm).
+               Elbow now bends FORWARD (positive angle) so the forearm can
+               come down onto the shelf from above instead of from below. -->
+          <body name="forearm" pos="0 0 0.30">
+            <joint name="elbow_pitch" type="hinge" axis="0 1 0"
+                   range="-0.3 2.6" damping="5.0" armature="0.015"/>
+            <geom name="forearm_geom" type="capsule"
+                  fromto="0 0 0  0 0 0.26" size="0.025"
+                  mass="0.45" rgba="0.32 0.37 0.47 1"
+                  contype="1" conaffinity="1"/>
+
+            <!-- Wrist: roll around the forearm's long axis -->
+            <body name="wrist" pos="0 0 0.26">
+              <joint name="wrist_roll" type="hinge" axis="0 0 1"
+                     range="-3.14 3.14" damping="1.0"/>
+              <geom name="wrist_housing" type="cylinder" size="0.02 0.015"
+                    mass="0.15" rgba="0.35 0.40 0.50 1"
+                    contype="1" conaffinity="1"/>
+              <!-- End-effector site for tracking -->
+              <site name="ee_site" pos="0 0 0.02" size="0.008"
+                    rgba="0 1 0.5 0.8"/>
+
+              <!-- Wrist tilt: pitch at the end for orienting the gripper -->
+              <body name="wrist_tilt" pos="0 0 0.03">
+                <joint name="wrist_pitch" type="hinge" axis="0 1 0"
+                       range="-1.57 1.57" damping="1.0" armature="0.005"/>
+                <geom name="wrist_bracket" type="box" size="0.015 0.025 0.012"
+                      mass="0.1" rgba="0.35 0.40 0.50 1"
+                      contype="1" conaffinity="1"/>
+
+                <!-- Gripper camera -->
+                <camera name="gripper_cam" pos="0 0 0.04"
+                        xyaxes="0 -1 0  0 0 1" fovy="70"/>
+
+                <!-- ── GRIPPER FINGERS ──
+                     Slide joints along Y axis (open/close).
+                     Both start at 0 (closed) and open to 0.05 m each.
+                     Fingers are 7 cm long (was 5 cm) so they wrap more of the box.
+                     The touch site is a thin box covering the whole inner face,
+                     so contact anywhere along the finger registers. -->
+
+                <!-- Left finger (slides in -Y to open) -->
+                <body name="finger_L" pos="0 -0.01 0.047" childclass="finger">
+                  <joint name="grip_L" type="slide" axis="0 -1 0"
+                         range="0 0.05" damping="10.0"/>
+                  <geom name="finger_L_geom" type="box"
+                        size="0.008 0.005 0.035" mass="0.05"/>
+                  <site name="touch_L_site" type="box" pos="0 0.005 0"
+                        size="0.009 0.003 0.036" rgba="1 0.5 0 0.5"/>
+                </body>
+
+                <!-- Right finger (slides in +Y to open) -->
+                <body name="finger_R" pos="0 0.01 0.047" childclass="finger">
+                  <joint name="grip_R" type="slide" axis="0 1 0"
+                         range="0 0.05" damping="10.0"/>
+                  <geom name="finger_R_geom" type="box"
+                        size="0.008 0.005 0.035" mass="0.05"/>
+                  <site name="touch_R_site" type="box" pos="0 -0.005 0"
+                        size="0.009 0.003 0.036" rgba="1 0.5 0 0.5"/>
+                </body>
+
+                <!-- Grasp point: midway along the fingers. IK and RL target this. -->
+                <site name="grasp_site" pos="0 0 0.06" size="0.006"
+                      rgba="1 1 0 0.8"/>
+
+              </body> <!-- wrist_tilt -->
+            </body> <!-- wrist -->
+          </body> <!-- forearm -->
+        </body> <!-- upper_arm -->
+      </body> <!-- arm_base -->
+
+    </body> <!-- chassis -->
+
+    <!-- ── GRASPABLE OBJECTS ──
+         Placed after chassis in XML so that qpos order is:
+           [0:7]   chassis_free
+           [7:11]  wheel spins
+           [11:18] arm + gripper joints
+           [18:25] red_box_free
+           [25:32] blue_cyl_free
+    -->
+
+    <!-- Red box on shelf A surface -->
+    <!-- Placed 12 cm in from the shelf's front edge (x=-1.10) so a
+         mobile arm parked at the shelf can reach it. -->
+    <body name="red_box" pos="-1.22 1.5 0.60">
+      <freejoint name="red_box_free"/>
+      <geom name="red_box_geom" class="object" type="box"
+            size="0.035 0.035 0.035" mass="0.25"
+            rgba="0.85 0.15 0.10 1"/>
+    </body>
+
+    <!-- Blue cylinder on shelf A surface -->
+    <body name="blue_cyl" pos="-1.25 1.72 0.60">
+      <freejoint name="blue_cyl_free"/>
+      <geom name="blue_cyl_geom" class="object" type="cylinder"
+            size="0.03 0.04" mass="0.15"
+            rgba="0.15 0.35 0.85 1"/>
+    </body>
+
+  </worldbody>
+
+  <!-- ============================================================
+       CONTACT EXCLUDES — arm links that are close in the chain (but not
+       direct parent/child, which MuJoCo already skips) would otherwise
+       collide with each other when the wrist bends.
+       ============================================================ -->
+  <contact>
+    <exclude body1="forearm" body2="wrist_tilt"/>
+    <exclude body1="forearm" body2="finger_L"/>
+    <exclude body1="forearm" body2="finger_R"/>
+    <exclude body1="wrist" body2="finger_L"/>
+    <exclude body1="wrist" body2="finger_R"/>
+    <exclude body1="arm_base" body2="forearm"/>
+  </contact>
+
+  <!-- ============================================================
+       TENDONS — couple the two gripper fingers so one actuator
+       controls both.  tendon length = grip_L - grip_R.
+       ============================================================ -->
+  <tendon>
+    <fixed name="gripper_couple">
+      <joint joint="grip_L" coef="1"/>
+      <joint joint="grip_R" coef="-1"/>
+    </fixed>
+  </tendon>
+
+  <!-- ============================================================
+       EQUALITY — constrain tendon length to 0, so grip_L == grip_R.
+       The two fingers always open and close symmetrically.
+       ============================================================ -->
+  <equality>
+    <tendon tendon1="gripper_couple" polycoef="0 0 0 0 0"/>
+  </equality>
+
+  <!-- ============================================================
+       ACTUATORS
+       Three types demonstrated:
+         velocity — wheels (set desired angular velocity, rad/s)
+         motor    — arm yaw (apply raw torque, N·m)
+         position — arm joints & gripper (servo to target angle/position)
+       ============================================================ -->
+  <actuator>
+    <!-- Wheel velocity actuators: kv=1 means ctrl=desired_velocity in rad/s.
+         forcerange limits max torque to prevent unrealistic acceleration. -->
+    <velocity name="drive_FL" joint="wheel_FL_spin" kv="5" forcerange="-10 10"/>
+    <velocity name="drive_FR" joint="wheel_FR_spin" kv="5" forcerange="-10 10"/>
+    <velocity name="drive_RL" joint="wheel_RL_spin" kv="5" forcerange="-10 10"/>
+    <velocity name="drive_RR" joint="wheel_RR_spin" kv="5" forcerange="-10 10"/>
+
+    <!-- Arm yaw motor: raw torque. ctrl is torque in N·m, clamped. -->
+    <motor name="yaw_motor" joint="arm_yaw" gear="1"
+           ctrlrange="-5 5" ctrllimited="true"/>
+
+    <!-- Arm position servos: ctrl = desired angle in radians.
+         kp is the proportional gain (stiffness, N·m/rad). -->
+    <position name="shoulder_pos" joint="shoulder_pitch" kp="200"
+              ctrlrange="-0.6 2.2" ctrllimited="true"/>
+    <position name="elbow_pos" joint="elbow_pitch" kp="150"
+              ctrlrange="-0.3 2.6" ctrllimited="true"/>
+    <position name="wrist_roll_pos" joint="wrist_roll" kp="20"
+              ctrlrange="-3.14 3.14" ctrllimited="true"/>
+    <position name="wrist_pitch_pos" joint="wrist_pitch" kp="20"
+              ctrlrange="-1.57 1.57" ctrllimited="true"/>
+
+    <!-- Gripper position actuator: ctrl=0 is closed, ctrl=0.04 is fully open.
+         Only controls grip_L; grip_R follows via the tendon equality. -->
+    <position name="gripper_pos" joint="grip_L" kp="600"
+              ctrlrange="0 0.05" ctrllimited="true"/>
+  </actuator>
+
+  <!-- ============================================================
+       SENSORS
+       Organized by function:
+         Joint state — arm joint angles and gripper opening
+         Contact     — touch sensors on gripper fingertips
+         Inertial    — accelerometer and gyroscope on chassis
+         Proximity   — rangefinder on chassis front
+       ============================================================ -->
+  <sensor>
+    <!-- Joint position sensors (rad for hinge, m for slide) -->
+    <jointpos name="sens_yaw"           joint="arm_yaw"/>
+    <jointpos name="sens_shoulder"      joint="shoulder_pitch"/>
+    <jointpos name="sens_elbow"         joint="elbow_pitch"/>
+    <jointpos name="sens_wrist_roll"    joint="wrist_roll"/>
+    <jointpos name="sens_wrist_pitch"   joint="wrist_pitch"/>
+    <jointpos name="sens_gripper"       joint="grip_L"/>
+
+    <!-- Touch sensors on gripper fingertips (scalar, N) -->
+    <touch name="touch_L" site="touch_L_site"/>
+    <touch name="touch_R" site="touch_R_site"/>
+
+    <!-- IMU on chassis: 3-axis accelerometer (m/s²) and gyroscope (rad/s) -->
+    <accelerometer name="imu_accel" site="imu_site"/>
+    <gyro name="imu_gyro" site="imu_site"/>
+
+    <!-- Forward-looking rangefinder (m, -1 if no hit) -->
+    <rangefinder name="forward_range" site="rangefinder_site"/>
+
+    <!-- End-effector world position (m, 3D) -->
+    <framepos name="ee_pos" objtype="site" objname="ee_site"/>
+
+    <!-- Grasp point world position (m, 3D) — midway between fingertips -->
+    <framepos name="grasp_pos" objtype="site" objname="grasp_site"/>
+  </sensor>
+
+  <!-- ============================================================
+       KEYFRAMES — predefined configurations
+       ============================================================ -->
+  <keyframe>
+    <!--
+      "home" — robot at starting position, arm tucked down, gripper open.
+      qpos order for the robot (first 18 entries):
+        chassis_free: x y z  qw qx qy qz           (7)
+        wheel_FL, FR, RL, RR spin                    (4)
+        arm_yaw                                       (1)
+        shoulder_pitch                                (1)
+        elbow_pitch                                   (1)
+        wrist_roll                                    (1)
+        wrist_pitch                                   (1)
+        grip_L                                        (1)
+        grip_R                                        (1)
+      Then object freejoints: red_box (7), blue_cyl (7)
+    -->
+    <!-- "home" — robot at center, facing +Y, arm tucked, gripper open.
+         Quaternion 0.707 0 0 0.707 = 90° about Z (local +X → world +Y). -->
+    <key name="home"
+         qpos="0 -1.5 0.11  0.707 0 0 0.707
+               0 0 0 0
+               0
+               0.0
+               2.4
+               0
+               -0.8
+               0.04
+               0.04
+               -1.22 1.5 0.60  1 0 0 0
+               -1.25 1.72 0.60  1 0 0 0"/>
+
+    <!-- "pre_grasp" — robot near shelf A, arm reaching toward object -->
+    <key name="pre_grasp"
+         qpos="-0.93 1.5 0.11  0 0 0 1
+               0 0 0 0
+               0.0
+               0.2
+               1.2
+               0
+               0.15
+               0.04
+               0.04
+               -1.22 1.5 0.60  1 0 0 0
+               -1.25 1.72 0.60  1 0 0 0"/>
+  </keyframe>
+
+</mujoco>

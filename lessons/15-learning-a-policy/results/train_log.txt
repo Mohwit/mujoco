@@ -1,0 +1,11 @@
+    base seed 0:  40.9 s   final return   -24.253   lesson-9 return   -24.253   mean|a| 0.809   mean|da| 0.007   final err 0.081 rad
+    base seed 1:  41.7 s   final return   -24.420   lesson-9 return   -24.420   mean|a| 0.806   mean|da| 0.007   final err 0.083 rad
+    base seed 2:  41.7 s   final return   -24.095   lesson-9 return   -24.095   mean|a| 0.812   mean|da| 0.007   final err 0.076 rad
+  no_act seed 0:  42.2 s   final return   -22.362   lesson-9 return   -24.079   mean|a| 0.813   mean|da| 0.007   final err 0.073 rad
+ big_act seed 0:  45.3 s   final return  -140.010   lesson-9 return   -78.400   mean|a| 0.489   mean|da| 0.003   final err 0.507 rad
+  sparse seed 0:  44.6 s   final return   225.400   lesson-9 return   -26.554   mean|a| 0.894   mean|da| 0.011   final err 0.023 rad
+approach seed 0:  41.0 s   final return     8.785   lesson-9 return  -811.976   mean|a| 0.584   mean|da| 0.066   final err 0.756 rad
+approach seed 1:  45.0 s   final return    10.522   lesson-9 return -1394.211   mean|a| 0.693   mean|da| 0.059   final err 2.130 rad
+approach seed 2:  45.0 s   final return     9.925   lesson-9 return -1014.966   mean|a| 0.672   mean|da| 0.057   final err 0.730 rad
+  signed seed 0:  41.0 s   final return     0.853   lesson-9 return   -28.634   mean|a| 0.766   mean|da| 0.005   final err 0.159 rad
+total 432 s, wrote /Users/mohwit/Desktop/mujoco/lessons/15-learning-a-policy/results/curves.json

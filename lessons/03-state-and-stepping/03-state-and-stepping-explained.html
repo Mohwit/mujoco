@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 03 explained — State and stepping</title>
+<style>
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --bg:#0a0f0d;--raised:#111916;--surface:#151d19;--input:#0d1410;--border:#1e2b25;
+  --teal:#00c9a7;--teal-wash:rgba(0,229,192,.08);--orange:#ff7a45;--orange-wash:rgba(255,122,69,.10);
+  --purple:#c79bff;--blue:#6cb4ff;--yellow:#ffd166;--red:#ff5c6c;
+  --text:#d4ddd8;--dim:#8ea398;--bright:#f0faf5;--code:#0c1210;--grid:#1a2520;
+  --x:#ff5c6c;--y:#7bd88f;--z:#6cb4ff;
+  color-scheme:dark;
+}
+:root[data-theme=light]{
+  --bg:#f4f7f5;--raised:#ffffff;--surface:#eaf0ec;--input:#ffffff;--border:#c9d6ce;
+  --teal:#00796b;--teal-wash:rgba(0,121,107,.07);--orange:#c2410c;--orange-wash:rgba(194,65,12,.07);
+  --purple:#7c3aed;--blue:#1d6fd6;--yellow:#a16207;--red:#c81e3a;
+  --text:#1e2d26;--dim:#52665c;--bright:#0b1510;--code:#f0f4f1;--grid:#dde6e0;
+  --x:#d62839;--y:#2b8a3e;--z:#1d6fd6;
+  color-scheme:light;
+}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--bg);color:var(--text);font:17px/1.65 system-ui,-apple-system,"Segoe UI",sans-serif}
+a{color:var(--teal)}
+:focus-visible{outline:2px solid var(--teal);outline-offset:2px;border-radius:4px}
+code,pre,kbd,.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+code{background:var(--surface);color:var(--orange);padding:.08em .35em;border-radius:5px;font-size:.88em}
+pre{background:var(--code);border:1px solid var(--border);border-radius:10px;padding:14px 16px;overflow-x:auto;font-size:14px;line-height:1.55;margin:0}
+pre code{background:none;color:var(--text);padding:0;font-size:inherit}
+.k{color:var(--purple)}.s{color:var(--y)}.n{color:var(--yellow)}.c{color:var(--dim);font-style:italic}.t{color:var(--blue)}.a{color:var(--orange)}
+.hl{background:var(--teal-wash);box-shadow:inset 3px 0 0 var(--teal);display:inline-block;width:100%}
+
+/* top bar + ladder */
+.topbar{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--border)}
+.topbar-inner{max-width:980px;margin:0 auto;padding:8px 20px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.brand{font-weight:700;color:var(--bright);text-decoration:none;font-size:15px;white-space:nowrap}
+.brand span{color:var(--teal)}
+.ladder{display:flex;gap:4px;flex:1;flex-wrap:wrap;list-style:none;margin:0;padding:0}
+.ladder a{display:block;font-size:12px;padding:3px 9px;border-radius:999px;border:1px solid var(--border);color:var(--dim);text-decoration:none;white-space:nowrap}
+.ladder a.on{border-color:var(--teal);color:var(--teal);background:var(--teal-wash)}
+.theme-btn{font-size:12px}
+
+main{max-width:980px;margin:0 auto;padding:28px 20px 80px}
+header.hero{padding:24px 0 8px}
+.eyebrow{font:600 12px/1 ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--teal)}
+h1{font-size:clamp(28px,5vw,42px);line-height:1.15;margin:.35em 0 .3em;color:var(--bright)}
+h2{font-size:26px;line-height:1.25;margin:0 0 .4em;color:var(--bright)}
+h3{font-size:19px;margin:1.4em 0 .4em;color:var(--bright)}
+.lead{font-size:19px;color:var(--dim);max-width:68ch}
+p,li{max-width:72ch}
+section.step{padding:44px 0 8px;border-top:1px solid var(--border);margin-top:36px;scroll-margin-top:60px}
+.lvl{display:inline-flex;gap:6px;align-items:center;font:600 11px/1 ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase;padding:5px 9px;border-radius:999px;margin-bottom:12px}
+.lvl-plain{color:var(--y);background:color-mix(in srgb,var(--y) 12%,transparent)}
+.lvl-pic{color:var(--blue);background:color-mix(in srgb,var(--blue) 12%,transparent)}
+.lvl-words{color:var(--purple);background:color-mix(in srgb,var(--purple) 12%,transparent)}
+.lvl-math{color:var(--orange);background:var(--orange-wash)}
+.lvl-code{color:var(--teal);background:var(--teal-wash)}
+
+.card{background:var(--raised);border:1px solid var(--border);border-radius:14px;padding:18px 20px;margin:18px 0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media (max-width:760px){.grid2,.grid3{grid-template-columns:1fr}body{font-size:16px}}
+.analogy{border-left:4px solid var(--y);background:color-mix(in srgb,var(--y) 6%,var(--raised))}
+.analogy strong:first-child{color:var(--y)}
+.rule{border-left:4px solid var(--teal);background:var(--teal-wash)}
+.warn{border-left:4px solid var(--orange);background:var(--orange-wash)}
+.callout-title{font:700 12px/1 ui-monospace,monospace;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px;display:block}
+
+/* jargon terms */
+dfn.term{font-style:normal;font-weight:650;color:var(--purple);border-bottom:1.5px dotted var(--purple);cursor:help;position:relative}
+dfn.term:hover::after,dfn.term:focus::after{content:attr(data-def);position:absolute;left:0;top:calc(100% + 6px);width:min(300px,80vw);background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font:400 13.5px/1.45 system-ui,sans-serif;z-index:30;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.newwords{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:14px 0 0;font-size:13px;color:var(--dim)}
+.newwords span.chip{font:600 12px ui-monospace,monospace;padding:3px 8px;border-radius:6px;background:color-mix(in srgb,var(--purple) 12%,transparent);color:var(--purple)}
+
+/* maths boxes */
+details.math{border:1px solid color-mix(in srgb,var(--orange) 40%,var(--border));border-radius:12px;background:var(--orange-wash);margin:16px 0}
+details.math>summary{cursor:pointer;padding:12px 16px;font-weight:650;color:var(--orange);list-style:none}
+details.math>summary::before{content:"∑  ";}
+details.math[open]>summary{border-bottom:1px solid color-mix(in srgb,var(--orange) 30%,var(--border))}
+details.math>div{padding:4px 18px 14px}
+.eq{font:15.5px/1.7 ui-monospace,monospace;background:var(--code);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin:10px 0;overflow-x:auto;white-space:pre;color:var(--bright)}
+
+/* controls */
+button,.btn{font:600 14px system-ui,sans-serif;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:8px;padding:8px 13px;cursor:pointer}
+button:hover{border-color:var(--teal)}
+button.primary{background:var(--teal);border-color:var(--teal);color:#04120e}
+button:disabled{opacity:.45;cursor:not-allowed}
+.btnrow{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+label.slider{display:grid;grid-template-columns:1fr auto;gap:2px 10px;font-size:14px;margin:10px 0}
+label.slider input{grid-column:1/-1;width:100%;accent-color:var(--teal)}
+label.slider output{font:600 13px ui-monospace,monospace;color:var(--teal)}
+label.check{display:flex;gap:8px;align-items:center;font-size:14px;margin:6px 0;cursor:pointer}
+canvas{display:block;width:100%;border-radius:10px;background:var(--code);border:1px solid var(--border);touch-action:none}
+.caption{font-size:13.5px;color:var(--dim);margin-top:8px}
+
+/* readouts */
+.readouts{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin:10px 0}
+.ro{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 10px;transition:border-color .25s}
+.ro .lab{font-size:12px;color:var(--dim);display:block}
+.ro .val{font:700 16px ui-monospace,monospace;color:var(--bright)}
+.ro .unit{font-size:11.5px;color:var(--dim)}
+.ro.flash{border-color:var(--orange);background:var(--orange-wash)}
+.ro.frozen .val{color:var(--dim)}
+.ro.frozen{border-style:dashed}
+
+/* predict */
+.predict{border:1px dashed var(--yellow);border-radius:14px;padding:16px 18px;background:color-mix(in srgb,var(--yellow) 5%,var(--raised));margin:20px 0}
+.predict h4{margin:0 0 6px;color:var(--yellow);font-size:15px;letter-spacing:.02em}
+.predict textarea{width:100%;min-height:64px;background:var(--input);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font:15px system-ui,sans-serif;resize:vertical}
+.predict .answer{display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+.predict.revealed .answer{display:block}
+.predict ol{margin:6px 0;padding-left:22px}
+
+table{border-collapse:collapse;width:100%;font-size:15px;margin:12px 0}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+th{color:var(--dim);font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:.05em}
+.glossary dt{font:700 14px ui-monospace,monospace;color:var(--purple);margin-top:10px}
+.glossary dd{margin:2px 0 0 0;color:var(--text)}
+footer.next{margin-top:48px;padding:20px;border:1px solid var(--border);border-radius:14px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+@media print{.topbar,button,.btnrow{display:none}details.math{display:block}details.math>div{display:block}.predict .answer{display:block}}
+.grid2>*,.grid3>*{min-width:0}
+@media (max-width:760px){.ladder{flex-wrap:nowrap;overflow-x:auto;order:3;flex-basis:100%;padding-bottom:2px}.topbar-inner{gap:6px}}
+
+</style>
+</head>
+<body>
+<div class="topbar"><div class="topbar-inner">
+  <a class="brand" href="../index.html">MuJoCo <span>Learning Lab</span></a>
+  <ul class="ladder" aria-label="Sections on this page">
+    <li><a href="#s-idea">1 · Flipbook</a></li>
+    <li><a href="#s-state">2 · Four numbers</a></li>
+    <li><a href="#s-words">3 · forward/step/reset</a></li>
+    <li><a href="#s-inside">4 · Inside a step</a></li>
+    <li><a href="#s-dt">5 · Timestep</a></li>
+    <li><a href="#s-math">6 · Maths</a></li>
+    <li><a href="#s-code">7 · The script</a></li>
+    <li><a href="#s-check">8 · Check yourself</a></li>
+  </ul>
+  <button class="theme-btn" id="themeBtn" type="button">☀ Light</button>
+</div></div>
+
+<main>
+<header class="hero">
+  <p class="eyebrow">Lesson 03 · explained gently</p>
+  <h1>How a simulation moves forward in time</h1>
+  <p class="lead">A simulator doesn't run time smoothly. It jumps forward in tiny ticks, working out one moment from the moment before. This page shows what is stored at each tick, what <code>mj_forward</code>, <code>mj_step</code> and <code>mj_resetData</code> each do, and the simple arithmetic inside one step.</p>
+  <div class="card" style="font-size:15px">
+    <strong>Good to know:</strong> the pendulum on this page uses the same model as your <code>03_state_and_stepping.py</code>. That is a 1 m capsule, 22.25 kg, with timestep 0.002 s. Its in-browser physics was checked against real MuJoCo, and the two agree to 5 decimal places for this model. The numbers you see here are the numbers your script prints.
+  </div>
+</header>
+
+<!-- ============ 1 ============ -->
+<section class="step" id="s-idea">
+  <span class="lvl lvl-plain">● Plain words</span>
+  <h2>1. A simulation is a flipbook</h2>
+  <p>A cartoon flipbook is just still drawings. Flip through them fast and they seem to move. Each drawing is a tiny bit different from the one before.</p>
+  <p>MuJoCo works the same way. It stores <strong>one page</strong> — the current moment — in <code>MjData</code>. Then it works out the next page, a tiny moment later, and replaces the old one.</p>
+  <div class="grid3">
+    <div class="card"><span class="callout-title" style="color:var(--blue)">mj_forward = study this page</span>Look closely at the current drawing. Work out where every part is and which forces act on it. <strong>Do not turn the page.</strong> The clock doesn't move.</div>
+    <div class="card"><span class="callout-title" style="color:var(--orange)">mj_step = draw the next page</span>Use the forces on this page to draw the next one, 0.002 s later. <strong>The clock moves forward.</strong></div>
+    <div class="card"><span class="callout-title" style="color:var(--purple)">mj_resetData = back to page one</span>Throw away the drawings and go back to the <em>first page as the XML describes it</em> — not to where you last started.</div>
+  </div>
+
+  <h3>Try it: drive the flipbook yourself</h3>
+  <p>Press the buttons one at a time and watch which numbers flash. Each press adds a line to the log. The log uses the same format as your script's output.</p>
+  <div class="card">
+    <div class="grid2">
+      <div>
+        <canvas id="cvF" aria-label="Pendulum showing the current page of the simulation" role="img"></canvas>
+        <canvas id="cvStrip" aria-label="Film strip of past pages" role="img" style="margin-top:8px"></canvas>
+        <p class="caption">Film strip: one frame is kept every 25 steps (0.05 s). Faint ghosts on the main view show the last few pages.</p>
+      </div>
+      <div>
+        <div class="readouts" style="grid-template-columns:1fr 1fr">
+          <div class="ro" id="fT"><span class="lab">data.time</span><span class="val">0.000</span> <span class="unit">s</span></div>
+          <div class="ro" id="fQ"><span class="lab">data.qpos[0] angle</span><span class="val">0.70000</span> <span class="unit">rad</span></div>
+          <div class="ro" id="fV"><span class="lab">data.qvel[0] spin speed</span><span class="val">0.00000</span> <span class="unit">rad/s</span></div>
+          <div class="ro" id="fA"><span class="lab">data.qacc[0] speeding up</span><span class="val">0.00000</span> <span class="unit">rad/s²</span> <span id="fStale" style="font:700 10px ui-monospace,monospace;color:var(--orange)">STALE</span></div>
+        </div>
+        <div class="btnrow">
+          <button id="fFwd" type="button">mj_forward()</button>
+          <button id="fStep" type="button" class="primary">mj_step()</button>
+          <button id="fStep10" type="button">mj_step() × 10</button>
+          <button id="fPlay" type="button">▶ Play</button>
+          <button id="fReset" type="button">mj_resetData()</button>
+        </div>
+        <label class="slider"><span>Set <code>data.qpos[0]</code> by hand</span> <output id="oFq">0.70 rad</output><input type="range" id="fQs" min="-2.5" max="2.5" step="0.05" value="0.7"></label>
+        <label class="slider"><span>Set <code>data.qvel[0]</code> by hand</span> <output id="oFv">0.00 rad/s</output><input type="range" id="fVs" min="-6" max="6" step="0.1" value="0"></label>
+        <pre id="fLog" style="height:180px;overflow:auto;font-size:12px" aria-live="polite" tabindex="0"></pre>
+      </div>
+    </div>
+  </div>
+  <div class="card warn"><span class="callout-title" style="color:var(--orange)">What does STALE mean?</span>When you change <code>qpos</code> by hand, <code>qacc</code> still holds the value from <em>before</em> your change. MuJoCo does not recompute anything until you call <code>mj_forward</code> or <code>mj_step</code>. <strong>Prevention rule: after editing qpos or qvel by hand, call mj_forward before reading anything computed.</strong></div>
+</section>
+
+<!-- ============ 2 ============ -->
+<section class="step" id="s-state">
+  <span class="lvl lvl-pic">● Picture</span>
+  <h2>2. The four numbers on every page</h2>
+  <p>For a one-hinge pendulum, each page holds four important numbers. Think of a car on a road:</p>
+  <table>
+    <thead><tr><th>Number</th><th>Pendulum meaning</th><th>Car analogy</th><th>Unit</th></tr></thead>
+    <tbody>
+      <tr><td><dfn class="term" tabindex="0" data-def="The joint angle. For a hinge: how far it is turned from the XML's starting pose, in radians.">qpos</dfn></td><td>The angle, measured from hanging straight down</td><td>Where the car is on the road</td><td>rad</td></tr>
+      <tr><td><dfn class="term" tabindex="0" data-def="How fast the angle is changing right now. Positive = turning in the + direction.">qvel</dfn></td><td>How fast the angle is changing</td><td>The speedometer</td><td>rad/s</td></tr>
+      <tr><td><dfn class="term" tabindex="0" data-def="Acceleration: how fast qvel is changing. Computed by MuJoCo from the forces; you never set it directly.">qacc</dfn></td><td>How fast the <em>speed</em> is changing</td><td>How hard the car is speeding up or braking</td><td>rad/s²</td></tr>
+      <tr><td><code>time</code></td><td>The simulation clock</td><td>The clock on the dashboard</td><td>s</td></tr>
+    </tbody>
+  </table>
+  <p>Watch them change together. Each graph is the "steepness" of the one above it. Where the angle graph is steepest, the speed is largest. Where the angle is at its peak (flat), the speed is zero.</p>
+  <div class="card">
+    <div class="grid2">
+      <canvas id="cvP" aria-label="Pendulum swinging" role="img"></canvas>
+      <canvas id="cvG" aria-label="Graphs of qpos, qvel and qacc over time" role="img"></canvas>
+    </div>
+    <div class="btnrow"><button id="gPlay" type="button" class="primary">▶ Play</button><button id="gReset" type="button">↺ Restart</button>
+      <label class="slider" style="flex:1;min-width:200px;margin:0"><span>Starting angle</span> <output id="oG0">0.70 rad</output><input type="range" id="gQ0" min="0.1" max="3.0" step="0.05" value="0.7"></label></div>
+    <p class="caption">Teal = qpos (rad). Orange = qvel (rad/s). Purple = qacc (rad/s²). The dashed line marks "now". Notice that qacc is always the opposite sign to qpos: gravity always pulls back toward hanging down.</p>
+  </div>
+  <div class="card analogy"><strong>Who sets what?</strong> You may set <code>qpos</code> and <code>qvel</code> yourself (that's where the pendulum starts). <code>qacc</code> is always <em>computed</em> by MuJoCo from the forces. You don't set it — you read it.</div>
+  <p class="newwords">New words: <span class="chip">qacc</span><span class="chip">acceleration</span><span class="chip">rad/s · rad/s²</span><span class="chip">data.time</span></p>
+</section>
+
+<!-- ============ 3 ============ -->
+<section class="step" id="s-words">
+  <span class="lvl lvl-words">● MuJoCo words</span>
+  <h2>3. forward, step, reset — what each one changes</h2>
+  <table>
+    <thead><tr><th>Call</th><th>time</th><th>qpos</th><th>qvel</th><th>qacc</th><th>xpos (world positions)</th></tr></thead>
+    <tbody>
+      <tr><td><code>mj_forward(model, data)</code></td><td>✗ same</td><td>✗ same</td><td>✗ same</td><td>✓ computed</td><td>✓ computed</td></tr>
+      <tr><td><code>mj_step(model, data)</code></td><td>✓ + timestep</td><td>✓ new</td><td>✓ new</td><td>✓ computed</td><td>✓ computed</td></tr>
+      <tr><td><code>mj_resetData(model, data)</code></td><td>→ 0</td><td>→ <code>model.qpos0</code></td><td>→ 0</td><td>→ 0</td><td>cleared (call mj_forward)</td></tr>
+    </tbody>
+  </table>
+  <div class="grid2">
+    <div class="card rule"><span class="callout-title" style="color:var(--teal)">Model or data?</span>
+      <code>model.opt.timestep</code> (0.002 s) is part of the <strong>design</strong>. It's how big every tick is.<br>
+      <code>data.time</code> is the <strong>current clock</strong>. It grows by one timestep per <code>mj_step</code>.<br>
+      Same idea as Lesson 1: the step size is fixed, and the clock reading changes.</div>
+    <div class="card warn"><span class="callout-title" style="color:var(--orange)">The reset surprise</span>Your script sets <code>qpos[0] = 0.7</code> in Python. That changes the <em>data</em>, not the model. So <code>mj_resetData</code> goes back to the model's starting angle, <code>qpos0 = 0</code> — hanging straight down. It doesn't go back to 0.7.<br>To reset to a custom pose, set <code>qpos</code> again after the reset. Or save the pose in the XML as a keyframe (<code>&lt;key qpos="0.7"/&gt;</code>) and call <code>mj_resetDataKeyframe(model, data, 0)</code>.</div>
+  </div>
+  <p class="newwords">New words: <span class="chip">model.opt.timestep</span><span class="chip">qpos0</span><span class="chip">keyframe</span><span class="chip">mj_resetData</span></p>
+</section>
+
+<!-- ============ 4 ============ -->
+<section class="step" id="s-inside">
+  <span class="lvl lvl-pic">● Picture</span> <span class="lvl lvl-math">● simple arithmetic</span>
+  <h2>4. Slow motion: what happens inside one mj_step</h2>
+  <p>One <code>mj_step</code> does four small jobs, always in the same order. Step through them below. The numbers are real — they reproduce line "step 1" of your script exactly.</p>
+  <div class="card">
+    <div class="grid2">
+      <canvas id="cvS" aria-label="Free-body diagram of the pendulum showing gravity and its turning effect" role="img"></canvas>
+      <div>
+        <ol id="sList" style="padding-left:20px;margin-top:0">
+          <li data-k="0"><strong>Find the forces → acceleration.</strong> Gravity pulls the rod's middle straight down. Because the rod is tilted, that pull has a turning effect around the hinge. This gives <code>qacc</code>.</li>
+          <li data-k="1"><strong>Update the speed.</strong> new speed = old speed + timestep × acceleration.</li>
+          <li data-k="2"><strong>Update the angle, using the NEW speed.</strong> new angle = old angle + timestep × new speed.</li>
+          <li data-k="3"><strong>Move the clock.</strong> time = time + timestep.</li>
+        </ol>
+        <div class="eq" id="sEq" aria-live="polite" style="min-height:120px;white-space:pre-wrap;font-size:13.5px"></div>
+        <div class="btnrow">
+          <button id="sNext" type="button" class="primary">Next job ▸</button>
+          <button id="sAgain" type="button">Do another whole step</button>
+          <button id="sReset" type="button">↺ Back to θ = 0.7, at rest</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card analogy"><strong>Why "use the new speed" matters.</strong> Updating the speed first, then using it for the angle, is called <dfn class="term" tabindex="0" data-def="Semi-implicit (symplectic) Euler: update velocity from acceleration first, then update position using the NEW velocity. It is much more stable than updating position with the old velocity.">semi-implicit Euler</dfn>. It's what MuJoCo's default integrator does for a simple pendulum like this. If you used the <em>old</em> speed instead, the pendulum would slowly gain energy and swing higher and higher, forever. Section 5 lets you see that.</div>
+  <p class="newwords">New words: <span class="chip">integrator</span><span class="chip">semi-implicit Euler</span><span class="chip">torque</span></p>
+</section>
+
+<!-- ============ 5 ============ -->
+<section class="step" id="s-dt">
+  <span class="lvl lvl-pic">● Picture</span>
+  <h2>5. Experiment: how big should one tick be?</h2>
+  <p>Your model uses <code>timestep="0.002"</code>: 500 pages per simulated second. Why so small? Change <strong>only the timestep</strong> and compare against a very fine "truth" run (timestep 0.0002).</p>
+  <div class="predict">
+    <h4>🔮 Predict first: timestep goes from 0.002 to 0.1 (50× bigger). What happens to the swing over 5 seconds?</h4>
+    <textarea aria-label="Your prediction for the timestep experiment"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p>At <strong>0.02</strong> the curve is almost on top of the truth. At <strong>0.1</strong> it still swings, but it drifts out of time with the truth: the wiggles end up at the wrong moments. At <strong>0.3</strong> it is badly wrong. At <strong>0.5</strong> it "explodes": the pendulum spins over the top and the angle runs off to about −38 rad.</p>
+      <p>I ran these same timesteps in real MuJoCo. After 5 s: 0.002 → 0.48919 rad, 0.1 → 0.61049 rad, 0.5 → −37.729 rad. The browser numbers match. <strong>Debugging rule: if a simulation explodes, try halving the timestep first.</strong></p>
+    </div>
+  </div>
+  <div class="card">
+    <canvas id="cvD" aria-label="qpos over 5 seconds for the chosen timestep versus a fine reference" role="img"></canvas>
+    <label class="slider"><span>timestep <code>model.opt.timestep</code></span> <output id="oD">0.0020 s</output><input type="range" id="dH" min="0" max="100" step="1" value="20"></label>
+    <div class="btnrow" style="align-items:center">
+      <button type="button" class="dpre" data-h="0.002">0.002</button><button type="button" class="dpre" data-h="0.02">0.02</button><button type="button" class="dpre" data-h="0.1">0.1</button><button type="button" class="dpre" data-h="0.3">0.3</button><button type="button" class="dpre" data-h="0.5">0.5</button>
+      <label class="check" style="margin-left:auto"><input type="checkbox" id="dNaive"> Second experiment: use the OLD speed (naive Euler)</label>
+    </div>
+    <div class="readouts">
+      <div class="ro"><span class="lab">steps for 5 s</span><span class="val" id="dN">2500</span></div>
+      <div class="ro"><span class="lab">qpos at t = 5 s (yours)</span><span class="val" id="dQ">—</span> <span class="unit">rad</span></div>
+      <div class="ro frozen"><span class="lab">qpos at t = 5 s (truth)</span><span class="val" id="dR">—</span> <span class="unit">rad</span></div>
+      <div class="ro"><span class="lab">biggest swing</span><span class="val" id="dM">—</span> <span class="unit">rad</span></div>
+    </div>
+    <p class="caption">Grey = fine reference. Teal = your timestep (dots are the actual pages MuJoCo would compute). Tick the checkbox for a second, separate experiment: it shows why MuJoCo uses the new speed. Real MuJoCo never uses the old speed this way.</p>
+  </div>
+</section>
+
+<!-- ============ 6 ============ -->
+<section class="step" id="s-math">
+  <span class="lvl lvl-math">● Maths (optional)</span>
+  <h2>6. The maths, from "rate of change" to the step formula</h2>
+
+  <details class="math"><summary>Step 1 — speed is "how fast something changes"</summary><div>
+    <p>If the angle goes from 0.70 to 0.68 rad in 0.01 s, it changed by −0.02 rad in 0.01 s:</p>
+    <div class="eq">speed ≈ change in angle / change in time = −0.02 / 0.01 = −2 rad/s</div>
+    <p>Mathematicians make the time gap tiny and call the result a <dfn class="term" tabindex="0" data-def="The rate of change of something at one instant. Written with a dot: θ̇ is the rate of change of θ.">derivative</dfn>. They write it with a dot: θ̇ ("theta-dot") is the speed, and θ̈ ("theta-double-dot") is the acceleration. In MuJoCo names: <code>qvel</code> = θ̇ and <code>qacc</code> = θ̈.</p>
+  </div></details>
+
+  <details class="math"><summary>Step 2 — Newton's law for turning: where qacc comes from</summary><div>
+    <p>For things that turn, Newton's "force = mass × acceleration" becomes:</p>
+    <div class="eq">turning force (torque)  =  turning inertia  ×  angular acceleration
+          τ             =        I         ×        θ̈</div>
+    <p>Gravity pulls the rod's centre of mass (0.5 m from the hinge) straight down. Only the sideways part of that pull turns the rod, which is why sin θ appears:</p>
+    <div class="eq">τ = − m · g · d · sin θ        (minus: it always pulls back toward hanging down)</div>
+    <p>Your model's numbers. MuJoCo computes the mass and inertia from the capsule's shape and a density of 1000 kg/m³:</p>
+    <div class="eq">m = 22.25 kg      g = 9.81 m/s²      d = 0.5 m
+I = 2.314 (spin about its own centre) + m·d² (5.563) = 7.876 kg·m²
+
+θ̈ = −(m·g·d / I) · sin θ = −(109.14 / 7.876) · sin θ = −13.857 · sin θ
+at θ = 0.7:  θ̈ = −13.857 × 0.6442 = −8.9267 rad/s²   ✓  (script: qacc=-8.92670)</div>
+  </div></details>
+
+  <details class="math"><summary>Step 3 — turning the law into pages: the step formula</summary><div>
+    <p>A computer can't use infinitely tiny time gaps, so it uses the timestep h = 0.002 s. With "rate × time = change":</p>
+    <div class="eq">qacc  = −13.857 · sin(qpos)          (forces → acceleration)
+qvel ← qvel + h · qacc               (speed update)
+qpos ← qpos + h · qvel               (angle update, with the NEW qvel)
+time ← time + h</div>
+    <p>Step 1 of your script, by hand:</p>
+    <div class="eq">qacc = −8.92670
+qvel = 0 + 0.002 × (−8.92670)        = −0.017853   ✓ (−0.01785)
+qpos = 0.7 + 0.002 × (−0.017853)     =  0.699964   ✓ (0.69996)
+time = 0 + 0.002                     =  0.002      ✓</div>
+    <p>A detail many people miss: the <code>qacc</code> printed after <code>mj_step</code> is the one computed at the <em>start</em> of that step, from the old angle. That's why the "after forward" row and the "step 1" row show the same −8.92670.</p>
+  </div></details>
+
+  <details class="math"><summary>Step 4 — why tiny steps: error and stability</summary><div>
+    <p>Each step assumes the acceleration stays constant for the whole tick. It doesn't really — so each step makes a small error. Smaller h means smaller errors. Halving h roughly halves the total error.</p>
+    <p>For small swings this pendulum takes about</p>
+    <div class="eq">T = 2π · √(I / (m·g·d)) = 2π · √(7.876 / 109.14) ≈ 1.69 s per full swing</div>
+    <p>With h = 0.002 there are about 845 pages per swing — plenty. With h = 0.5 there are fewer than 4, so the method can't follow the motion at all, and it explodes. A good rule of thumb is to use many dozens of steps per fastest motion in your model. Stiff springs and hard contacts move fast, so they need small timesteps.</p>
+  </div></details>
+</section>
+
+<!-- ============ 7 ============ -->
+<section class="step" id="s-code">
+  <span class="lvl lvl-code">● Code</span>
+  <h2>7. Your script, line by line</h2>
+  <table>
+    <thead><tr><th style="width:44%">Code in <code>03_state_and_stepping.py</code></th><th>Physical meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>data.qpos[0] = 0.7</code></td><td>Tilt the pendulum 0.7 rad (about 40°) from hanging. This edits the <strong>data</strong>.</td></tr>
+      <tr><td><code>data.qvel[0] = 0.0</code></td><td>Hold it still: spin speed 0 rad/s. It is like holding the pendulum and about to let go.</td></tr>
+      <tr><td><code>mujoco.mj_forward(model, data)</code></td><td>Study the current page: work out positions and the acceleration (−8.927 rad/s²). The clock stays at 0.</td></tr>
+      <tr><td><code>for step in range(1, 11): mj_step(...)</code></td><td>Draw 10 new pages, each 0.002 s after the last. That is 0.02 s in total.</td></tr>
+      <tr><td><code>mujoco.mj_resetData(model, data)</code></td><td>Back to page one <em>as the model describes it</em>: time 0, angle <code>qpos0 = 0</code>, speed 0.</td></tr>
+      <tr><td><code>model.opt.timestep</code></td><td>The tick size, read from the <strong>model</strong> (0.002 s). It's part of the design.</td></tr>
+    </tbody>
+  </table>
+<pre><code><span class="c">#                    clock (s)    angle (rad)    spin speed (rad/s)   speeding up (rad/s²)</span>
+after forward      time=0.000  qpos= 0.70000  qvel= 0.00000  qacc=-8.92670  <span class="c"># studied, not moved</span>
+step 1             time=0.002  qpos= 0.69996  qvel=-0.01785  qacc=-8.92670  <span class="c"># first page: barely moved</span>
+step 2             time=0.004  qpos= 0.69989  qvel=-0.03571  qacc=-8.92632  <span class="c"># speed keeps growing</span>
+…
+step 10            time=0.020  qpos= 0.69804  qvel=-0.17841  qacc=-8.90966  <span class="c"># 0.02 s in: falling faster</span>
+after reset        time=0.000  qpos= 0.00000  qvel= 0.00000  qacc= 0.00000  <span class="c"># back to qpos0, NOT 0.7</span></code></pre>
+  <div class="card analogy"><strong>Why does qacc shrink a little each step?</strong> As the pendulum falls, θ gets smaller. So sin θ gets smaller, and gravity's turning effect weakens. When it reaches the bottom (θ = 0), the acceleration is zero and the speed is at its biggest.</div>
+</section>
+
+<!-- ============ 8 ============ -->
+<section class="step" id="s-check">
+  <span class="lvl lvl-plain">● Check yourself</span>
+  <h2>8. Your lesson's four questions</h2>
+  <p>These are the Lesson 3 checkpoint questions. Answer them here, then tell me your answers in the chat so I can update your progress.</p>
+  <div class="predict">
+    <h4>Q1. You call mj_forward() three times, with no mj_step(). Does data.time change?</h4>
+    <textarea aria-label="Answer to question 1"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>No.</strong> It stays 0.0. mj_forward only studies the current page. Calling it again gives the same results. (Checked in real MuJoCo: time = 0.0, qacc = −8.927 after two calls.)</p></div>
+  </div>
+  <div class="predict">
+    <h4>Q2. qpos = 0.7 and qvel = 0. What happens to qpos after one step under gravity?</h4>
+    <textarea aria-label="Answer to question 2"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>It goes down very slightly, to <strong>0.69996</strong>. Gravity gives a negative acceleration. The speed becomes −0.01785 rad/s, and the angle moves by 0.002 × that. The change is tiny because the pendulum starts from rest and 2 ms is short.</p></div>
+  </div>
+  <div class="predict">
+    <h4>Q3. The timestep is 0.002 s. What is data.time after ten steps?</h4>
+    <textarea aria-label="Answer to question 3"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>0.020 s</strong> (10 × 0.002).</p></div>
+  </div>
+  <div class="predict">
+    <h4>Q4. You add mj_resetData(model, data) after the loop. Which values go back, and to what?</h4>
+    <textarea aria-label="Answer to question 4"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>All of them:</strong> time → 0, qvel → 0, qacc → 0, and qpos → <strong>0</strong>, not 0.7. The 0.7 was set in Python on the data. The model's own starting angle (<code>qpos0</code>) is 0. The model itself — timestep, nq, masses — isn't touched by a reset.</p></div>
+  </div>
+
+  <h3>Glossary — new words from this page</h3>
+  <dl class="glossary">
+    <dt>qpos / qvel / qacc</dt><dd>Angle (rad), spin speed (rad/s), and how fast the speed changes (rad/s²) for each joint.</dd>
+    <dt>data.time</dt><dd>The simulation clock, in seconds.</dd>
+    <dt>model.opt.timestep</dt><dd>The fixed size of one tick (here 0.002 s). Part of the model.</dd>
+    <dt>mj_forward</dt><dd>Compute everything for the current state (positions, forces, qacc). No time passes.</dd>
+    <dt>mj_step</dt><dd>Compute, then move time forward by one timestep.</dd>
+    <dt>mj_resetData</dt><dd>Set the data back to the model's defaults: time 0, qpos = qpos0, qvel 0.</dd>
+    <dt>qpos0 / keyframe</dt><dd>The model's built-in starting pose / a saved pose in the XML you can reset to.</dd>
+    <dt>integrator, semi-implicit Euler</dt><dd>The rule for turning acceleration into the next page: speed first, then angle using the new speed.</dd>
+    <dt>torque, inertia</dt><dd>Turning force (N·m) and resistance to being turned (kg·m²).</dd>
+    <dt>stale</dt><dd>A computed value that no longer matches the state, because you changed qpos or qvel and haven't called mj_forward.</dd>
+  </dl>
+  <footer class="next">
+    <a href="../02-frames-and-axes/02-frames-and-axes-explained.html">← Lesson 02 explained</a>
+    <a href="../index.html">Back to the Learning Lab →</a>
+  </footer>
+</section>
+</main>
+
+<script>
+// ---- shared helpers (theme, ladder, predictions, canvas) ----
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+(function theme(){
+  const root=document.documentElement, saved=localStorage.getItem('mjx-theme');
+  root.dataset.theme = saved || (matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');
+  const b=document.getElementById('themeBtn');
+  const label=()=>b.textContent = root.dataset.theme==='dark'?'☀ Light':'☾ Dark';
+  label();
+  b.addEventListener('click',()=>{root.dataset.theme=root.dataset.theme==='dark'?'light':'dark';localStorage.setItem('mjx-theme',root.dataset.theme);label();window.dispatchEvent(new Event('themechange'));});
+})();
+(function ladder(){
+  const links=[...document.querySelectorAll('.ladder a')];
+  const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){links.forEach(l=>l.classList.toggle('on',l.getAttribute('href')==='#'+e.target.id));}}),{rootMargin:'-40% 0px -55% 0px'});
+  document.querySelectorAll('section.step').forEach(s=>io.observe(s));
+})();
+document.querySelectorAll('.predict').forEach(p=>{
+  const ta=p.querySelector('textarea'), lock=p.querySelector('.lock'), skip=p.querySelector('.skip');
+  if(!ta||!lock)return;
+  const upd=()=>lock.disabled=!ta.value.trim();
+  ta.addEventListener('input',upd); upd();
+  lock.addEventListener('click',()=>{p.classList.add('revealed');lock.textContent='Guess locked ✓';lock.disabled=true;ta.readOnly=true;});
+  skip&&skip.addEventListener('click',()=>{p.classList.add('revealed');});
+});
+function css(name){return getComputedStyle(document.documentElement).getPropertyValue(name).trim();}
+function fit(canvas,aspect){
+  const dpr=Math.min(devicePixelRatio||1,2), w=canvas.clientWidth, h=Math.round(w*aspect);
+  canvas.style.height=h+'px'; canvas.width=w*dpr; canvas.height=h*dpr;
+  const ctx=canvas.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); return {ctx,w,h};
+}
+function arrow(ctx,x1,y1,x2,y2,color,width=2,head=8){
+  const a=Math.atan2(y2-y1,x2-x1); ctx.strokeStyle=color; ctx.fillStyle=color; ctx.lineWidth=width;
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(x2,y2);ctx.lineTo(x2-head*Math.cos(a-.4),y2-head*Math.sin(a-.4));ctx.lineTo(x2-head*Math.cos(a+.4),y2-head*Math.sin(a+.4));ctx.closePath();ctx.fill();
+}
+function text(ctx,s,x,y,color,size=12,align='left',weight=600){ctx.fillStyle=color;ctx.font=`${weight} ${size}px ui-monospace,Menlo,monospace`;ctx.textAlign=align;ctx.textBaseline='middle';ctx.fillText(s,x,y);}
+function flash(el){if(!el)return;el.classList.remove('flash');void el.offsetWidth;el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),600);}
+function fmt(v,d=3){return (v>=0?'+':'')+v.toFixed(d);}
+
+// ---------- Lesson 3 page logic ----------
+// Same model as 03_state_and_stepping.py: capsule r = 0.08, length 1 m, pivot at z = 1.
+// qacc = -K sin(qpos), K = m g d / I = 13.8566 1/s^2 (measured from MuJoCo).
+// The step below reproduces MuJoCo's Euler integrator for this model to 5 decimals.
+const K = 13.85664904045135, H0 = 0.002;
+const pyf = v => { const s = (Math.abs(v) < 5e-6 ? 0 : v).toFixed(5); return s.startsWith('-') ? s : ' ' + s; };
+const logLine = (lab, s) => lab.padEnd(18) + ' time=' + s.t.toFixed(3) + ' qpos=' + pyf(s.q) + ' qvel=' + pyf(s.v) + ' qacc=' + pyf(s.a);
+
+function drawRod(ctx, w, h, th, o = {}) {
+  const s = o.scale || h / 1.5, P = [w / 2, (o.py || 0.12) * h];
+  const end = [P[0] - Math.sin(th) * s, P[1] + Math.cos(th) * s]; // +th swings the hanging end toward -x (left)
+  if (!o.keep) ctx.clearRect(0, 0, w, h);
+  if (o.ghosts) o.ghosts.forEach((g, i) => { ctx.globalAlpha = 0.08 + 0.1 * i / o.ghosts.length; ctx.strokeStyle = css('--teal'); ctx.lineWidth = 0.16 * s; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(...P); ctx.lineTo(P[0] - Math.sin(g) * s, P[1] + Math.cos(g) * s); ctx.stroke(); });
+  ctx.globalAlpha = 1;
+  ctx.setLineDash([4, 5]); ctx.strokeStyle = css('--dim'); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(P[0], P[1]); ctx.lineTo(P[0], P[1] + s * 1.08); ctx.stroke(); ctx.setLineDash([]);
+  ctx.strokeStyle = o.color || css("--teal"); ctx.lineWidth = Math.min(0.16 * s, 22); ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(...P); ctx.lineTo(...end); ctx.stroke();
+  ctx.fillStyle = css('--purple'); ctx.beginPath(); ctx.arc(...P, 5, 0, 7); ctx.fill();
+  if (o.angleArc !== false) {
+    ctx.strokeStyle = css('--yellow'); ctx.lineWidth = 1.5; ctx.beginPath();
+    const a0 = Math.PI / 2, a1 = Math.PI / 2 + th; ctx.arc(P[0], P[1], s * 0.3, Math.min(a0, a1), Math.max(a0, a1)); ctx.stroke();
+    if (o.label !== false) text(ctx, 'θ = ' + th.toFixed(2), P[0] + (th > 0 ? 1 : -1) * s * 0.22, P[1] + s * 0.42, css('--yellow'), 11, 'center');
+  }
+  return { P, s, end };
+}
+
+/* ---------- Section 1: flipbook ---------- */
+(() => {
+  const cv = document.getElementById('cvF'), cs = document.getElementById('cvStrip'); let g = fit(cv, 0.9), gs = fit(cs, 0.16);
+  const $ = id => document.getElementById(id);
+  const st = { q: 0.7, v: 0, a: 0, t: 0, n: 0, stale: true }, ghosts = [], strip = [];
+  const log = [], logEl = $('fLog');
+  let playing = false, last = 0, acc = 0;
+  function addLog(s) { log.push(s); if (log.length > 200) log.shift(); logEl.textContent = log.join('\n'); logEl.scrollTop = 1e9; }
+  function computeAcc() { st.a = -K * Math.sin(st.q); st.stale = false; }
+  function step() {
+    computeAcc(); st.v += H0 * st.a; st.q += H0 * st.v; st.t += H0; st.n++;
+    if (st.n % 5 === 0) { ghosts.push(st.q); if (ghosts.length > 8) ghosts.shift(); }
+    if (st.n % 25 === 0) { strip.push([st.q, st.t]); if (strip.length > 14) strip.shift(); }
+  }
+  function show(changed) {
+    $('fT').querySelector('.val').textContent = st.t.toFixed(3); $('fQ').querySelector('.val').textContent = pyf(st.q);
+    $('fV').querySelector('.val').textContent = pyf(st.v); $('fA').querySelector('.val').textContent = pyf(st.a);
+    $('fStale').style.visibility = st.stale ? 'visible' : 'hidden';
+    (changed || []).forEach(id => flash($(id)));
+    drawRod(g.ctx, g.w, g.h, st.q, { ghosts, scale: g.h / 1.35 });
+    text(g.ctx, 'page ' + st.n + '  ·  t = ' + st.t.toFixed(3) + ' s', 10, 14, css('--dim'), 11);
+    // film strip
+    const c = gs.ctx, n = 14, cw = gs.w / n; c.clearRect(0, 0, gs.w, gs.h);
+    strip.forEach(([q, t], i) => {
+      const x0 = i * cw; c.strokeStyle = css('--border'); c.lineWidth = 1; c.strokeRect(x0 + 2, 2, cw - 4, gs.h - 4);
+      const px = x0 + cw / 2, py = 8, L = gs.h * 0.55; c.strokeStyle = css('--teal'); c.lineWidth = 3; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(px, py); c.lineTo(px - Math.sin(q) * L, py + Math.cos(q) * L); c.stroke();
+      text(c, t.toFixed(2), px, gs.h - 9, css('--dim'), 9, 'center');
+    });
+    if (!strip.length) text(c, 'take some steps to fill the film strip', gs.w / 2, gs.h / 2, css('--dim'), 11, 'center');
+  }
+  $('fFwd').onclick = () => { computeAcc(); addLog(logLine('after forward', st)); show(['fA']); };
+  $('fStep').onclick = () => { step(); addLog(logLine('step ' + st.n, st)); show(['fT', 'fQ', 'fV', 'fA']); };
+  $('fStep10').onclick = () => { for (let i = 0; i < 10; i++) { step(); addLog(logLine('step ' + st.n, st)); } show(['fT', 'fQ', 'fV', 'fA']); };
+  $('fReset').onclick = () => { Object.assign(st, { q: 0, v: 0, a: 0, t: 0, n: 0, stale: false }); ghosts.length = 0; strip.length = 0; $('fQs').value = 0; $('fVs').value = 0; syncOut(); addLog(logLine('after reset', st) + '   ← qpos0 from the model'); show(['fT', 'fQ', 'fV', 'fA']); };
+  function syncOut() { $('oFq').textContent = (+$('fQs').value).toFixed(2) + ' rad'; $('oFv').textContent = (+$('fVs').value).toFixed(2) + ' rad/s'; }
+  $('fQs').addEventListener('input', () => { st.q = +$('fQs').value; st.stale = true; syncOut(); show(['fQ']); });
+  $('fQs').addEventListener('change', () => addLog('data.qpos[0] = ' + st.q.toFixed(2) + '      (qacc is now stale)'));
+  $('fVs').addEventListener('input', () => { st.v = +$('fVs').value; st.stale = true; syncOut(); show(['fV']); });
+  $('fVs').addEventListener('change', () => addLog('data.qvel[0] = ' + st.v.toFixed(2) + '      (qacc is now stale)'));
+  const pb = $('fPlay');
+  function loop(ts) { if (!playing) return; const dt = Math.min(.05, (ts - last) / 1000); last = ts; acc += dt; while (acc >= H0) { step(); acc -= H0; } show(); requestAnimationFrame(loop); }
+  pb.onclick = () => { playing = !playing; pb.textContent = playing ? '⏸ Pause' : '▶ Play'; if (playing) { addLog('… playing in real time (500 steps per second) …'); last = performance.now(); requestAnimationFrame(loop); } else addLog(logLine('paused at step ' + st.n, st)); };
+  addEventListener('resize', () => { g = fit(cv, 0.9); gs = fit(cs, 0.16); show(); }); addEventListener('themechange', () => show());
+  addLog('data = mujoco.MjData(model)'); addLog('data.qpos[0] = 0.7     (nothing computed yet: qacc = 0 is stale)');
+  show();
+})();
+
+/* ---------- Section 2: graphs ---------- */
+(() => {
+  const cp = document.getElementById('cvP'), cg = document.getElementById('cvG'); let gp = fit(cp, 0.9), gg = fit(cg, 0.9);
+  const $ = id => document.getElementById(id), WIN = 4;
+  let q, v, t, hist, playing = false, last = 0, accum = 0, q0 = 0.7;
+  function reset() { q0 = +$('gQ0').value; q = q0; v = 0; t = 0; hist = [[0, q, 0, -K * Math.sin(q)]]; $('oG0').textContent = q0.toFixed(2) + ' rad'; draw(); }
+  function draw() {
+    drawRod(gp.ctx, gp.w, gp.h, q, { scale: gp.h / 1.35 });
+    const c = gg.ctx, W = gg.w, Hh = gg.h; c.clearRect(0, 0, W, Hh);
+    const vmax = Math.sqrt(2 * K * (1 - Math.cos(q0))) * 1.1 + 1e-6, amax = K * (q0 > Math.PI / 2 ? 1 : Math.sin(q0)) * 1.1 + 1e-6, qmax = q0 * 1.1;
+    const rows = [['qpos', 1, qmax, css('--teal'), 'rad'], ['qvel', 2, vmax, css('--orange'), 'rad/s'], ['qacc', 3, amax, css('--purple'), 'rad/s²']];
+    const ph = Hh / 3, t1 = Math.max(WIN, t), t0 = t1 - WIN, X = tt => 40 + (tt - t0) / WIN * (W - 50);
+    rows.forEach(([name, k, m, col, unit], i) => {
+      const y0 = i * ph, mid = y0 + ph / 2, Y = val => mid - val / m * (ph / 2 - 10);
+      c.strokeStyle = css('--grid'); c.lineWidth = 1; c.beginPath(); c.moveTo(40, mid); c.lineTo(W - 10, mid); c.stroke();
+      text(c, name, 4, y0 + 12, col, 11); text(c, unit, 4, y0 + 26, css('--dim'), 9);
+      c.strokeStyle = col; c.lineWidth = 2; c.beginPath(); let started = false;
+      hist.forEach(r => { if (r[0] < t0) return; const x = X(r[0]), y = Y(r[k]); started ? c.lineTo(x, y) : (c.moveTo(x, y), started = true); }); c.stroke();
+      const lastR = hist[hist.length - 1]; c.fillStyle = col; c.beginPath(); c.arc(X(lastR[0]), Y(lastR[k]), 4, 0, 7); c.fill();
+      text(c, lastR[k].toFixed(3), W - 12, y0 + 12, col, 11, 'right');
+    });
+    c.setLineDash([4, 4]); c.strokeStyle = css('--dim'); c.beginPath(); c.moveTo(X(t), 0); c.lineTo(X(t), Hh); c.stroke(); c.setLineDash([]);
+    text(c, 't = ' + t.toFixed(2) + ' s', X(t) - 4, Hh - 8, css('--dim'), 10, 'right');
+  }
+  function loop(ts) {
+    if (!playing) return; const dt = Math.min(.05, (ts - last) / 1000); last = ts; accum += dt;
+    while (accum >= H0) { const a = -K * Math.sin(q); v += H0 * a; q += H0 * v; t += H0; accum -= H0; if (Math.round(t / H0) % 5 === 0) hist.push([t, q, v, a]); }
+    while (hist.length && hist[0][0] < t - WIN - 0.1) hist.shift();
+    draw(); requestAnimationFrame(loop);
+  }
+  const pb = $('gPlay');
+  pb.onclick = () => { playing = !playing; pb.textContent = playing ? '⏸ Pause' : '▶ Play'; if (playing) { last = performance.now(); requestAnimationFrame(loop); } };
+  $('gReset').onclick = reset; $('gQ0').addEventListener('input', reset);
+  addEventListener('resize', () => { gp = fit(cp, 0.9); gg = fit(cg, 0.9); draw(); }); addEventListener('themechange', draw);
+  reset();
+  // pre-run a little so the graphs aren't empty on load
+  for (let i = 0; i < 1200; i++) { const a = -K * Math.sin(q); v += H0 * a; q += H0 * v; t += H0; if (i % 5 === 0) hist.push([t, q, v, a]); } draw();
+})();
+
+/* ---------- Section 4: slow-motion step ---------- */
+(() => {
+  const cv = document.getElementById('cvS'); let g = fit(cv, 0.95);
+  const $ = id => document.getElementById(id), items = [...document.querySelectorAll('#sList li')];
+  let s, stage, prevQ, n;
+  const m = 22.25, gN = 9.81;
+  function reset() { s = { q: 0.7, v: 0, t: 0, a: 0 }; stage = 0; prevQ = null; n = 1; render(); }
+  function lines() {
+    const L = [];
+    if (stage >= 1) L.push(`① qacc = −13.857 × sin(${s.q0.toFixed(5)}) = −13.857 × ${Math.sin(s.q0).toFixed(5)} = ${pyf(s.a).trim()} rad/s²`);
+    if (stage >= 2) L.push(`② qvel = ${pyf(s.v0).trim()} + 0.002 × (${pyf(s.a).trim()}) = ${pyf(s.v).trim()} rad/s`);
+    if (stage >= 3) L.push(`③ qpos = ${s.q0.toFixed(5)} + 0.002 × (${pyf(s.v).trim()}) = ${s.q.toFixed(5)} rad`);
+    if (stage >= 4) L.push(`④ time = ${(s.t - H0).toFixed(3)} + 0.002 = ${s.t.toFixed(3)} s        ✓ that's "step ${n}"`);
+    return L.length ? L.join('\n') : `Start of step ${n}:  qpos = ${s.q.toFixed(5)} rad,  qvel = ${pyf(s.v).trim()} rad/s,  time = ${s.t.toFixed(3)} s\nPress "Next job".`;
+  }
+  function render() {
+    items.forEach((li, i) => { li.style.opacity = (stage === 4 || i <= stage) ? 1 : 0.45; li.style.color = i === stage - 1 ? 'var(--bright)' : ''; li.style.fontWeight = i === stage - 1 ? '600' : ''; });
+    $('sEq').textContent = lines();
+    $('sNext').textContent = stage >= 4 ? 'Start the next step ▸' : 'Next job ▸';
+    const c = g.ctx, th = (stage === 0 || stage >= 3) ? s.q : s.q0;
+    c.clearRect(0, 0, g.w, g.h);
+    if (prevQ !== null && stage >= 3) drawRod(c, g.w, g.h, prevQ, { scale: g.h / 1.45, color: css('--border'), keep: true, angleArc: false });
+    const { P, s: sc } = drawRod(c, g.w, g.h, th, { scale: g.h / 1.45, keep: true, label: false });
+    // centre of mass + gravity
+    const com = [P[0] - Math.sin(th) * sc * 0.5, P[1] + Math.cos(th) * sc * 0.5];
+    c.fillStyle = css('--bright'); c.beginPath(); c.arc(...com, 5, 0, 7); c.fill();
+    arrow(c, com[0], com[1], com[0], com[1] + sc * 0.42, css('--orange'), 3, 9);
+    text(c, 'm·g = ' + (m * gN).toFixed(0) + ' N', com[0] + 8, com[1] + sc * 0.3, css('--orange'), 11);
+    // lever arm
+    c.setLineDash([3, 3]); c.strokeStyle = css('--yellow'); c.lineWidth = 1.5; c.beginPath(); c.moveTo(P[0], com[1]); c.lineTo(com[0], com[1]); c.stroke(); c.setLineDash([]);
+    const ly = g.h - 58;
+    text(c, '●  centre of mass, 0.5 m down the rod', 12, ly, css('--bright'), 11);
+    text(c, '- -  lever arm = 0.5 · sin θ = ' + (0.5 * Math.sin(th)).toFixed(3) + ' m', 12, ly + 18, css('--yellow'), 11);
+    text(c, '◜   θ = ' + th.toFixed(5) + ' rad (angle from hanging)', 12, ly + 36, css('--yellow'), 11);
+    if (stage >= 1) { // turning direction (restoring)
+      const r = sc * 0.18, dir = -Math.sign(th) || 1; c.strokeStyle = css('--purple'); c.lineWidth = 2.5; c.beginPath();
+      const a0 = Math.PI / 2 + th, a1 = a0 + dir * 0.9; c.arc(P[0], P[1], r, Math.min(a0, a1), Math.max(a0, a1)); c.stroke();
+      const ex = P[0] + r * Math.cos(a1), ey = P[1] + r * Math.sin(a1); c.fillStyle = css('--purple'); c.beginPath(); c.arc(ex, ey, 4, 0, 7); c.fill();
+      text(c, 'qacc pulls back', P[0] + 14, P[1] - 14, css('--purple'), 10);
+    }
+  }
+  $('sNext').onclick = () => {
+    if (stage >= 4) { stage = 0; n++; render(); return; }
+    if (stage === 0) { s.q0 = s.q; s.v0 = s.v; s.a = -K * Math.sin(s.q); }
+    if (stage === 1) s.v = s.v0 + H0 * s.a;
+    if (stage === 2) { prevQ = s.q0; s.q = s.q0 + H0 * s.v; }
+    if (stage === 3) s.t += H0;
+    stage++; render();
+  };
+  $('sAgain').onclick = () => { if (stage >= 4) { stage = 0; n++; } while (stage < 4) $('sNext').onclick(); };
+  $('sReset').onclick = reset;
+  addEventListener('resize', () => { g = fit(cv, 0.95); render(); }); addEventListener('themechange', render);
+  reset();
+})();
+
+/* ---------- Section 5: timestep experiment ---------- */
+(() => {
+  const cv = document.getElementById('cvD'); let g = fit(cv, 0.42);
+  const $ = id => document.getElementById(id), TEND = 5;
+  let H = 0.002;
+  const toH = x => 0.0005 * Math.pow(1200, x / 100), toX = h => 100 * Math.log(h / 0.0005) / Math.log(1200);
+  function run(h, naive) {
+    const n = Math.round(TEND / h), pts = [[0, 0.7]]; let q = 0.7, v = 0, mx = 0.7;
+    for (let i = 1; i <= n; i++) { const a = -K * Math.sin(q); if (naive) { q += h * v; v += h * a; } else { v += h * a; q += h * v; } pts.push([i * h, q]); mx = Math.max(mx, Math.abs(q)); if (!isFinite(q)) break; }
+    return { pts, q, mx, n };
+  }
+  const ref = run(0.0002, false);
+  function draw() {
+    const naive = $('dNaive').checked, r = run(H, naive), c = g.ctx, W = g.w, Hh = g.h;
+    $('oD').textContent = H.toFixed(4) + ' s'; $('dN').textContent = r.n; $('dQ').textContent = isFinite(r.q) ? r.q.toFixed(5) : 'NaN'; $('dR').textContent = ref.q.toFixed(5); $('dM').textContent = r.mx.toFixed(3);
+    const ym = Math.max(1, Math.min(r.mx, 60)) * 1.1, X = t => 44 + t / TEND * (W - 56), Y = q => Hh / 2 - q / ym * (Hh / 2 - 14);
+    c.clearRect(0, 0, W, Hh);
+    c.strokeStyle = css('--grid'); c.lineWidth = 1;
+    for (let t = 0; t <= TEND; t++) { c.beginPath(); c.moveTo(X(t), 6); c.lineTo(X(t), Hh - 6); c.stroke(); text(c, t + ' s', X(t), Hh - 6, css('--dim'), 9, 'center'); }
+    c.beginPath(); c.moveTo(44, Y(0)); c.lineTo(W - 12, Y(0)); c.stroke();
+    text(c, '+' + ym.toFixed(1), 4, 14, css('--dim'), 9); text(c, '−' + ym.toFixed(1), 4, Hh - 18, css('--dim'), 9); text(c, 'qpos', 4, Hh / 2 - 10, css('--dim'), 10);
+    const path = (pts, col, w) => { c.strokeStyle = col; c.lineWidth = w; c.beginPath(); pts.forEach(([t, q], i) => { const y = Math.max(-5, Math.min(Hh + 5, Y(q))); i ? c.lineTo(X(t), y) : c.moveTo(X(t), y); }); c.stroke(); };
+    path(ref.pts.filter((_, i) => i % 10 === 0), css('--dim'), 2);
+    path(r.pts, naive ? css('--red') : css('--teal'), 2);
+    if (r.n <= 400) { c.fillStyle = naive ? css('--red') : css('--teal'); r.pts.forEach(([t, q]) => { c.beginPath(); c.arc(X(t), Y(q), 2.5, 0, 7); c.fill(); }); }
+    text(c, naive ? 'naive Euler (old speed)' : 'semi-implicit Euler (MuJoCo)', W - 14, 14, naive ? css('--red') : css('--teal'), 11, 'right');
+    text(c, 'truth (h = 0.0002)', W - 14, 30, css('--dim'), 11, 'right');
+    if (r.mx > 3.2) text(c, '⚠ angle passed ±π: the pendulum went over the top — the simulation "exploded"', 50, 16, css('--orange'), 11);
+  }
+  $('dH').addEventListener('input', () => { H = toH(+$('dH').value); draw(); });
+  document.querySelectorAll('.dpre').forEach(b => b.onclick = () => { H = +b.dataset.h; $('dH').value = toX(H); draw(); });
+  $('dNaive').onchange = draw;
+  addEventListener('resize', () => { g = fit(cv, 0.42); draw(); }); addEventListener('themechange', draw);
+  $('dH').value = toX(H); draw();
+})();
+
+</script>
+</body>
+</html>

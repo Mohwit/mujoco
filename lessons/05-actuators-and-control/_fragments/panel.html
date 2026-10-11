@@ -1,0 +1,376 @@
+<div class="lesson-content xp" id="lesson5">
+  <header class="lesson-header-block">
+    <p class="lesson-num-label">Lesson 05</p>
+    <h1 class="lesson-title">Actuators and Control</h1>
+    <p class="lesson-subtitle">So far the pendulum could only fall. Now we give it a muscle. You will add a motor to the hinge, send it a command, and predict the exact twist it produces. Then you will meet two smarter muscles: one that pulls toward a target angle and one that holds a target speed.</p>
+    <p class="lesson-legend"><dfn class="term" tabindex="0" data-def="Technical words look like this. Hover or focus one to read a plain-English definition.">Dotted words</dfn> show a definition on hover. <span class="lg-math">Maths boxes</span> are optional. <span class="lg-pred">Predict boxes</span> hide the answer until you guess.</p>
+  </header>
+  <nav class="lesson-toc" aria-label="Sections in lesson 5"><a href="#l5-s-idea">A muscle</a><a href="#l5-s-words">MuJoCo names</a><a href="#l5-s-torque">ctrl to torque</a><a href="#l5-s-hold">Hold it still</a><a href="#l5-s-types">Three muscles</a><a href="#l5-s-model">Model or data?</a><a href="#l5-s-math">Maths</a><a href="#l5-s-code">The script</a><a href="#l5-s-check">Check yourself</a><a href="#l5-recap">Recap</a></nav>
+
+<section class="step" id="l5-s-idea">
+  <span class="lvl lvl-plain">Plain words</span> <span class="lvl lvl-pic">Picture</span>
+  <h2>1. An actuator is a muscle at the joint</h2>
+  <p>Your pendulum from Lesson 3 has a hinge but nothing to turn it. Gravity is the only thing that moves it.</p>
+  <p>Your arm is different. A muscle at your elbow can twist it. You decide how hard, and the muscle does the pushing.</p>
+  <p>MuJoCo calls such a muscle an <dfn class="term" tabindex="0" data-def="A part of the model that applies a force or twist to a joint when you send it a number. A motor is the simplest kind.">actuator</dfn>. You send it one number every step. It turns that number into a twist on the hinge.</p>
+  <div class="card analogy"><strong>Analogy: a tug of war at the hinge.</strong> Gravity pulls the rod back down toward hanging. Your muscle pulls the other way. If the two pulls are equal, the rod stays still. If one is bigger, the rod turns that way.</div>
+  <p>A twisting push has a name: <dfn class="term" tabindex="0" data-def="A twisting force around an axis. Measured in newton metres (N m). Like a force, but it turns things instead of sliding them.">torque</dfn>, in newton metres (N m). Try the tug of war below. Nothing moves here: it only compares the two twists.</p>
+  <div class="card">
+    <div class="grid2">
+      <canvas id="l5cvA" role="img" aria-label="Pendulum with two curved arrows: gravity twisting it down and the muscle twisting it up"></canvas>
+      <div>
+        <label class="slider"><span>Rod angle from hanging</span> <output id="l5oAq">0.50 rad</output><input type="range" id="l5aQ" min="0" max="1.5" step="0.01" value="0.5"></label>
+        <label class="slider"><span>Muscle twist</span> <output id="l5oAt">50.0 N m</output><input type="range" id="l5aT" min="0" max="120" step="0.5" value="50"></label>
+        <div class="readouts">
+          <div class="ro" id="l5aG"><span class="lab">gravity twist (pulls down)</span><span class="val">-52.32</span> <span class="unit">N m</span></div>
+          <div class="ro" id="l5aM"><span class="lab">muscle twist (pushes up)</span><span class="val">+50.00</span> <span class="unit">N m</span></div>
+          <div class="ro" id="l5aN"><span class="lab">total twist</span><span class="val">-2.32</span> <span class="unit">N m</span></div>
+        </div>
+        <p id="l5aV" class="caption" aria-live="polite"></p>
+      </div>
+    </div>
+    <p class="caption">Orange = gravity's twist. Teal = the muscle's twist. Arrow length shows size. The view is from the front: +x points right, +z points up, and the hinge axis +y points into the screen. A positive angle swings the rod to the left.</p>
+  </div>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">Good to know</span>This is the same pendulum as Lessons 3 and 4: a 1 m capsule of mass 22.25 kg, hinged at height 1 m, timestep 0.002 s. The only new thing is one actuator. Every number on this page comes from <code>05_actuators_and_control.py</code> or its helper <code>05_check_browser_match.py</code>.</div>
+  <p class="newwords">New words: <span class="chip">actuator</span><span class="chip">torque</span><span class="chip">N m</span></p>
+</section>
+
+<section class="step" id="l5-s-words">
+  <span class="lvl lvl-words">MuJoCo words</span>
+  <h2>2. One line of XML adds the muscle</h2>
+  <p>You add actuators inside an <code>&lt;actuator&gt;</code> block, next to <code>&lt;worldbody&gt;</code>. The simplest one is a <dfn class="term" tabindex="0" data-def="An actuator whose twist is simply gear times ctrl. It does not look at the angle or the speed. A hand pushing with the strength you ask for.">motor</dfn>. It says: "push on this joint with the strength I tell you."</p>
+  <div class="grid2">
+<pre style="min-width:0"><code><span class="c">&lt;!-- the Lesson 3 pendulum, plus: --&gt;</span>
+<span class="t">&lt;actuator&gt;</span>
+  <span class="t">&lt;motor</span> <span class="a">name</span>=<span class="s">"motor"</span>
+         <span class="a">joint</span>=<span class="s">"hinge"</span>
+         <span class="a">gear</span>=<span class="s">"100"</span>
+         <span class="a">ctrlrange</span>=<span class="s">"-1 1"</span>
+         <span class="a">ctrllimited</span>=<span class="s">"true"</span><span class="t">/&gt;</span>
+<span class="t">&lt;/actuator&gt;</span></code></pre>
+<pre style="min-width:0"><code>aid = mujoco.mj_name2id(model,
+        mujoco.mjtObj.mjOBJ_ACTUATOR, <span class="s">"motor"</span>)  <span class="c"># 0</span>
+model.nu                      <span class="c"># 1 actuator</span>
+model.actuator_trnid[aid, <span class="n">0</span>]   <span class="c"># 0 = joint "hinge"</span>
+model.actuator_gear[aid, <span class="n">0</span>]    <span class="c"># 100.0</span>
+model.actuator_ctrlrange[aid] <span class="c"># [-1. 1.]</span>
+model.actuator(<span class="s">"motor"</span>).gear[<span class="n">0</span>] <span class="c"># 100.0, by name</span>
+data.ctrl                     <span class="c"># [0.]  shape (1,)</span></code></pre>
+  </div>
+  <p>Each XML word lands in an array. The first <code>&lt;motor&gt;</code> becomes actuator number 0, so it lives at index 0 of every <code>actuator_...</code> array. You find that index with <code>mj_name2id</code>, exactly as in Lesson 4.</p>
+  <table>
+    <thead><tr><th>XML</th><th>Becomes</th><th>Shape, unit</th><th>Plain meaning</th><th>Lives in</th></tr></thead>
+    <tbody>
+      <tr><td><code>&lt;motor&gt;</code> (1st actuator)</td><td><code>model.nu</code> = 1</td><td>integer</td><td>How many muscles the model has</td><td>model</td></tr>
+      <tr><td><code>joint="hinge"</code></td><td><code>actuator_trnid[0, 0]</code> = 0</td><td>(nu, 2), joint id</td><td>Which joint this muscle twists</td><td>model</td></tr>
+      <tr><td><code>gear="100"</code></td><td><code>actuator_gear[0, 0]</code> = 100</td><td>(nu, 6), N m per unit ctrl</td><td>How strong one unit of command is</td><td>model</td></tr>
+      <tr><td><code>ctrlrange="-1 1"</code></td><td><code>actuator_ctrlrange[0]</code></td><td>(nu, 2), ctrl units</td><td>The smallest and largest command allowed</td><td>model</td></tr>
+      <tr><td>(you write it)</td><td><code>data.ctrl[0]</code></td><td>(nu,), unitless here</td><td>The command you send this step</td><td><strong>data</strong></td></tr>
+      <tr><td>(MuJoCo computes it)</td><td><code>data.actuator_force[0]</code></td><td>(nu,), actuator units</td><td>What the muscle produces, before the gear</td><td><strong>data</strong></td></tr>
+      <tr><td>(MuJoCo computes it)</td><td><code>data.qfrc_actuator[0]</code></td><td>(nv,), N m on the hinge</td><td>The twist that actually reaches the joint</td><td><strong>data</strong></td></tr>
+    </tbody>
+  </table>
+  <div class="grid3">
+    <div class="card"><span class="callout-title" style="color:var(--blue)">ctrl = the command</span><dfn class="term" tabindex="0" data-def="data.ctrl: one number per actuator that you write before each step. It is the command. It lives in MjData because it changes while the simulation runs.">ctrl</dfn> is the number you write each step. Think of it as how hard you press the pedal. <code>nu</code> = 1, so <code>ctrl</code> has one slot.</div>
+    <div class="card"><span class="callout-title" style="color:var(--orange)">gear = the lever</span><dfn class="term" tabindex="0" data-def="A fixed multiplier from actuator output to joint torque. For a motor, torque = gear x ctrl. Set in the XML, stored in model.actuator_gear.">gear</dfn> multiplies the muscle's output. With gear 100, a command of 1 becomes 100 N m. It is part of the design.</div>
+    <div class="card"><span class="callout-title" style="color:var(--purple)">ctrlrange = the limits</span><dfn class="term" tabindex="0" data-def="The allowed range for ctrl. With ctrllimited true, MuJoCo clamps the command into this range before using it.">ctrlrange</dfn> with <code>ctrllimited="true"</code> clips any command outside -1 to 1. Here it means ctrl is a throttle from -100 % to +100 %.</div>
+  </div>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">Why gear 100 and ctrlrange -1 to 1?</span>The rod's gravity twist is at most 109.14 N m, when it sticks out sideways. A strongest twist of 100 N m is enough to hold it at most angles, but not quite sideways. Reading ctrl as "fraction of full strength" keeps the command easy to think about.</div>
+  <p class="newwords">New words: <span class="chip">motor</span><span class="chip">ctrl</span><span class="chip">nu</span><span class="chip">gear</span><span class="chip">ctrlrange</span><span class="chip">actuator_force</span><span class="chip">qfrc_actuator</span></p>
+</section>
+
+<section class="step" id="l5-s-torque">
+  <span class="lvl lvl-pic">Picture</span>
+  <h2>3. From a command to a twist on the hinge</h2>
+  <p>A motor does three small things with your command. It clips it into the allowed range. It hands that out as its own output. Then the gear multiplies it into the twist on the hinge.</p>
+  <div class="predict">
+    <h3>Predict: you set data.ctrl[0] = 0.5 with gear = 100. What twist reaches the hinge? What does data.actuator_force[0] show?</h3>
+    <textarea aria-label="Your prediction for the torque from ctrl 0.5 and gear 100"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer"><p>The hinge gets <strong>50 N m</strong> (100 x 0.5). But <code>actuator_force[0]</code> shows <strong>0.500</strong>, not 50. It is the muscle's output <em>before</em> the gear. The twist on the joint is in <code>qfrc_actuator[0]</code> = 50.000 N m. Your script prints all three.</p></div>
+  </div>
+  <div class="card">
+    <canvas id="l5cvB" role="img" aria-label="Pipeline from ctrl through clamping and gear to joint torque"></canvas>
+    <label class="slider"><span>Command <code>data.ctrl[0]</code></span> <output id="l5oBc">0.50</output><input type="range" id="l5bC" min="-2" max="2" step="0.05" value="0.5"></label>
+    <label class="slider"><span>Gear <code>model.actuator_gear[0, 0]</code></span> <output id="l5oBg">100</output><input type="range" id="l5bG" min="0" max="200" step="5" value="100"></label>
+    <div class="readouts">
+      <div class="ro" id="l5bRc"><span class="lab">data.ctrl[0] (what you wrote)</span><span class="val">0.500</span></div>
+      <div class="ro" id="l5bRf"><span class="lab">data.actuator_force[0]</span><span class="val">0.500</span></div>
+      <div class="ro" id="l5bRq"><span class="lab">data.qfrc_actuator[0]</span><span class="val">50.000</span> <span class="unit">N m</span></div>
+    </div>
+    <p class="caption">Drag ctrl past 1 or below -1. The value you wrote stays in <code>data.ctrl</code>, but the muscle only uses the clipped value. Your script checks three cases: ctrl 0.8 gives 80 N m, ctrl 1.5 gives 100 N m, ctrl -3 gives -100 N m.</p>
+  </div>
+  <div class="card warn"><span class="callout-title" style="color:var(--orange)">Common mistake</span>Reading <code>actuator_force</code> and calling it the joint torque. For a motor with gear 100 they differ by a factor of 100. <strong>Rule: the twist on the joint is <code>qfrc_actuator</code>, in N m. <code>actuator_force</code> is the muscle's own output, before the gear.</strong></div>
+  <p class="newwords">New words: <span class="chip">clamping</span><span class="chip">ctrllimited</span></p>
+</section>
+
+<section class="step" id="l5-s-hold">
+  <span class="lvl lvl-pic">Picture</span>
+  <h2>4. Experiment: hold the rod still at 0.5 rad</h2>
+  <p>Now let time run. The rod starts at 0.5 rad (about 29 degrees), at rest. The motor pushes with a constant ctrl. Your job: find the ctrl that keeps it perfectly still.</p>
+  <div class="predict">
+    <h3>Predict: which ctrl holds the rod still at 0.5 rad? Hint: gravity's twist there is 109.14 x sin(0.5) N m.</h3>
+    <textarea aria-label="Your prediction for the holding ctrl"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer"><p>Gravity's twist is 109.14 x 0.4794 = <strong>52.32 N m</strong>. The motor must give the same, so ctrl = 52.32 / 100 = <strong>0.52325</strong>. Your script sets exactly that and steps for 1 s. The rod stays at qpos = 0.50000 rad with qvel = 0. Set ctrl back to 0 and it falls: after one more second it is at -0.43288 rad.</p></div>
+  </div>
+  <div class="card">
+    <div class="grid2">
+      <canvas id="l5cvC" role="img" aria-label="Pendulum driven by a motor, with gravity and motor torque arrows and an angle trace"></canvas>
+      <div>
+        <label class="slider"><span>Motor command <code>data.ctrl[0]</code></span> <output id="l5oCc">0.40000</output><input type="range" id="l5cC" min="0" max="1" step="0.00025" value="0.4"></label>
+        <div class="btnrow">
+          <button id="l5cPlay" type="button" class="primary">Run 3 s</button>
+          <button id="l5cHold" type="button">Set ctrl = 0.52325</button>
+          <button id="l5cReset" type="button">Back to 0.5 rad, at rest</button>
+        </div>
+        <div class="readouts" style="grid-template-columns:1fr 1fr">
+          <div class="ro" id="l5cT"><span class="lab">data.time</span><span class="val">0.000</span> <span class="unit">s</span></div>
+          <div class="ro" id="l5cQ"><span class="lab">data.qpos[0] angle</span><span class="val">0.50000</span> <span class="unit">rad</span></div>
+          <div class="ro" id="l5cV"><span class="lab">data.qvel[0] spin speed</span><span class="val">0.00000</span> <span class="unit">rad/s</span></div>
+          <div class="ro" id="l5cF"><span class="lab">data.qfrc_actuator[0]</span><span class="val">40.000</span> <span class="unit">N m</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="caption">Teal arrow = motor twist (gear x ctrl). Orange arrow = gravity twist (-109.14 sin qpos). The strip below the rod traces qpos over the 3 s run; the dashed line marks 0.5 rad. This page runs its own small copy of the pendulum maths, checked against MuJoCo (see the maths section).</p>
+  </div>
+  <div class="card analogy"><strong>Why does a slightly wrong ctrl swing so much?</strong> Nothing in this model slows the rod down: there is no friction or damping. A small leftover twist starts a swing that never dies out. Lesson 8 adds a controller that fixes this.</div>
+  <p class="newwords">New words: <span class="chip">holding torque</span><span class="chip">equilibrium</span></p>
+</section>
+
+<section class="step" id="l5-s-types">
+  <span class="lvl lvl-words">MuJoCo words</span> <span class="lvl lvl-pic">Picture</span>
+  <h2>5. Three kinds of muscle: motor, position, velocity</h2>
+  <p>A motor is dumb but honest: it pushes with the strength you ask, whatever the rod is doing. MuJoCo has two smarter shortcuts. They look at the joint and push to reach a goal.</p>
+  <div class="grid3">
+    <div class="card"><span class="callout-title" style="color:var(--teal)">Motor = a hand pushing</span>ctrl is a <strong>strength</strong>. The hand pushes with that strength, never more, never less.<br><code>torque = gear x ctrl</code></div>
+    <div class="card"><span class="callout-title" style="color:var(--purple)">Position = a spring to a target</span>ctrl is a <strong>target angle</strong> in rad. A spring pulls the rod toward it. The further away, the harder it pulls.<br><code>torque = kp x (ctrl - qpos)</code></div>
+    <div class="card"><span class="callout-title" style="color:var(--blue)">Velocity = cruise control</span>ctrl is a <strong>target spin speed</strong> in rad/s. Too slow: push forward. Too fast: push back.<br><code>torque = kv x (ctrl - qvel)</code></div>
+  </div>
+  <p>Each is one XML line. Only the actuator changes; the pendulum is identical. That is one variable at a time.</p>
+<pre><code><span class="t">&lt;motor</span>    <span class="a">name</span>=<span class="s">"motor"</span>  <span class="a">joint</span>=<span class="s">"hinge"</span> <span class="a">gear</span>=<span class="s">"100"</span> <span class="a">ctrlrange</span>=<span class="s">"-1 1"</span>       <span class="a">ctrllimited</span>=<span class="s">"true"</span><span class="t">/&gt;</span>
+<span class="t">&lt;position</span> <span class="a">name</span>=<span class="s">"servo"</span>  <span class="a">joint</span>=<span class="s">"hinge"</span> <span class="a">kp</span>=<span class="s">"500"</span>   <span class="a">ctrlrange</span>=<span class="s">"-1.57 1.57"</span> <span class="a">ctrllimited</span>=<span class="s">"true"</span><span class="t">/&gt;</span>  <span class="c">&lt;!-- target angle, quarter turn each way --&gt;</span>
+<span class="t">&lt;velocity</span> <span class="a">name</span>=<span class="s">"cruise"</span> <span class="a">joint</span>=<span class="s">"hinge"</span> <span class="a">kv</span>=<span class="s">"200"</span>   <span class="a">ctrlrange</span>=<span class="s">"-2 2"</span>       <span class="a">ctrllimited</span>=<span class="s">"true"</span><span class="t">/&gt;</span>  <span class="c">&lt;!-- target speed, rad/s --&gt;</span></code></pre>
+  <p><dfn class="term" tabindex="0" data-def="The stiffness of a position actuator's spring, in N m per rad. Bigger kp pulls harder toward the target.">kp</dfn> is the spring's stiffness (N m per rad). <dfn class="term" tabindex="0" data-def="The strength of a velocity actuator, in N m per (rad/s). Bigger kv corrects speed errors harder.">kv</dfn> is how hard cruise control corrects a speed error (N m per rad/s). Both are part of the model.</p>
+  <div class="predict">
+    <h3>Predict: all three start hanging still, and all get ctrl = 0.5. After 1 s, which rod is highest? Which is lowest?</h3>
+    <textarea aria-label="Your prediction for the three actuator types"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer"><p>The same number means three different things. The motor pushes a steady 50 N m and has swung highest: <strong>0.97690 rad</strong>. The servo aims for 0.5 rad, overshoots and is at <strong>0.73142 rad</strong>, still moving up at 2.34 rad/s. Cruise control only asked for 0.5 rad/s, so it has crept to <strong>0.38133 rad</strong>. These are the script's numbers at t = 1.000 s.</p></div>
+  </div>
+  <div class="card">
+    <canvas id="l5cvD" role="img" aria-label="Three pendulums side by side: motor, position and velocity actuators, all with ctrl 0.5"></canvas>
+    <canvas id="l5cvE" role="img" aria-label="Hinge angle over time for the three actuator types" style="margin-top:8px"></canvas>
+    <div class="btnrow">
+      <button id="l5dRun1" type="button" class="primary">Run 1 s</button>
+      <button id="l5dRun10" type="button">Run 10 s</button>
+      <button id="l5dReset" type="button">Reset</button>
+    </div>
+    <div class="readouts">
+      <div class="ro" id="l5dM"><span class="lab">motor qpos</span><span class="val">0.00000</span> <span class="unit">rad</span></div>
+      <div class="ro" id="l5dP"><span class="lab">servo qpos</span><span class="val">0.00000</span> <span class="unit">rad</span></div>
+      <div class="ro" id="l5dV"><span class="lab">cruise qpos</span><span class="val">0.00000</span> <span class="unit">rad</span></div>
+      <div class="ro" id="l5dT"><span class="lab">data.time</span><span class="val">0.000</span> <span class="unit">s</span></div>
+    </div>
+    <p class="caption">Teal = motor, purple = position (servo), blue = velocity (cruise). The dashed line on the servo shows its target, 0.5 rad. Run 10 s to see the long story: the motor and the servo swing forever (no damping), and cruise control slows down and stalls near 1.16 rad.</p>
+  </div>
+  <div class="card analogy"><strong>Why does cruise control stall?</strong> With ctrl = 0.5 and kv = 200, its biggest push is 200 x 0.5 = 100 N m, when the rod is not moving at all. Gravity's twist grows as the rod rises. At 1.15862 rad, gravity also reaches 100 N m. Like a car on a hill too steep for its engine, it creeps to a stop there.</div>
+  <p class="newwords">New words: <span class="chip">position actuator</span><span class="chip">velocity actuator</span><span class="chip">kp</span><span class="chip">kv</span></p>
+</section>
+
+<section class="step" id="l5-s-model">
+  <span class="lvl lvl-words">MuJoCo words</span>
+  <h2>6. Model or data? Who writes what</h2>
+  <p>Lesson 3's rule still holds. <code>MjModel</code> is the machine as built. <code>MjData</code> is what is happening right now. Actuators have parts in both.</p>
+  <table>
+    <thead><tr><th>Name</th><th>Plain meaning</th><th>Analogy</th><th>Lives in</th><th>Who writes it?</th></tr></thead>
+    <tbody>
+      <tr><td><code>actuator_gear</code>, <code>actuator_gainprm</code>, <code>actuator_biasprm</code>, <code>actuator_ctrlrange</code></td><td>How the muscle is built</td><td>The engine size</td><td>model</td><td>The XML, once</td></tr>
+      <tr><td><code>data.ctrl</code></td><td>The command right now</td><td>Your foot on the pedal</td><td>data</td><td><strong>You, every step</strong></td></tr>
+      <tr><td><code>data.actuator_force</code>, <code>data.qfrc_actuator</code></td><td>What the muscle produced this step</td><td>The speedometer reading</td><td>data</td><td>MuJoCo, every step</td></tr>
+    </tbody>
+  </table>
+  <p>Your script tries the three classic mistakes. Here is what it prints:</p>
+<pre><code>wrote actuator_force=999, after mj_step it is:            0.500  <span class="c"># overwritten: MuJoCo recomputes it from ctrl</span>
+model.actuator_gear set to 200, qfrc_actuator:            100.000 N m <span class="c"># ctrl 0.5 now gives 100 N m: you rebuilt the machine</span>
+after mj_resetData: ctrl=0.0, gear still 200  (reset touches data only) <span class="c"># reset does not undo model edits</span></code></pre>
+  <div class="grid2">
+    <div class="card warn"><span class="callout-title" style="color:var(--orange)">Common mistake 1</span>Writing <code>data.actuator_force</code> or <code>data.qfrc_actuator</code> to push the joint. MuJoCo overwrites both on the next step. <strong>Write <code>data.ctrl</code> instead.</strong></div>
+    <div class="card warn"><span class="callout-title" style="color:var(--orange)">Common mistake 2</span>Changing <code>model.actuator_gear</code> mid-run to "push harder". It works, but you have redesigned the robot, and <code>mj_resetData</code> will not undo it. <strong>Commands go in <code>data.ctrl</code>; design goes in the model.</strong></div>
+  </div>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">Rule to remember</span>Each step: write <code>data.ctrl</code>, call <code>mj_step</code>, read <code>qfrc_actuator</code> and <code>qpos</code>. Also note that <code>mj_resetData</code> sets <code>ctrl</code> back to 0, so set it again after a reset.</div>
+  <p class="newwords">New words: <span class="chip">gainprm</span><span class="chip">biasprm</span></p>
+</section>
+
+<section class="step" id="l5-s-math">
+  <span class="lvl lvl-math">Maths (optional)</span>
+  <h2>7. The maths, from one multiplication to the step formula</h2>
+
+  <details class="math"><summary>Step 1: motor twist is a multiplication</summary><div>
+    <p>First clip the command into ctrlrange, then multiply by the gear:</p>
+    <div class="eq">actuator_force = clip(ctrl, -1, 1)          (muscle output)
+qfrc_actuator  = gear x actuator_force       (twist on the hinge, N m)
+
+ctrl = 0.5:   0.5    then  100 x 0.5 =  50.000 N m   (script: 0.500, 50.000)
+ctrl = 1.5:   1.0    then  100 x 1.0 = 100.000 N m   (script: +1.000, +100.000)</div>
+  </div></details>
+
+  <details class="math"><summary>Step 2: gravity's twist, and the holding command</summary><div>
+    <p>Gravity pulls the centre of mass, d = 0.5 m below the hinge. Only the sideways part turns the rod, hence sin:</p>
+    <div class="eq">gravity twist = -m g d sin(qpos)
+m g d = 22.25085 x 9.81 x 0.5 = 109.14044 N m
+
+at qpos = 0.5:  109.14044 x sin(0.5) = 109.14044 x 0.47943 = 52.32471 N m
+hold:  gear x ctrl = 52.32471   so   ctrl = 52.32471 / 100 = 0.52325</div>
+    <p>Script: <code>ctrl needed = 0.52325</code>, and after 1 s <code>qpos=0.50000 rad, qvel=0.00e+00</code>.</p>
+  </div></details>
+
+  <details class="math"><summary>Step 3: Newton for turning, with the real inertia</summary><div>
+    <p>Total twist = turning inertia x angular acceleration. The turning inertia about the hinge has two parts: the rod spinning about its own middle, plus its mass carried 0.5 m from the hinge.</p>
+    <div class="eq">I = body_inertia[1][y] + m d^2 = 2.31368 + 5.56271 = 7.87639 kg m^2
+MuJoCo's mass matrix for this one hinge, mj_fullM(...)[0, 0] = 7.87639   (same)
+
+qacc = (qfrc_actuator - m g d sin(qpos)) / I
+
+ctrl 0.5, qpos 0:    (50 - 0) / 7.87639          =  6.34808 rad/s^2   (MuJoCo:  6.34808)
+ctrl 0.5, qpos 0.5:  (50 - 52.32471) / 7.87639   = -0.29515 rad/s^2   (MuJoCo: -0.29515)</div>
+    <p>With constant ctrl 0.5, the twists balance where sin(qpos) = 50 / 109.14044, at qpos = 0.47589 rad. The motor rod swings around that angle.</p>
+  </div></details>
+
+  <details class="math"><summary>Step 4: position and velocity actuators are "gain x ctrl + bias"</summary><div>
+    <p>Inside MuJoCo every actuator uses one recipe. Only the numbers in <dfn class="term" tabindex="0" data-def="actuator_gainprm and actuator_biasprm: per-actuator numbers in the model. MuJoCo computes force = gain x ctrl + bias0 + bias1 x length + bias2 x velocity.">gainprm and biasprm</dfn> differ:</p>
+    <div class="eq">actuator_force = gain x ctrl + bias0 + bias1 x qpos + bias2 x qvel      (gear 1 here)
+
+motor:     gain 1,    bias [0, 0, 0]       force = ctrl
+position:  gain 500,  bias [0, -500, 0]    force = 500 ctrl - 500 qpos = kp (ctrl - qpos)
+velocity:  gain 200,  bias [0, 0, -200]    force = 200 ctrl - 200 qvel = kv (ctrl - qvel)
+
+check at ctrl 0.5, qpos 0.2, qvel 0.3:
+position:  500 x (0.5 - 0.2) = 150.000      (script: 150.000)
+velocity:  200 x (0.5 - 0.3) =  40.000      (script:  40.000)</div>
+    <p>The spring settles a little below its target, because it must also hold up the rod. Balance needs 500 (0.5 - qpos) = 109.14 sin(qpos). That gives qpos = 0.41249 rad, a droop of 0.08751 rad. A stiffer kp droops less.</p>
+  </div></details>
+
+  <details class="math"><summary>Step 5: one step of the integrator, and how this page matches MuJoCo</summary><div>
+    <p>The page uses MuJoCo's default Euler integrator for this model, exactly as in Lesson 3:</p>
+    <div class="eq">force = gain x clip(ctrl) + bias(qpos, qvel)     (from the CURRENT qpos, qvel)
+qacc  = (gear x force - 109.14044 sin(qpos)) / 7.87639
+qvel <- qvel + 0.002 x qacc
+qpos <- qpos + 0.002 x qvel     (the NEW qvel)</div>
+    <p>A detail: MuJoCo's Euler integrator treats only joint damping implicitly. The kp and kv terms of these actuators are plain forces computed from the current state. With <code>integrator="implicitfast"</code> the kv term would be implicit and numbers would shift slightly. Example, kv 1000 and ctrl 2 after 1 s: qvel 1.89665 rad/s with Euler, 1.89640 with implicitfast.</p>
+    <p><strong>Verification.</strong> <code>05_check_browser_match.py</code> runs real MuJoCo and this page's formula side by side for 10 s. It tries nine cases covering all three types, low and high gear, kp, kv, and clipped ctrl. The largest difference in qpos or qvel was 1.8e-12. That is far better than the 4-decimal match the sandbox needs.</p>
+  </div></details>
+</section>
+
+<section class="step" id="l5-s-code">
+  <span class="lvl lvl-code">Code</span>
+  <h2>8. Your script, line by line</h2>
+  <p>Run it with <code>uv run --python .venv/bin/python lessons/05-actuators-and-control/05_actuators_and_control.py</code>.</p>
+  <table>
+    <thead><tr><th style="width:44%">Code in <code>05_actuators_and_control.py</code></th><th>Physical meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>BASE_XML.format(actuator=MOTOR)</code></td><td>The Lesson 3 pendulum with one muscle slotted in. Only that line changes between the three versions.</td></tr>
+      <tr><td><code>mujoco.mj_fullM(model, data, M)</code></td><td>Read the hinge's turning inertia from MuJoCo (7.87639 kg m^2) instead of computing it by hand.</td></tr>
+      <tr><td><code>mj_name2id(model, mjOBJ_ACTUATOR, "motor")</code></td><td>Look up the muscle's index (0) by its name, as in Lesson 4.</td></tr>
+      <tr><td><code>data.ctrl[0] = 0.5</code></td><td>Send the command: half strength. This edits the <strong>data</strong>.</td></tr>
+      <tr><td><code>mujoco.mj_forward(model, data)</code></td><td>Compute the muscle's output and the twist on the hinge without moving time.</td></tr>
+      <tr><td><code>data.qfrc_actuator[0]</code></td><td>The twist reaching the hinge, in N m: gear x clipped ctrl.</td></tr>
+      <tr><td><code>ctrl_hold = tau_g / gear</code></td><td>The command whose twist exactly cancels gravity at 0.5 rad.</td></tr>
+      <tr><td><code>for _ in range(500): mj_step(...)</code></td><td>500 steps of 0.002 s = 1 s of simulated time.</td></tr>
+      <tr><td><code>model.actuator_gear[aid, 0] = 200.0</code></td><td>Redesign the machine on purpose, to show it is a model change, not a command.</td></tr>
+    </tbody>
+  </table>
+<pre><code><span class="c">=== 1. The pendulum (read from MuJoCo, not typed in) ===</span>
+body_mass[1]           (pendulum mass, kg):            22.25085
+CoM distance d            (hinge to CoM, m):              0.500          <span class="c"># body frame, straight below the hinge</span>
+I = mass matrix [0,0]     (inertia about hinge, kg m^2):  7.87639
+m*g*d                     (max gravity torque, N m):      109.14044
+<span class="c">=== 2. The motor actuator: names, ids, arrays ===</span>
+model.nu                  (number of actuators):          1
+actuator_trnid[0,0]      (joint id it drives):           0              <span class="c"># joint "hinge"</span>
+actuator_gear[0,0]       (torque per unit ctrl, N m):    100.0
+actuator_ctrlrange[0]    (allowed ctrl):                 [-1.  1.]
+<span class="c">=== 3. Predict the torque: ctrl = 0.5, gear = 100 ===</span>
+data.actuator_force[0]    (actuator output, before gear): 0.500         <span class="c"># NOT the joint torque</span>
+data.qfrc_actuator[0]     (torque on hinge, N m):         50.000        <span class="c"># 100 x 0.5</span>
+<span class="c">=== 4. Which ctrl holds the pendulum still at 0.5 rad? ===</span>
+gravity torque m*g*d*sin(0.5) (N m):                      52.32471
+ctrl needed = gravity torque / gear:                      0.52325
+after 1 s: time=1.000 s  qpos=0.50000 rad  qvel=0.00e+00 rad/s   <span class="c"># held perfectly</span>
+ctrl=0 for 1 more s: qpos=-0.43288 rad  (no muscle: it swings)
+<span class="c">=== 5. Clamping by ctrlrange ===</span>
+data.ctrl[0]=+1.50  actuator_force=+1.000  qfrc_actuator=+100.000 N m   <span class="c"># clipped to 1</span>
+data.ctrl[0]=-3.00  actuator_force=-1.000  qfrc_actuator=-100.000 N m   <span class="c"># clipped to -1</span>
+<span class="c">=== 8. Same start (hanging still), ctrl = 0.5 for each, angle after 1 s ===</span>
+motor   t=1.000 s  qpos= 0.97690 rad  qvel=-0.43967 rad/s  actuator_force= 0.500
+servo   t=1.000 s  qpos= 0.73142 rad  qvel= 2.34401 rad/s  actuator_force=-113.367   <span class="c"># past target: spring pulls back</span>
+cruise  t=1.000 s  qpos= 0.38133 rad  qvel= 0.30311 rad/s  actuator_force= 39.315    <span class="c"># 200 x (0.5 - 0.30311) at step start</span>
+integrator: mjINT_EULER</code></pre>
+  <div class="card analogy"><strong>Why is the servo's force negative at 1 s?</strong> The rod has overshot its 0.5 rad target and sits at 0.73 rad. The spring now pulls it back down, so the twist is negative. It still moves up for a moment because it is spinning at 2.34 rad/s.</div>
+</section>
+
+<section class="step" id="l5-s-check">
+  <span class="lvl lvl-plain">Check yourself</span>
+  <h2>9. Your lesson's four questions</h2>
+  <p>These are the Lesson 5 checkpoint questions. Answer them here, then tell me your answers in the chat so I can update your progress.</p>
+  <div class="predict">
+    <h3>Q1. A motor has gear = 100 and ctrlrange -1 to 1. You set data.ctrl[0] = 0.8. What are actuator_force[0] and qfrc_actuator[0]?</h3>
+    <textarea aria-label="Answer to question 1"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>0.800 and 80.000 N m.</strong> 0.8 is inside the range, so no clipping. The gear multiplies it by 100. (Script, section 5: <code>actuator_force=+0.800 qfrc_actuator=+80.000 N m</code>.)</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q2. Same motor, but you set data.ctrl[0] = 1.5. What happens to data.ctrl[0] and to the twist?</h3>
+    <textarea aria-label="Answer to question 2"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><code>data.ctrl[0]</code> still reads 1.5: MuJoCo does not overwrite your command. But the muscle uses the clipped value 1.0, so the twist is <strong>100 N m</strong>, not 150.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q3. A position actuator has kp = 500. ctrl = 0.5, qpos = 0.2. What twist does it apply? Which way does it turn the rod?</h3>
+    <textarea aria-label="Answer to question 3"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>500 x (0.5 - 0.2) = 150 N m</strong>, positive: it pulls toward the larger target angle. If qpos were above 0.5 the sign would flip. (Script, section 7: <code>servo ... actuator_force= 150.000</code>.)</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q4. You want the rod to push harder. A friend writes model.actuator_gear[0, 0] = 200 in the control loop. What would you change instead, and why?</h3>
+    <textarea aria-label="Answer to question 4"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>Raise <strong><code>data.ctrl[0]</code></strong> (up to the limit 1). ctrl is the command and lives in the data. The gear is part of the machine's design in the model. Editing it changes the robot itself, it bypasses ctrlrange, and <code>mj_resetData</code> will not undo it.</p></div>
+  </div>
+
+  <h3>Glossary: new words from this lesson</h3>
+  <dl class="glossary">
+    <dt>actuator</dt><dd>A muscle in the model: it turns a command number into a force or twist on a joint.</dd>
+    <dt>torque (N m)</dt><dd>A twisting push around an axis.</dd>
+    <dt>nu</dt><dd><code>model.nu</code>, the number of actuators. Also the length of <code>data.ctrl</code>.</dd>
+    <dt>ctrl</dt><dd><code>data.ctrl</code>, shape (nu,): the command you write before each step.</dd>
+    <dt>gear</dt><dd><code>model.actuator_gear[i, 0]</code>: multiplies the actuator output into joint torque.</dd>
+    <dt>ctrlrange, ctrllimited, clamping</dt><dd>The allowed command range. With ctrllimited on, commands outside it are clipped before use.</dd>
+    <dt>actuator_force</dt><dd><code>data.actuator_force</code>, shape (nu,): the actuator's output before the gear.</dd>
+    <dt>qfrc_actuator</dt><dd><code>data.qfrc_actuator</code>, shape (nv,): the twist all actuators put on each joint, in N m for a hinge.</dd>
+    <dt>motor</dt><dd>Actuator with torque = gear x ctrl. A hand pushing with a set strength.</dd>
+    <dt>position actuator, kp</dt><dd>Torque = kp (ctrl - qpos). A spring pulling toward a target angle; kp is its stiffness in N m per rad.</dd>
+    <dt>velocity actuator, kv</dt><dd>Torque = kv (ctrl - qvel). Cruise control for spin speed; kv in N m per rad/s.</dd>
+    <dt>gainprm, biasprm</dt><dd>Model numbers MuJoCo uses for every actuator: force = gain x ctrl + bias terms in qpos and qvel.</dd>
+    <dt>holding torque, equilibrium</dt><dd>The twist that exactly cancels gravity, so the rod stays still.</dd>
+  </dl>
+</section>
+
+<section class="step recap" id="l5-recap">
+  <h2>Recap: the lesson in one minute</h2>
+  <div class="mental-model">
+    <p><strong>Actuators</strong> are declared in an <code>&lt;actuator&gt;</code> block. Each one names a joint. <code>model.nu</code> counts them, and <code>data.ctrl</code> (shape (nu,)) holds one command per actuator.</p>
+    <p><strong>Each step</strong> MuJoCo clips <code>ctrl</code> into <code>ctrlrange</code>, computes <code>actuator_force</code> = gain x ctrl + bias(qpos, qvel), and multiplies by <code>gear</code> to get <code>qfrc_actuator</code>, the joint torque in N m.</p>
+    <p><strong>Motor:</strong> torque = gear x ctrl (gear 100, ctrl 0.5: 50 N m). <strong>Position:</strong> torque = kp (ctrl - qpos), ctrl is a target angle. <strong>Velocity:</strong> torque = kv (ctrl - qvel), ctrl is a target speed.</p>
+    <p><strong>Holding still</strong> means actuator torque = m g d sin(qpos). For this pendulum at 0.5 rad: 52.32471 N m, so ctrl = 0.52325.</p>
+    <p><strong>Model vs data:</strong> gear, kp, kv and ctrlrange are in <code>MjModel</code>. <code>ctrl</code>, <code>actuator_force</code> and <code>qfrc_actuator</code> are in <code>MjData</code>. You write <code>ctrl</code>; MuJoCo writes the forces.</p>
+  </div>
+  <div class="checkpoint">
+    <p>Try the actuator sandbox: pick a type, set ctrl and the gear or gain, and press Play. Find the ctrl that holds each type still at the angle you choose.</p>
+    <div class="btn-row">
+      <button class="btn btn-primary btn-sm" type="button" onclick="markComplete(5)">Mark lesson complete</button>
+      <button class="btn btn-sm" type="button" onclick="switchLesson(6)">Next: Sensors and Observation</button>
+    </div>
+  </div>
+</section>
+</div>

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 560" role="img" aria-labelledby="title desc">
+  <title id="title">MuJoCo pendulum model hierarchy</title>
+  <desc id="desc">A world body contains a pendulum body. The pendulum contains a hinge joint, a rod geom, and a bob body with a weight geom.</desc>
+  <style>
+    .box { fill: #eef6ff; stroke: #2563eb; stroke-width: 3; rx: 12; }
+    .child { fill: #f8fafc; stroke: #475569; stroke-width: 2; rx: 10; }
+    .text { font: 20px sans-serif; fill: #0f172a; }
+    .small { font: 16px sans-serif; fill: #334155; }
+    .line { stroke: #64748b; stroke-width: 3; fill: none; }
+  </style>
+  <text x="450" y="42" text-anchor="middle" class="text" font-weight="bold">MuJoCo MJCF hierarchy</text>
+  <rect x="350" y="75" width="200" height="65" class="box"/>
+  <text x="450" y="115" text-anchor="middle" class="text">worldbody</text>
+  <path d="M450 140 V190" class="line"/>
+  <rect x="330" y="190" width="240" height="75" class="box"/>
+  <text x="450" y="225" text-anchor="middle" class="text">body: pendulum</text>
+  <text x="450" y="250" text-anchor="middle" class="small">pos = (0, 0, 1)</text>
+  <path d="M390 265 V330" class="line"/>
+  <path d="M510 265 V330" class="line"/>
+  <rect x="270" y="330" width="180" height="65" class="child"/>
+  <text x="360" y="370" text-anchor="middle" class="text">joint: hinge</text>
+  <rect x="450" y="330" width="180" height="65" class="child"/>
+  <text x="540" y="370" text-anchor="middle" class="text">geom: rod</text>
+  <path d="M450 395 V450" class="line"/>
+  <rect x="330" y="450" width="240" height="75" class="box"/>
+  <text x="450" y="485" text-anchor="middle" class="text">body: bob</text>
+  <text x="450" y="510" text-anchor="middle" class="small">geom: weight</text>
+</svg>

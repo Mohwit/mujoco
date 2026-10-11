@@ -1,0 +1,13 @@
+<!-- Lesson 11: the lesson 4 two-link arm, same geometry, now styled by the "robot" class. -->
+<mujoco>
+  <body name="upper_arm" pos="0 0 1" childclass="robot">
+    <joint name="shoulder"/>
+    <geom name="upper_geom" type="capsule" fromto="0 0 0 0.5 0 0" size="0.04"/>
+    <body name="forearm" pos="0.5 0 0">
+      <joint name="elbow"/>
+      <geom name="forearm_geom" type="capsule" fromto="0 0 0 0.4 0 0" size="0.03" rgba="0.9 0.5 0.2 1"/>
+      <geom name="weight" class="finger" type="box" pos="0.4 0 0" size="0.05 0.05 0.05"/>
+      <site name="hand" pos="0.4 0 0" size="0.02"/>
+    </body>
+  </body>
+</mujoco>

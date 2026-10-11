@@ -1,0 +1,66 @@
+<div class="sandbox-container" id="sandbox8">
+  <div class="sandbox-header">
+    <span class="sandbox-dot"></span>
+    <span>PD Controller Lab</span>
+  </div>
+  <div class="sandbox-viz">
+    <svg viewBox="0 0 400 450" role="img" aria-labelledby="s8Title s8Desc">
+      <title id="s8Title">PD controller sandbox</title>
+      <desc id="s8Desc">The course pendulum driven by a PD controller towards a target angle. Above: the pendulum seen from the side with the target as a dashed line. Below: the hinge angle against time for 3 seconds.</desc>
+      <line class="axis-line" x1="200" y1="20" x2="200" y2="200"></line>
+      <line id="s8TargetLine" x1="200" y1="64" x2="200" y2="202" stroke="var(--yellow)" stroke-width="1.5" stroke-dasharray="5 4"></line>
+      <g id="s8Pend" transform="translate(200, 64)">
+        <line class="rod-line" x1="0" y1="0" x2="0" y2="120"></line>
+        <circle class="pivot-dot" cx="0" cy="0" r="7"></circle>
+      </g>
+      <text id="s8Clock" x="20" y="30" fill="var(--teal)" font-size="12" font-family="var(--mono)">t = 0.00 s</text>
+      <text x="380" y="30" text-anchor="end" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">side view, + angle swings left</text>
+      <!-- angle vs time plot: x 40..385 = 0..3 s, y 250..420 -->
+      <rect x="40" y="250" width="345" height="170" fill="none" stroke="var(--border)"></rect>
+      <line id="s8TargetY" x1="40" y1="352" x2="385" y2="352" stroke="var(--yellow)" stroke-width="1.5" stroke-dasharray="5 4"></line>
+      <line id="s8QsY" x1="40" y1="352" x2="385" y2="352" stroke="var(--text-dim)" stroke-width="1" stroke-dasharray="3 3"></line>
+      <polyline id="s8Curve" points="" fill="none" stroke="var(--teal)" stroke-width="2"></polyline>
+      <text x="44" y="262" fill="var(--text-dim)" font-size="10" font-family="var(--mono)" id="s8YMax">2.5 rad</text>
+      <text x="36" y="422" text-anchor="end" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">0</text>
+      <text x="40" y="436" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">0 s</text>
+      <text x="385" y="436" text-anchor="end" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">3 s</text>
+      <text x="212" y="446" text-anchor="middle" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">qpos[0] (rad) vs time; yellow = target, grey = q*</text>
+    </svg>
+  </div>
+  <div class="sandbox-controls">
+    <div class="control-group">
+      <label for="s8Kp">Spring kp (N m/rad) <span class="control-val" id="s8KpVal">400</span></label>
+      <input type="range" id="s8Kp" min="20" max="1600" step="10" value="400">
+    </div>
+    <div class="control-group">
+      <label for="s8Kd">Shock absorber kd (N m s/rad) <span class="control-val" id="s8KdVal">40</span></label>
+      <input type="range" id="s8Kd" min="0" max="500" step="1" value="40">
+    </div>
+    <div class="control-group">
+      <label for="s8Target">Target angle (rad) <span class="control-val" id="s8TargetVal">1.00</span></label>
+      <input type="range" id="s8Target" min="0.2" max="1.5" step="0.05" value="1">
+    </div>
+    <div class="control-group">
+      <label for="s8H">Timestep h (s) <span class="control-val" id="s8HVal">0.002</span></label>
+      <input type="range" id="s8H" min="0.001" max="0.06" step="0.001" value="0.002">
+    </div>
+    <div class="control-group">
+      <label for="s8Gc"><input type="checkbox" id="s8Gc"> Gravity compensation (add m g d sin q)</label>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary btn-sm" type="button" id="s8Run">Run 3 s</button>
+      <button class="btn btn-sm" type="button" id="s8Reset">Script values</button>
+    </div>
+    <div class="readout" id="s8Readout">
+      <span class="rk">overshoot:</span> <span class="rv" id="s8Over">-</span> <span class="rk">%</span> &nbsp;
+      <span class="rk">rise:</span> <span class="rv" id="s8Rise">-</span> <span class="rk">s</span><br>
+      <span class="rk">settling time:</span> <span class="rv" id="s8Settle">-</span> <span class="rk">s</span><br>
+      <span class="rk">steady-state error:</span> <span class="rv-o" id="s8Err">-</span> <span class="rk">rad (target - qpos at 3 s)</span><br>
+      <span class="rk">balance angle q*:</span> <span class="rv" id="s8Qs">-</span> <span class="rk">rad</span><br>
+      <span class="rk">peak torque:</span> <span class="rv" id="s8Peak">-</span> <span class="rk">N m (limit 100, ctrl = tau / 100)</span><br>
+      <span class="rk">wobble growth per step:</span> <span class="rv" id="s8Grow">-</span><br>
+      <span class="rk" id="s8Note"></span>
+    </div>
+    <p class="sidebar-hint" style="margin-top:8px;">Same model and maths as 08_controllers_and_experiments.py: the course pendulum with the Lesson 5 motor (gear 100, ctrlrange -1 1), semi-implicit Euler, ctrl computed from the state before each step and clipped. Checked against MuJoCo: better than 1e-10 rad in all six test runs (stable runs: 1e-16 rad). Above 1.1586 rad the motor cannot hold the rod even at full power.</p>
+  </div>
+</div>

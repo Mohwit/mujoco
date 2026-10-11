@@ -1,0 +1,59 @@
+<div class="sandbox-container" id="sandbox5">
+  <div class="sandbox-header">
+    <span class="sandbox-dot"></span>
+    <span>Actuator Sandbox</span>
+  </div>
+  <div class="sandbox-viz">
+    <svg viewBox="0 0 400 400" role="img" aria-labelledby="s5Title s5Desc">
+      <title id="s5Title">Actuator sandbox</title>
+      <desc id="s5Desc">The course pendulum with one actuator on its hinge. A teal curved arrow shows the actuator torque and an orange curved arrow shows the gravity torque. Pick motor, position or velocity, set ctrl, and play.</desc>
+      <defs>
+        <marker id="s5ArrT" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="var(--teal)"/></marker>
+        <marker id="s5ArrG" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="var(--orange)"/></marker>
+      </defs>
+      <line class="axis-line" x1="200" y1="20" x2="200" y2="380"></line>
+      <line id="s5Target" x1="200" y1="120" x2="200" y2="330" stroke="var(--purple)" stroke-width="1.5" stroke-dasharray="6 5" style="display:none"></line>
+      <g id="s5Pendulum" transform="translate(200, 120)">
+        <line class="rod-line" x1="0" y1="0" x2="0" y2="200"></line>
+        <circle cx="0" cy="100" r="5" fill="var(--text-bright)"></circle>
+        <circle class="pivot-dot" cx="0" cy="0" r="7"></circle>
+      </g>
+      <path id="s5TauArc" d="" fill="none" stroke="var(--teal)" stroke-width="4" marker-end="url(#s5ArrT)"></path>
+      <path id="s5GravArc" d="" fill="none" stroke="var(--orange)" stroke-width="3" marker-end="url(#s5ArrG)"></path>
+      <text id="s5TypeText" x="20" y="30" fill="var(--teal)" font-size="12" font-family="var(--mono)">motor: torque = gear x ctrl</text>
+      <text id="s5TimeText" x="20" y="46" fill="var(--text-dim)" font-size="11" font-family="var(--mono)">time: 0.000 s</text>
+      <text x="20" y="384" fill="var(--teal)" font-size="11" font-family="var(--mono)">teal = actuator torque</text>
+      <text x="230" y="384" fill="var(--orange)" font-size="11" font-family="var(--mono)">orange = gravity</text>
+    </svg>
+  </div>
+  <div class="sandbox-controls">
+    <div class="btn-row" role="group" aria-label="Actuator type">
+      <button class="btn btn-sm btn-primary" type="button" id="s5TypeMotor" aria-pressed="true">Motor</button>
+      <button class="btn btn-sm" type="button" id="s5TypePos" aria-pressed="false">Position</button>
+      <button class="btn btn-sm" type="button" id="s5TypeVel" aria-pressed="false">Velocity</button>
+    </div>
+    <div class="control-group">
+      <label for="s5Ctrl"><span id="s5CtrlLab">ctrl (strength, -1 to 1)</span> <span class="control-val" id="s5CtrlVal">0.500</span></label>
+      <input type="range" id="s5Ctrl" min="-1" max="1" step="0.005" value="0.5">
+    </div>
+    <div class="control-group">
+      <label for="s5Par"><span id="s5ParLab">gear (N m per unit ctrl)</span> <span class="control-val" id="s5ParVal">100</span></label>
+      <input type="range" id="s5Par" min="0" max="200" step="5" value="100">
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary btn-sm" type="button" id="s5Play">Play</button>
+      <button class="btn btn-sm" type="button" id="s5Step">Step</button>
+      <button class="btn btn-sm" type="button" id="s5Step100">Step x100</button>
+      <button class="btn btn-sm" type="button" id="s5Reset">Reset</button>
+    </div>
+    <div class="readout" id="s5Readout" aria-live="off">
+      <span class="rk">time:</span> <span class="rv" id="s5Time">0.000</span> <span class="rk">s</span><br>
+      <span class="rk">data.ctrl[0]:</span> <span class="rv" id="s5RCtrl">0.5000</span> <span class="rk" id="s5RCtrlU">(strength)</span><br>
+      <span class="rk">actuator_force[0]:</span> <span class="rv-o" id="s5RForce">0.5000</span> <span class="rk" id="s5RForceU">(before gear)</span><br>
+      <span class="rk">qfrc_actuator[0]:</span> <span class="rv-o" id="s5RTau">50.0000</span> <span class="rk">N m on hinge</span><br>
+      <span class="rk">qpos[0]:</span> <span class="rv" id="s5Qpos">0.0000</span> <span class="rk">rad (hinge angle)</span><br>
+      <span class="rk">qvel[0]:</span> <span class="rv" id="s5Qvel">0.0000</span> <span class="rk">rad/s</span>
+    </div>
+    <p class="sidebar-hint" style="margin-top:10px;">Same pendulum and actuators as 05_actuators_and_control.py (Euler, timestep 0.002 s). The stepping formula was checked against real MuJoCo: it matches to better than 1e-11 rad over 10 s. Readouts after a step show the force computed at the start of that step, as MuJoCo does. Play runs in real time and stops at 20 s.</p>
+  </div>
+</div>

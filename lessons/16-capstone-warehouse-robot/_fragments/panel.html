@@ -1,0 +1,631 @@
+<div class="lesson-content xp" id="lesson16">
+  <header class="lesson-header-block">
+    <p class="lesson-num-label">Capstone 2</p>
+    <h1 class="lesson-title">Capstone 2: Warehouse Robot</h1>
+    <p class="lesson-subtitle">Goal: a small wheeled robot with an arm drives to shelf A, picks up a red box, carries it across a warehouse and puts it on a green target on shelf B. You will see why a timed script fails, how a closed-loop controller made of small feedback loops succeeds, and exactly where a learned (reinforcement learning) policy takes over the hardest part: the grasp.</p>
+    <p class="lesson-legend"><dfn class="term" tabindex="0" data-def="Technical words look like this. Hover or focus one to read a plain-English definition.">Dotted words</dfn> show a definition on hover. <span class="lg-math">Maths boxes</span> are optional. <span class="lg-pred">Predict boxes</span> hide the answer until you guess.</p>
+  </header>
+  <nav class="lesson-toc" aria-label="Sections in Capstone 2"><a href="#l16-s-model">1. The robot</a><a href="#l16-s-open">2. Open loop</a><a href="#l16-s-fsm">3. State machine</a><a href="#l16-s-loops">4. Inner loops</a><a href="#l16-s-rl">5. RL env</a><a href="#l16-s-train">6. Training</a><a href="#l16-s-code">7. Script</a><a href="#l16-s-check">8. Check yourself</a><a href="#l16-recap">Recap</a></nav>
+
+<section class="step" id="l16-s-model">
+  <span class="lvl lvl-plain">Plain words</span> <span class="lvl lvl-pic">Picture</span> <span class="lvl lvl-words">MuJoCo words</span>
+  <h2>1. Milestone 1: meet the robot and its job</h2>
+  <div class="card"><span class="callout-title" style="color:var(--orange)">Mission 1: read the model like a parts list</span>Open <code>warehouse_robot.xml</code> and find every part the robot is built from. Uses lessons 2 (body tree), 4 (names and frames) and 11 (default classes, keyframes). <strong>Success:</strong> you can say why the model has 32 position numbers but only 29 velocity numbers.</div>
+  <p>This capstone is a guided project, not a new topic. Every part of the robot was taught in lessons 1 to 15. Here you watch them work together.</p>
+  <p>The job is simple to say. A small robot car with an arm starts in the south of a warehouse. It must pick up the red box on shelf A and put it on the green square on shelf B. Nobody steers it.</p>
+  <div class="card analogy"><strong>Analogy: a kitchen brigade.</strong> A big dish is too much for one cook. So a head chef calls out the steps in order: "chop", "fry", "plate". Each cook does one job and shouts "done!" when it is finished. Our robot works the same way. A head chef (the state machine) calls the phases. Small helpers (feedback loops) drive, reach and squeeze.</div>
+  <h3>The warehouse, from above</h3>
+  <div class="card">
+    <canvas id="l16cvPlan" role="img" aria-label="Top-down floor plan of the warehouse: shelf A top left with the red box, shelf B on the right with the green target, a table in the middle, two yellow pylons, and the robot at the start facing north"></canvas>
+    <div class="btnrow">
+      <button type="button" data-l16plan="marks" class="primary">Standoff and dock points</button>
+      <button type="button" data-l16plan="route">The route the closed loop took</button>
+    </div>
+    <div class="readouts">
+      <div class="ro frozen"><span class="lab">start (world)</span><span class="val">(0, -1.5)</span> <span class="unit">m</span></div>
+      <div class="ro frozen"><span class="lab">red box (world)</span><span class="val">(-1.22, 1.5)</span> <span class="unit">m</span></div>
+      <div class="ro frozen"><span class="lab">target (world)</span><span class="val">(1.22, -1.0)</span> <span class="unit">m</span></div>
+      <div class="ro" id="l16pA"><span class="lab">start to box, straight line</span><span class="val">-</span> <span class="unit">m</span></div>
+      <div class="ro" id="l16pB"><span class="lab">box to target, straight line</span><span class="val">-</span> <span class="unit">m</span></div>
+    </div>
+    <p class="caption">World frame, north (+y) up, east (+x) right, grid 1 m. Drawn from the positions in <code>warehouse_robot.xml</code>. Purple circles are the <dfn class="term" tabindex="0" data-def="A safe stopping point in open floor, about 0.6 m in front of a shelf. The robot drives there first, then turns and creeps the last few centimetres.">standoff points</dfn> the controller drives to first; dashed lines are where it docks (chassis x = -0.85 m and +0.85 m). The blue dot is a second object, a cylinder, which the robot ignores.</p>
+  </div>
+  <h3>The body tree</h3>
+  <p>The robot is one <dfn class="term" tabindex="0" data-def="A robot that both moves around (a mobile base) and handles objects (an arm and gripper).">mobile manipulator</dfn>: a base with four wheels, a five-joint arm, and a two-finger gripper. Here is its tree, with the index of each joint in <code>qpos</code> (printed by the script).</p>
+<pre><code>world
+ +- chassis          free joint   qpos[0:7]   qvel[0:6]   (box 0.5 x 0.3 m, 8.50 kg with its top plate)
+ |   +- wheel_FL, wheel_FR, wheel_RL, wheel_RR   hinges  qpos[7..10]   velocity actuators
+ |   +- arm_base     hinge arm_yaw         qpos[11]   motor (raw torque)
+ |       +- upper_arm   hinge shoulder_pitch  qpos[12]   position servo kp 200
+ |           +- forearm    hinge elbow_pitch    qpos[13]   position servo kp 150
+ |               +- wrist      hinge wrist_roll     qpos[14]   position servo kp 20
+ |                   +- wrist_tilt  hinge wrist_pitch  qpos[15]   position servo kp 20
+ |                       +- finger_L   slide grip_L   qpos[16]   position servo kp 600
+ |                       +- finger_R   slide grip_R   qpos[17]   follows grip_L (tendon + equality)
+ +- red_box          free joint   qpos[18:25]  qvel[17:23]   0.25 kg, 7 cm cube
+ +- blue_cyl         free joint   qpos[25:32]  qvel[23:29]
+ +- walls, shelf_A, shelf_B, table, crates, pylons   (no joint: welded to the world)</code></pre>
+  <div class="predict">
+    <h3>Predict: the model has 14 joints. MuJoCo reports nq = 32 position numbers but nv = 29 velocity numbers. Where do the 3 missing velocities go?</h3>
+    <textarea aria-label="Your prediction for nq versus nv"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p>There are <strong>3 free joints</strong>: the chassis, the box and the cylinder. A free joint stores its position as 3 numbers plus a 4-number quaternion (7), but its velocity as 3 linear plus 3 angular numbers (6). The other 11 joints (hinges and slides) have 1 of each.</p>
+      <div class="eq">nq = 3 x 7 + 11 x 1 = 32        nv = 3 x 6 + 11 x 1 = 29      (script: nq=32, nv=29)</div>
+      <p>So one velocity is "missing" per free joint: a rotation needs 4 numbers to store without trouble, but only 3 to describe how fast it turns (lessons 2 and 14).</p>
+    </div>
+  </div>
+  <h3>Every part, and the lesson that taught it</h3>
+  <table>
+    <thead><tr><th>Part of the model</th><th>In this robot</th><th>Lesson</th></tr></thead>
+    <tbody>
+      <tr><td>free joint, yaw from the quaternion</td><td>chassis (and both objects); heading read from <code>xmat</code></td><td>2, 4, 14</td></tr>
+      <tr><td>hinge and slide joints</td><td>4 wheel hinges, 5 arm hinges, 2 finger slides</td><td>2, 13</td></tr>
+      <tr><td>velocity actuators</td><td>4 wheels, kv 5, ctrl = wanted wheel speed in rad/s</td><td>5, 14</td></tr>
+      <tr><td>motor actuator</td><td>arm yaw turret, gear 1, ctrl = torque, -5..5 N*m</td><td>5</td></tr>
+      <tr><td>position actuators</td><td>shoulder kp 200, elbow 150, wrists 20, gripper 600</td><td>5</td></tr>
+      <tr><td>fixed tendon + equality</td><td><code>gripper_couple</code> = grip_L - grip_R, held at 0: one actuator moves both fingers</td><td>13</td></tr>
+      <tr><td>sensors</td><td>6 jointpos, 2 touch, accelerometer, gyro, rangefinder, 2 framepos (13 sensors, 21 numbers)</td><td>6, 13, 14</td></tr>
+      <tr><td>contacts, friction, condim, contype</td><td>chassis contype 0 (never collides); wheels friction 1.5 condim 6; fingers 2.0 condim 4; box 0.6</td><td>7, 13</td></tr>
+      <tr><td>default classes, keyframes</td><td>classes robot, wheel, finger, object, furniture; keyframes <code>home</code>, <code>pre_grasp</code></td><td>11</td></tr>
+      <tr><td>sites and cameras</td><td><code>grasp_site</code>, <code>imu_site</code>, touch sites; cameras overview, side, tracking, gripper_cam</td><td>4, 6</td></tr>
+      <tr><td>inverse kinematics</td><td><code>arm_ik</code> in <code>warehouse_common.py</code></td><td>12</td></tr>
+      <tr><td>PD control, Gym env, SAC</td><td>heading and turret loops; <code>WarehouseGraspEnv</code>; <code>train_grasp_rl.py</code></td><td>8, 9, 15</td></tr>
+    </tbody>
+  </table>
+  <h3>The XML and the code that reads it</h3>
+  <div class="grid2">
+<pre><code><span class="t">&lt;body</span> <span class="a">name</span>=<span class="s">"chassis"</span> <span class="a">pos</span>=<span class="s">"0 -1.5 0.11"</span>
+      <span class="a">quat</span>=<span class="s">"0.707 0 0 0.707"</span> <span class="a">childclass</span>=<span class="s">"robot"</span><span class="t">&gt;</span>
+  <span class="t">&lt;freejoint</span> <span class="a">name</span>=<span class="s">"chassis_free"</span><span class="t">/&gt;</span>   <span class="c"># qpos[0:7]</span>
+  <span class="t">&lt;site</span> <span class="a">name</span>=<span class="s">"imu_site"</span><span class="t">/&gt;</span>
+  ...
+<span class="t">&lt;gyro</span> <span class="a">name</span>=<span class="s">"imu_gyro"</span> <span class="a">site</span>=<span class="s">"imu_site"</span><span class="t">/&gt;</span>  <span class="c"># sensordata[11:14]</span>
+<span class="t">&lt;touch</span> <span class="a">name</span>=<span class="s">"touch_L"</span> <span class="a">site</span>=<span class="s">"touch_L_site"</span><span class="t">/&gt;</span> <span class="c"># [6]</span>
+<span class="t">&lt;framepos</span> <span class="a">name</span>=<span class="s">"grasp_pos"</span> <span class="a">objtype</span>=<span class="s">"site"</span>
+          <span class="a">objname</span>=<span class="s">"grasp_site"</span><span class="t">/&gt;</span>      <span class="c"># [18:21]</span>
+<span class="t">&lt;velocity</span> <span class="a">name</span>=<span class="s">"drive_FL"</span> <span class="a">joint</span>=<span class="s">"wheel_FL_spin"</span>
+          <span class="a">kv</span>=<span class="s">"5"</span> <span class="a">forcerange</span>=<span class="s">"-10 10"</span><span class="t">/&gt;</span>  <span class="c"># ctrl[0]</span></code></pre>
+<pre><code><span class="c"># warehouse_common.py</span>
+<span class="k">def</span> get_chassis_pose(model, data):
+    cid = body_id(model, <span class="s">"chassis"</span>)
+    xmat = data.xmat[cid].reshape(<span class="n">3</span>, <span class="n">3</span>)
+    yaw = arctan2(xmat[<span class="n">1</span>, <span class="n">0</span>], xmat[<span class="n">0</span>, <span class="n">0</span>])  <span class="c"># rad, world</span>
+    <span class="k">return</span> data.xpos[cid, <span class="n">0</span>], data.xpos[cid, <span class="n">1</span>], yaw
+
+<span class="k">def</span> sensor_val(model, data, name):
+    sid = mj_name2id(model, mjOBJ_SENSOR, name)
+    adr = model.sensor_adr[sid]       <span class="c"># e.g. 11 for imu_gyro</span>
+    <span class="k">return</span> data.sensordata[adr:adr + model.sensor_dim[sid]]
+
+yaw_rate = sensor_val(m, d, <span class="s">"imu_gyro"</span>)[<span class="n">2</span>]  <span class="c"># rad/s about z</span></code></pre>
+  </div>
+  <p>The quaternion <code>0.707 0 0 0.707</code> turns the chassis 90 degrees about z, so its forward axis (local +x) points north. The heading <code>yaw</code> is read from the first column of the rotation matrix <code>xmat</code>: that column is "forward", written in world coordinates (lesson 14).</p>
+  <table>
+    <thead><tr><th>Count (script output)</th><th>Value</th><th>Count</th><th>Value</th></tr></thead>
+    <tbody>
+      <tr><td><code>nbody</code> (incl. world)</td><td>21</td><td><code>nu</code> (actuators, length of <code>ctrl</code>)</td><td>10</td></tr>
+      <tr><td><code>njnt</code></td><td>14</td><td><code>nsensor</code> / <code>nsensordata</code></td><td>13 / 21</td></tr>
+      <tr><td><code>nq</code> / <code>nv</code></td><td>32 / 29</td><td><code>ntendon</code>, <code>neq</code>, <code>nkey</code></td><td>1, 1, 2</td></tr>
+      <tr><td><code>ngeom</code>, <code>nsite</code>, <code>ncam</code></td><td>41, 7, 4</td><td>timestep, integrator</td><td>0.002 s, implicit</td></tr>
+      <tr><td>whole robot mass</td><td>12.000 kg</td><td>friction cone, <code>impratio</code></td><td>elliptic, 10</td></tr>
+    </tbody>
+  </table>
+  <p class="newwords">New words: <span class="chip">mobile manipulator</span><span class="chip">standoff point</span><span class="chip">dock</span></p>
+</section>
+
+<section class="step" id="l16-s-open">
+  <span class="lvl lvl-pic">Picture</span> <span class="lvl lvl-code">Experiment</span>
+  <h2>2. Milestone 2: try it blind first (open loop)</h2>
+  <div class="card"><span class="callout-title" style="color:var(--orange)">Mission 2: run the timed script and find where it goes wrong</span>Run <code>16_capstone_warehouse_robot.py --headless</code>. Uses lesson 14 (open loop versus closed loop). <strong>Success:</strong> you can name the first phase where the robot leaves the plan, and say why.</div>
+  <p>The first version of this robot is a recipe with a kitchen timer. "Drive all wheels at 8 rad/s for 5.0 s. Spin for 3.2 s. Reach. Close the gripper." It never looks at a sensor. That is <dfn class="term" tabindex="0" data-def="Control that sends pre-planned commands without measuring the result. It cannot notice or correct a mistake.">open loop</dfn> control, as in lesson 14, but now for a whole 13-step job.</p>
+  <div class="predict">
+    <h3>Predict: phase 03 drives the left wheels at -5 rad/s and the right wheels at +5 rad/s for 3.2 s. The author meant a 90 degree left turn. How far does the robot really turn?</h3>
+    <textarea aria-label="Your prediction for the open-loop turn"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p>Only <strong>30.7 degrees</strong> (yaw 90.0 to 120.7 degrees). Four fixed wheels cannot roll sideways. When the robot spins on the spot, its wheels must scrub sideways over the floor, and friction fights the turn (skid steer, lesson 14). The 3.2 s was tuned for an older version of the robot. Change the mass, the friction or the arm, and the same timer gives a different angle.</p>
+      <p>From then on every phase starts from the wrong place. After phase 04 the robot is at (-0.721, 1.903) m, facing 123.3 degrees. That is <strong>0.423 m</strong> from where it needs to be to grasp. It closes the gripper on air: the touch sensors read 0.00 N in the grasp and lift phases, and the box never moves.</p>
+    </div>
+  </div>
+  <table>
+    <thead><tr><th>Phase</th><th>Wheels FL, FR, RL, RR (rad/s)</th><th>Timer (s)</th><th>Chassis at end, x, y (m, world)</th><th>Yaw at end (deg)</th><th>Turned (deg)</th></tr></thead>
+    <tbody>
+      <tr><td>01 settle, open gripper</td><td>0, 0, 0, 0</td><td>0.5</td><td>0.000, -1.426</td><td>90.0</td><td>0.0</td></tr>
+      <tr><td>02 drive north</td><td>8, 8, 8, 8</td><td>5.0</td><td>-0.000, 0.915</td><td>90.0</td><td>0.0</td></tr>
+      <tr><td><strong>03 turn left 90 deg</strong></td><td>-5, 5, -5, 5</td><td>3.2</td><td>-0.060, 0.806</td><td>120.7</td><td><strong>30.7</strong></td></tr>
+      <tr><td>04 drive to shelf A</td><td>5, 6, 5, 6</td><td>4.0</td><td>-0.721, 1.903</td><td>123.3</td><td>2.6</td></tr>
+      <tr><td>05 to 07 extend, grasp, lift</td><td>0</td><td>5.0</td><td>-0.722, 1.905</td><td>123.4</td><td>0.1</td></tr>
+      <tr><td>08 reverse</td><td>-6 (all)</td><td>2.5</td><td>-0.239, 1.172</td><td>123.4</td><td>0.0</td></tr>
+      <tr><td><strong>09 turn right 180 deg</strong></td><td>6, -6, 6, -6</td><td>6.0</td><td>-0.336, 1.315</td><td>-81.3</td><td><strong>-204.7</strong></td></tr>
+      <tr><td>10 drive to shelf B</td><td>8, 5, 8, 5</td><td>5.5</td><td>-0.552, -0.744</td><td>-113.9</td><td>-32.6</td></tr>
+      <tr><td>11 to 13 lower, release, retract</td><td>0</td><td>5.0</td><td>-0.553, -0.746</td><td>-113.9</td><td>0.0</td></tr>
+    </tbody>
+  </table>
+  <p class="caption">From the lesson script, which runs the same phases as <code>16_capstone_warehouse_robot.py</code>. "Turned" adds up the yaw change during the phase (positive = left, counter-clockwise). The right turn overshoots to 204.7 degrees: same timer idea, opposite error. Total 36.70 s. Red box at the end: (-1.220, 1.500, 0.595) m, where it started. Even "settle" moved the base 7 cm north, because the arm swinging up pushes on the chassis.</p>
+  <h3>One variable: start 5 cm further east</h3>
+  <div class="predict">
+    <h3>Predict: start the robot 5 cm east (qpos[0] += 0.05) and change nothing else. Where does the open-loop robot end phase 04? Where does the closed-loop robot (section 3) dock?</h3>
+    <textarea aria-label="Your prediction for the 5 cm experiment"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p><strong>Open loop: it ends 94.4 cm away</strong> from its own nominal end point, at (-0.940, 0.984) m instead of (-0.721, 1.903). A small change early on (a slightly different scrub during the turn) grows through every later phase. <strong>Closed loop: it docks 0.4 cm away</strong> from its nominal dock, at (-0.840, 1.530) instead of (-0.840, 1.534), and still places the box 3.3 mm from the target.</p>
+    </div>
+  </div>
+  <div class="card">
+    <canvas id="l16cvOpen" role="img" aria-label="Floor plan with recorded paths: the open-loop run in orange, the same script started 5 cm east in dashed purple, and the closed-loop run in teal"></canvas>
+    <div class="btnrow">
+      <button type="button" data-l16path="open" class="primary">Open loop</button>
+      <button type="button" data-l16path="open5">Open loop, start 5 cm east</button>
+      <button type="button" data-l16path="closed">Closed loop</button>
+      <button type="button" data-l16path="all">All three</button>
+    </div>
+    <p class="caption">This picture replays paths recorded from MuJoCo by the lesson script (one sample every 0.2 s). Dots: where the open-loop robot is when phase 04 ends, and where the closed-loop robot is when it has docked.</p>
+  </div>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">Rule to remember</span>A timed script is only as good as the world is repeatable. Wheels slip, arms push the base, and starts are never exact. If you cannot measure it, you cannot correct it.</div>
+  <p class="newwords">New words: <span class="chip">open loop</span><span class="chip">drift</span></p>
+</section>
+
+<section class="step" id="l16-s-fsm">
+  <span class="lvl lvl-plain">Plain words</span> <span class="lvl lvl-pic">Picture</span> <span class="lvl lvl-words">MuJoCo words</span>
+  <h2>3. Milestone 3: a head chef calls the phases</h2>
+  <div class="card"><span class="callout-title" style="color:var(--orange)">Mission 3: give every phase a "done when" test</span>Read <code>PickPlaceController</code> in <code>16_capstone_closed_loop.py</code>. Uses lesson 8 (feedback) and lesson 14 (closed-loop driving). <strong>Success:</strong> for any phase you can say what it reads, what it commands, and which measurement ends it.</div>
+  <p>The fix keeps the idea of phases but changes how a phase ends. A phase no longer stops when a timer runs out. It stops when a measurement says the job is done. "Drive until the standoff point is less than 10 cm away." "Squeeze until both fingers feel more than 0.5 N."</p>
+  <p>That list of phases plus the rule for moving between them is a <dfn class="term" tabindex="0" data-def="A controller that is always in exactly one named phase (state). Each phase has its own commands and a test that, when true, moves it to the next phase.">state machine</dfn>. The head chef holds the list and the current phase. Each phase is a cook with one job, and a <dfn class="term" tabindex="0" data-def="The test that ends a phase, for example 'distance to the standoff < 0.10 m'. It is measured, not timed.">done-when</dfn> test.</p>
+  <div class="predict">
+    <h3>Predict: the closed loop has 20 phases. Which one do you think takes the longest, and roughly how long does the whole job take compared with the 36.7 s timed script?</h3>
+    <textarea aria-label="Your prediction for the phase durations"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer"><p><strong>Drive to shelf B: 19.60 s</strong>, then drive to shelf A at 15.57 s. The whole job takes <strong>76.32 s</strong>, about twice the timed script. Feedback is slower here because the controller drives at most 6 rad/s (0.36 m/s with 6 cm wheels), slows down near targets, and waits for every joint to settle. But it finishes the job, and the timed script does not.</p></div>
+  </div>
+  <div class="card">
+    <canvas id="l16cvFsm" role="img" aria-label="Phase diagram: twenty boxes in order from settle to tuck, coloured by what they move. Click a box to read what that phase reads, commands and waits for."></canvas>
+    <div class="btnrow">
+      <button type="button" id="l16fPrev">Previous phase</button>
+      <button type="button" id="l16fNext" class="primary">Next phase</button>
+    </div>
+    <table>
+      <tbody>
+        <tr><th style="width:24%">Phase</th><td id="l16fName">-</td></tr>
+        <tr><th>Reads</th><td id="l16fReads">-</td></tr>
+        <tr><th>Commands</th><td id="l16fCmd">-</td></tr>
+        <tr><th>Done when</th><td id="l16fDone">-</td></tr>
+        <tr><th>Real run</th><td id="l16fOut">-</td></tr>
+      </tbody>
+    </table>
+    <p class="caption">Click a box (or use the buttons). Every phase also has a safety <dfn class="term" tabindex="0" data-def="A maximum time per phase. If the done-when test never becomes true, the phase ends anyway with the outcome 'timeout'. Here 30 s.">timeout</dfn> of 30 s (<code>PHASE_TIMEOUT</code>), so a stuck phase cannot hang the robot. Durations and outcomes come from the real run below.</p>
+  </div>
+  <h3>The head chef in code</h3>
+  <table>
+    <thead><tr><th style="width:46%">Code in <code>16_capstone_closed_loop.py</code></th><th>What it means</th></tr></thead>
+    <tbody>
+      <tr><td><code>PHASES = ["SETTLE", "DRIVE_TO_SHELF_A", ...]</code></td><td>The order of the recipe: 20 named phases.</td></tr>
+      <tr><td><code>self.phase_idx</code>, <code>self.phase_t0</code></td><td>The head chef's memory: which phase we are in, and when it started.</td></tr>
+      <tr><td><code>_enter()</code></td><td>Runs once when a phase starts. Arm phases plan their move here, e.g. <code>CartesianMove(m, d, box, 1.2)</code>.</td></tr>
+      <tr><td><code>step()</code></td><td>Called before <em>every</em> <code>mj_step</code>. Looks at the phase, runs its small loop, writes <code>data.ctrl</code>.</td></tr>
+      <tr><td><code>if navigate_step(...): result = "arrived at standoff"</code></td><td>The cook shouts "done!": a helper returns True when its test passes.</td></tr>
+      <tr><td><code>if result is None and elapsed &gt; PHASE_TIMEOUT: result = "timeout"</code></td><td>The safety net.</td></tr>
+      <tr><td><code>_finish(result)</code></td><td>Logs the outcome and the duration, moves to the next phase, calls <code>_enter()</code>.</td></tr>
+      <tr><td><code>while not ctrl.done: ctrl.step(); mj_step(m, d)</code></td><td>The main loop (headless). Control and physics take turns, 0.002 s each.</td></tr>
+    </tbody>
+  </table>
+  <h3>The real run: every phase, how long, and how it ended</h3>
+  <table>
+    <thead><tr><th>#</th><th>Phase</th><th>Outcome</th><th>Duration (s)</th><th>#</th><th>Phase</th><th>Outcome</th><th>Duration (s)</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>SETTLE</td><td>settled</td><td>0.50</td><td>11</td><td>BACK_OFF_A</td><td>backed off</td><td>2.90</td></tr>
+      <tr><td>2</td><td>DRIVE_TO_SHELF_A</td><td>arrived at standoff</td><td>15.57</td><td>12</td><td>DRIVE_TO_SHELF_B</td><td>arrived at standoff</td><td>19.60</td></tr>
+      <tr><td>3</td><td>ALIGN_TO_SHELF_A</td><td>aligned</td><td>7.11</td><td>13</td><td>ALIGN_TO_SHELF_B</td><td>aligned</td><td>6.89</td></tr>
+      <tr><td>4</td><td>READY</td><td>reached</td><td>1.50</td><td>14</td><td>DOCK_AT_SHELF_B</td><td>docked</td><td>3.63</td></tr>
+      <tr><td>5</td><td>DOCK_AT_SHELF_A</td><td>docked</td><td>3.78</td><td>15</td><td>PLACE_ABOVE</td><td>reached</td><td>2.00</td></tr>
+      <tr><td>6</td><td>PRE_GRASP</td><td>reached</td><td>1.50</td><td>16</td><td>PLACE_DOWN</td><td>reached</td><td>1.20</td></tr>
+      <tr><td>7</td><td>APPROACH</td><td>reached</td><td>1.20</td><td>17</td><td>RELEASE</td><td>released</td><td>0.04</td></tr>
+      <tr><td>8</td><td>GRASP</td><td>grasped (L=7.8N R=8.0N)</td><td>0.60</td><td>18</td><td>RETREAT</td><td>reached</td><td>1.20</td></tr>
+      <tr><td>9</td><td>LIFT</td><td>reached</td><td>1.20</td><td>19</td><td>BACK_OFF_B</td><td>backed off</td><td>2.90</td></tr>
+      <tr><td>10</td><td>CARRY</td><td>reached</td><td>1.50</td><td>20</td><td>TUCK</td><td>reached</td><td>1.50</td></tr>
+    </tbody>
+  </table>
+<pre><code>Red box final pos (m): x=1.221  y=-0.997  z=0.595     <span class="c"># world frame; target site at (1.22, -1.0)</span>
+Distance to target (m, horizontal): 0.003            <span class="c"># 3 mm</span>
+SUCCESS: True                                        <span class="c"># error &lt; 0.05 m and box z &gt; 0.55 m (on the shelf)</span></code></pre>
+  <p>Arm phases often end exactly at their planned time (1.50 s, 1.20 s): the move was planned to last that long, and the joints were already within 0.04 rad when it finished. Driving phases have no plan for time at all; they end when the measurement says so.</p>
+  <p>Five more runs with a random start (up to 15 cm off in x and y) and a random box position (up to 3 cm in x, 4 cm in y): <strong>5 out of 5 succeeded</strong>, with final errors of 6.7, 3.3, 3.0, 3.1 and 3.7 mm. The timed script never reached the box in any of them.</p>
+  <p class="newwords">New words: <span class="chip">state machine</span><span class="chip">phase</span><span class="chip">done-when test</span><span class="chip">timeout</span></p>
+</section>
+
+<section class="step" id="l16-s-loops">
+  <span class="lvl lvl-pic">Picture</span> <span class="lvl lvl-words">MuJoCo words</span> <span class="lvl lvl-math">Maths</span>
+  <h2>4. Inside each phase: three small feedback loops</h2>
+  <p>The head chef only decides <em>which</em> phase runs. The real work is done by three helpers. Each is a feedback loop: measure, compare with the goal, command, repeat 500 times a second.</p>
+  <div class="grid3">
+    <div class="card"><span class="callout-title" style="color:var(--blue)">Drive = steer to a point</span>Reads the chassis pose and the gyro. Commands the four wheel speeds. Lessons 8 and 14.</div>
+    <div class="card"><span class="callout-title" style="color:var(--teal)">Arm = put the gripper there</span>Turns a 3D point into joint angles (IK) and lets the position servos follow. Lessons 5 and 12.</div>
+    <div class="card"><span class="callout-title" style="color:var(--orange)">Gripper = squeeze until you feel it</span>Closes the fingers and waits for both touch sensors. Lesson 13.</div>
+  </div>
+
+  <h3>4a. Driving: turn towards the goal, go slower when you are not facing it</h3>
+  <p>Think of pushing a shopping trolley to a door. If the door is to your left, you turn left. If you are facing the wrong way, you turn first and only then walk. If you are already turning fast, you ease off so you do not overshoot.</p>
+  <p><code>navigate_step</code> does exactly that, in four lines. The <dfn class="term" tabindex="0" data-def="The angle between where the robot faces and the direction to the target, wrapped to -pi..pi. Positive means the target is to the left (counter-clockwise).">heading error</dfn> is the angle to turn; the gyro gives the yaw rate for damping, as the D term in lesson 8.</p>
+  <table>
+    <thead><tr><th style="width:52%">Code (<code>navigate_step</code>)</th><th>Plain meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>x, y, yaw = get_chassis_pose(model, data)</code></td><td>Where am I, which way do I face (world frame, from <code>xpos</code>, <code>xmat</code>).</td></tr>
+      <tr><td><code>heading_err = angle_wrap(arctan2(dy, dx) - yaw)</code></td><td>How far to turn (rad). Wrapping keeps it in -pi..pi.</td></tr>
+      <tr><td><code>yaw_rate = sensor_val(..., "imu_gyro")[2]</code></td><td>How fast I am already turning (rad/s).</td></tr>
+      <tr><td><code>turn = clip(6.0*heading_err - 2.0*yaw_rate, -6, 6)</code></td><td>PD steering: P turns towards the goal, D stops the overshoot.</td></tr>
+      <tr><td><code>alignment = max(0, 1 - |heading_err| / 0.8)</code></td><td>1 when facing the goal, 0 when more than 0.8 rad off.</td></tr>
+      <tr><td><code>speed = clip(max(4.0*dist*alignment, creep), 0, 6)</code></td><td>Fast when far and facing it; a 1.5 rad/s creep when within 0.4 rad.</td></tr>
+      <tr><td><code>set_wheels(data, wheels, speed - turn, speed + turn)</code></td><td>Differential mixing: left wheels slower, right faster = turn left. Clipped to -6..6 rad/s.</td></tr>
+    </tbody>
+  </table>
+  <div class="card">
+    <canvas id="l16cvNav" role="img" aria-label="The robot seen from above facing up the screen, a purple target dot at the chosen heading error and distance, orange arrows for left and right wheel commands, and bars for turn, speed, left and right"></canvas>
+    <label class="slider"><span>Heading error</span> <output id="l16nHo">0.1916 rad</output><input type="range" id="l16nH" min="-3.14" max="3.14" step="0.001" value="0.1916" aria-label="Heading error in radians"></label>
+    <label class="slider"><span>Distance to the goal</span> <output id="l16nDo">2.2662 m</output><input type="range" id="l16nD" min="0" max="3" step="0.001" value="2.2662" aria-label="Distance to goal in metres"></label>
+    <label class="slider"><span>Gyro yaw rate</span> <output id="l16nYo">0.0208 rad/s</output><input type="range" id="l16nY" min="-1" max="1" step="0.001" value="0.0208" aria-label="Yaw rate in radians per second"></label>
+    <div class="btnrow">
+      <button type="button" id="l16nP1" class="primary">The real moment at t = 3.000 s</button>
+      <button type="button" id="l16nP2">Facing away (2.5 rad)</button>
+      <button type="button" id="l16nP3">Turning fast near the goal</button>
+    </div>
+    <div class="readouts">
+      <div class="ro" id="l16nTurn"><span class="lab">turn: raw -> clipped</span><span class="val">-</span> <span class="unit">rad/s</span></div>
+      <div class="ro" id="l16nAl"><span class="lab">alignment</span><span class="val">-</span></div>
+      <div class="ro" id="l16nCreep"><span class="lab">creep</span><span class="val">-</span> <span class="unit">rad/s</span></div>
+      <div class="ro" id="l16nSp"><span class="lab">speed: raw -> clipped</span><span class="val">-</span> <span class="unit">rad/s</span></div>
+      <div class="ro" id="l16nL"><span class="lab">left wheels ctrl</span><span class="val">-</span> <span class="unit">rad/s</span></div>
+      <div class="ro" id="l16nR"><span class="lab">right wheels ctrl</span><span class="val">-</span> <span class="unit">rad/s</span></div>
+    </div>
+    <p class="caption">This is the controller's own formula, not a simulation: the page runs the same arithmetic as <code>navigate_step</code> (checked against Python on 201 inputs by <code>16_check_browser_maths.py</code>: identical to 1e-9). Below 0.10 m it reports "stop": the phase is done.</p>
+  </div>
+  <details class="math"><summary>Step 1: one real navigation step, by hand (t = 3.000 s)</summary><div>
+    <p>The script paused the run at t = 3.000 s, during DRIVE_TO_SHELF_A, and recomputed the step by hand. The goal is the standoff point (-0.55, 1.5).</p>
+    <div class="eq">chassis (world)   x = -0.0171 m   y = -0.7026 m   yaw = 1.6166 rad (92.63 deg)
+distance          = 2.2662 m
+heading to goal   = 1.8082 rad      heading error = 1.8082 - 1.6166 = 0.1916 rad
+gyro z            = 0.0208 rad/s</div>
+    <div class="eq">turn      = 6.0 x 0.1916 - 2.0 x 0.0208      = 1.1077 rad/s   (inside -6..6)
+alignment = 1 - 0.1916 / 0.8                  = 0.7606
+speed     = 4.0 x 2.2662 x 0.7606             = 6.8942  -> clipped to 6.0000 rad/s
+left      = 6.0000 - 1.1077                   = 4.8923 rad/s
+right     = 6.0000 + 1.1077 = 7.1077          -> clipped to 6.0000 rad/s</div>
+    <p>The controller really wrote <code>ctrl[FL] = 4.8923</code> and <code>ctrl[FR] = 6.0000</code>. The left wheels are slower, so the robot curves left, towards the goal. Both wheels near the top speed of 6 rad/s means 0.36 m/s with 0.06 m wheels.</p>
+  </div></details>
+  <p>Two cousins of this loop finish the driving. <code>align_step</code> spins on the spot until the heading error is under 0.03 rad; it never commands less than 1 rad/s, because skidding wheels stall below that. <code>dock_step</code> creeps straight along the track at no more than 2.5 rad/s (0.15 m/s) until the chassis x is within 1 cm of the dock line.</p>
+
+  <h3>4b. The arm: ask for a point, get joint angles</h3>
+  <p>You do not think "shoulder 0.2 rad, elbow 1.4 rad" when you reach for a cup. You think "hand there". Inverse kinematics (lesson 12) turns "there" into joint angles. Here <code>arm_ik</code> does it in closed form: the turret yaw aims the arm, a two-link triangle (law of cosines) places the wrist, and the wrist pitch tilts the gripper 0.3 rad (17 degrees) down so the forearm clears the shelf edge.</p>
+  <div class="card">
+    <canvas id="l16cvArm" role="img" aria-label="Side view of the robot and shelf A in the chassis frame. The arm links are drawn from the inverse kinematics solution for the target cross."></canvas>
+    <label class="slider"><span>Target forward x (chassis)</span> <output id="l16aXo">0.3792 m</output><input type="range" id="l16aX" min="0.10" max="0.85" step="0.001" value="0.3792" aria-label="Target x in the chassis frame"></label>
+    <label class="slider"><span>Target sideways y (chassis)</span> <output id="l16aYo">0.0430 m</output><input type="range" id="l16aY" min="-0.20" max="0.20" step="0.001" value="0.043" aria-label="Target y in the chassis frame"></label>
+    <label class="slider"><span>Target height z (chassis)</span> <output id="l16aZo">0.4851 m</output><input type="range" id="l16aZ" min="0.15" max="0.90" step="0.001" value="0.4851" aria-label="Target z in the chassis frame"></label>
+    <div class="btnrow">
+      <button type="button" id="l16aP1" class="primary">The box, end of APPROACH</button>
+      <button type="button" id="l16aP2">The ready point</button>
+      <button type="button" id="l16aP3">Too far</button>
+    </div>
+    <div class="readouts">
+      <div class="ro" id="l16aYaw"><span class="lab">arm_yaw</span><span class="val">-</span> <span class="unit">rad</span></div>
+      <div class="ro" id="l16aSh"><span class="lab">shoulder_pitch</span><span class="val">-</span> <span class="unit">rad</span></div>
+      <div class="ro" id="l16aEl"><span class="lab">elbow_pitch</span><span class="val">-</span> <span class="unit">rad</span></div>
+      <div class="ro" id="l16aWp"><span class="lab">wrist_pitch</span><span class="val">-</span> <span class="unit">rad</span></div>
+      <div class="ro" id="l16aCos"><span class="lab">cos(elbow)</span><span class="val">-</span></div>
+      <div class="ro" id="l16aOk"><span class="lab">reachable and in limits</span><span class="val">-</span></div>
+    </div>
+    <p class="caption">Chassis frame: x forward, z up, origin at the chassis centre (0.11 m above the floor). Angles are measured from vertical, positive = tilting forward. The shelf is drawn where it sits once the robot has docked. The page runs the same <code>arm_ik</code> maths (checked against Python on 202 points: identical to 1e-15 rad); it draws the links with forward kinematics, so the yellow gripper tip landing on the cross is the proof.</p>
+  </div>
+  <details class="math"><summary>Step 2: the IK for the real box, by hand</summary><div>
+    <p>At the end of APPROACH the box centre, written in the chassis frame, is p = (0.3792, 0.0430, 0.4851) m. The shoulder sits at (0.12, 0, 0.11) m.</p>
+    <div class="eq">r = p - shoulder        = (0.2592, 0.0430, 0.3751) m
+yaw = atan2(0.0430, 0.2592) = 0.1645 rad          aim the arm plane at the box
+h = 0.2627 m (horizontal)    v = 0.3751 m (vertical)</div>
+    <p>Back off 6 cm from the grasp point along the tilted gripper to find the wrist joint:</p>
+    <div class="eq">wf = h - 0.06 cos 0.3 = 0.2054 m     wu = v + 0.06 sin 0.3 = 0.3928 m     d = 0.4433 m
+cos(elbow) = (d^2 - 0.30^2 - 0.29^2) / (2 x 0.30 x 0.29) = 0.1286
+elbow = acos(0.1286)                                   = 1.4418 rad (bends forward)</div>
+    <table>
+      <thead><tr><th>Joint</th><th>IK target (rad)</th><th>Actual qpos after the move (rad)</th></tr></thead>
+      <tbody>
+        <tr><td>arm_yaw</td><td>0.1645</td><td>0.1703</td></tr>
+        <tr><td>shoulder_pitch</td><td>-0.2242</td><td>-0.2248</td></tr>
+        <tr><td>elbow_pitch</td><td>1.4418</td><td>1.4422</td></tr>
+        <tr><td>wrist_pitch</td><td>0.6532</td><td>0.6545</td></tr>
+      </tbody>
+    </table>
+    <p>The servos got within 0.006 rad, and the grasp site ended <strong>1.6 mm</strong> from the box centre. All four angles are inside their joint ranges.</p>
+  </div></details>
+  <p>Three details make the arm reliable. <strong>Straight lines:</strong> near the shelf, <code>CartesianMove</code> slides the target along a straight line in the world (with a smooth start and stop) and solves IK every step; a joint-space move could swing the gripper through the shelf. <strong>Gravity compensation:</strong> every step it sets <code>qfrc_applied = qfrc_bias</code> on the arm joints, so the servos only correct errors instead of holding up the arm's weight. <strong>The turret:</strong> its actuator is a raw torque motor, so <code>ArmDriver</code> closes its own PD loop on it: torque = 30 x angle error - 3 x speed (N*m).</p>
+  <p>When is an arm phase done? When the planned move has finished <em>and</em> <code>joint_error</code>, the largest gap between target and measured joint angle, is under 0.04 rad.</p>
+
+  <h3>4c. The gripper: squeeze until you feel it on both sides</h3>
+  <p>GRASP sets the gripper target to 0 (closed) and watches the two touch sensors. It is done when both read more than 0.5 N and at least 0.6 s have passed. If nothing is felt in 3.0 s, it reports "no contact" and moves on, which would make the job fail visibly instead of silently.</p>
+<pre><code>grasp confirmed: touch L=7.79 N  R=8.02 N             <span class="c"># both above 0.5 N</span>
+gripper opening = 27.1 mm                              <span class="c"># each finger stopped against the 7 cm box</span>
+gripper actuator force = -16.26 N                      <span class="c"># kp 600 x (0 - 0.0271): squeezing</span>
+finger contacts: finger_L_geom&lt;-&gt;red_box_geom, finger_R_geom&lt;-&gt;red_box_geom
+friction check: 2 x mu x N = 2 x 2.0 x 7.79 = 31.2 N   vs   m g = 0.25 x 9.81 = 2.45 N</code></pre>
+  <p>One actuator drives <code>grip_L</code>; the tendon plus equality makes <code>grip_R</code> copy it (lesson 13). The friction check uses lesson 13's rule with the finger's friction 2.0 (MuJoCo takes the larger of the two geoms' coefficients): more than 12 times the box's weight, so it will not slip while driving. RELEASE opens to 0.05 and is done when the opening passes 0.045 m: 0.04 s in the real run.</p>
+
+  <h3>4d. Two clocks: control rate and physics rate</h3>
+  <p>As in lesson 9, there are two clocks. MuJoCo ticks every 0.002 s. The classical controller's <code>step()</code> runs before every tick, so it decides <strong>500 times a second</strong>. The learned policy in section 5 is asked only every 25 ticks, <strong>20 times a second</strong>, and its command is held in between. Both are fine here: wheel and arm servos inside MuJoCo smooth out the gaps.</p>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">Rule to remember</span>Closed loop = measure, compare, command, repeat. The state machine picks the goal; small loops chase it; a measured test (never a timer) says when to move on; a timeout keeps it from hanging.</div>
+  <p class="newwords">New words: <span class="chip">heading error</span><span class="chip">differential mixing</span><span class="chip">Cartesian move</span><span class="chip">gravity compensation</span><span class="chip">joint error</span></p>
+</section>
+
+<section class="step" id="l16-s-rl">
+  <span class="lvl lvl-plain">Plain words</span> <span class="lvl lvl-words">MuJoCo words</span>
+  <h2>5. Milestone 4: where learning comes in</h2>
+  <div class="card"><span class="callout-title" style="color:var(--orange)">Mission 4: turn the grasp into a game a learner can play</span>Read <code>WarehouseGraspEnv</code> in <code>warehouse_grasp_env.py</code>. Uses lesson 9 (environments) and lesson 15 (SAC, reward design). <strong>Success:</strong> you can list what the policy sees, what it controls, how it is scored, and which phases it replaces.</div>
+  <p>The classical controller works. So why learn anything? Because the grasp is the fragile part. It relies on hand-picked waypoints ("8 cm in front, 3 cm up, then straight in"), on the box being where the camera says, and on the robot parking where it planned. A cluttered shelf or an odd-shaped object breaks those choices.</p>
+  <p>Real mobile robots usually split the work: <strong>classical control for what is easy, learning for what is hard.</strong></p>
+  <table>
+    <thead><tr><th>Part of the job</th><th>Who does it</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>drive, align, dock, back off</td><td>classical loops</td><td>Already reliable; learning to cross a warehouse would cost far more samples.</td></tr>
+      <tr><td><strong>pre-grasp, approach, grasp, lift</strong></td><td><strong>SAC policy</strong> (one phase, <code>RL_GRASP</code>)</td><td>The contact-rich part, where hand-chosen waypoints are fragile.</td></tr>
+      <tr><td>carry, place, release</td><td>classical IK</td><td>Simple straight lines once the box is held.</td></tr>
+    </tbody>
+  </table>
+  <h3>The grasp as a lesson 9 game, at full size</h3>
+  <table>
+    <thead><tr><th>Gym word</th><th>In <code>WarehouseGraspEnv</code></th></tr></thead>
+    <tbody>
+      <tr><td><code>reset(seed)</code></td><td>Load keyframe <code>home</code>, then park the robot at shelf A with random error: x within 4 cm, y within 6 cm, heading within 0.08 rad (4.6 degrees); move the box up to 3 cm (x) and 4 cm (y). Put the arm at the ready pose, open the gripper, let it settle for 100 ticks. This variation on every reset is <dfn class="term" tabindex="0" data-def="Changing the start (or the physics) randomly on every reset, so the policy must work across a range and cannot memorise one exact situation.">domain randomisation</dfn>.</td></tr>
+      <tr><td>observation, shape (19,)</td><td>Numbers in the <strong>chassis frame</strong> (see below), so the same box ahead looks the same wherever the robot is parked.</td></tr>
+      <tr><td>action, shape (4,), each in -1..1</td><td>[0:3] move the grasp-point target by up to 1.5 cm in x, y, z (chassis frame); [3] gripper: -1 closed, +1 open (0 to 0.05 m). IK turns the target into joint angles: a <dfn class="term" tabindex="0" data-def="An action that says where the hand should go (a position change), instead of joint torques. IK converts it to joint targets.">task-space action</dfn>.</td></tr>
+      <tr><td>frame_skip, control rate</td><td>25 ticks of 0.002 s per action: 0.050 s, <strong>20 Hz</strong>. 100 steps per episode = 5.0 s.</td></tr>
+      <tr><td>reward, per step</td><td><code>1 - tanh(10 x |box - grasp|)</code> (reach, 0..1) + 0.5 if <em>both finger geoms touch the box geom</em> + <code>2 x clip(lift / 0.10, 0, 1)</code> while grasped; -0.2 if an arm link touches the shelf.</td></tr>
+      <tr><td>terminated</td><td>Box knocked off (3 cm lower than its start) or pushed more than 8 cm without a grasp: -5 and game over.</td></tr>
+      <tr><td>truncated, success</td><td>After 100 steps. <code>is_success</code> = grasped and lifted more than 8 cm. Success does <em>not</em> end the episode (section 6 explains why).</td></tr>
+    </tbody>
+  </table>
+  <div class="grid2">
+<pre><code><span class="c"># reset(seed=0), observation in the chassis frame</span>
+obs[0:3]   grasp point     0.2200  0.0000  0.5500  <span class="c"># m</span>
+obs[3:6]   box             0.3787 -0.0885  0.4850  <span class="c"># m</span>
+obs[6:9]   box - grasp     0.1587 -0.0885 -0.0650  <span class="c"># m</span>
+obs[9]     gripper opening 0.0499                  <span class="c"># m</span>
+obs[10:12] touch L, R / 10 0.0000  0.0000          <span class="c"># N / 10</span>
+obs[12]    lift            0.0000                  <span class="c"># m</span>
+obs[13:17] yaw, shoulder, elbow, wrist pitch
+                          -0.0000 -0.5709  1.3551  1.0866  <span class="c"># rad</span>
+obs[17:19] parking error: box y, box x - 0.37
+                          -0.0885  0.0087          <span class="c"># m</span></code></pre>
+<pre><code><span class="c"># warehouse_grasp_env.py, build_obs()</span>
+grasp = world_to_chassis(m, d,
+          sensor_val(m, d, <span class="s">"grasp_pos"</span>))   <span class="c"># framepos</span>
+box   = world_to_chassis(m, d, d.xpos[bid])
+<span class="k">return</span> concatenate([
+    grasp, box, box - grasp,
+    sensor_val(m, d, <span class="s">"sens_gripper"</span>),   <span class="c"># jointpos</span>
+    sensor_val(m, d, <span class="s">"touch_L"</span>) / <span class="n">10</span>,  <span class="c"># touch</span>
+    sensor_val(m, d, <span class="s">"touch_R"</span>) / <span class="n">10</span>,
+    [d.xpos[bid, <span class="n">2</span>] - box_start[<span class="n">2</span>]],
+    joints,                               <span class="c"># qpos</span>
+    [box[<span class="n">1</span>], box[<span class="n">0</span>] - <span class="n">0.37</span>]])
+
+<span class="c"># world_to_chassis: R.T @ (p - chassis xpos)</span></code></pre>
+  </div>
+  <p>For seed 0 the robot was parked at x = -0.8684, y = 1.4449 m, heading -178.74 degrees instead of (-0.85, 1.5, 180). The box sits 8.85 cm to the right of the gripper line (obs[4]): parking error and box offset together. The same <code>build_obs</code> is used in training and inside the full task, so the policy always sees the same kind of numbers.</p>
+  <div class="predict">
+    <h3>Predict: why give the policy positions in the chassis frame and not the world frame?</h3>
+    <textarea aria-label="Your prediction for the frame question"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer"><p>Because the policy acts in the chassis frame: "move the gripper 1 cm forward" means forward for the robot. In world numbers, the same grasp would look different at every parking spot and every shelf (shelf B faces the other way). In the chassis frame, "box 38 cm ahead, 9 cm to the right" is the same situation wherever the robot is. The policy learns one skill instead of many.</p></div>
+  </div>
+  <p class="newwords">New words: <span class="chip">domain randomisation</span><span class="chip">task-space action</span><span class="chip">chassis frame observation</span></p>
+</section>
+
+<section class="step" id="l16-s-train">
+  <span class="lvl lvl-pic">Picture</span> <span class="lvl lvl-math">Maths</span>
+  <h2>6. Training, results, and two true reward hacks</h2>
+  <p><code>train_grasp_rl.py</code> trains SAC from Stable-Baselines3 (lesson 15): learning rate 0.0003, gamma 0.98, batch 256, replay buffer 300,000, tau 0.005, two hidden layers of 256, and 5,000 random steps before learning starts. Every 5,000 steps an <code>EvalCallback</code> plays 20 test episodes and keeps the best policy as <code>best_model.zip</code>.</p>
+  <div class="card">
+    <canvas id="l16cvCurve" role="img" aria-label="Learning curve: mean evaluation return (teal, left axis) and success rate (orange dashed, right axis) against environment steps, from 5,000 to 190,000"></canvas>
+    <label class="slider"><span>Evaluation</span> <output id="l16cIdxO">-</output><input type="range" id="l16cIdx" min="0" max="37" step="1" value="34" aria-label="Which evaluation to inspect"></label>
+    <div class="readouts">
+      <div class="ro" id="l16cT"><span class="lab">env steps trained</span><span class="val">-</span></div>
+      <div class="ro" id="l16cR"><span class="lab">mean return, 20 episodes</span><span class="val">-</span></div>
+      <div class="ro" id="l16cS"><span class="lab">success rate</span><span class="val">-</span></div>
+    </div>
+    <p class="caption">Read from the saved <code>models/eval_logs/evaluations.npz</code> of the training run (38 evaluations). Nothing was retrained for this page. The run took 15.9 min for 192,314 steps (about 201 steps per second, CPU).</p>
+  </div>
+  <p>Read the curve like lesson 15. For 95,000 steps the success rate is 0: the return rises to about 107 as the policy learns to reach but never lifts 8 cm. The first success appears at <strong>100,000 steps</strong> (0.45). The best mean return, <strong>279.68 with 20/20 successes</strong>, came at 175,000 steps; that is the saved <code>best_model.zip</code>. Notice the dips (145,000: 0.60): learning is noisy, which is why the callback keeps the best, not the last.</p>
+  <h3>Testing on starts it never saw</h3>
+<pre><code>evaluation of best_model.zip, seeds 10000-10019 (never used in training), deterministic:
+  success at episode end: 18/20   mean return 253.8  (min 21.3, max 288.7)
+  first env step with box &gt; 8 cm and both fingers on it: mean 18.9 (min 16, max 22) -&gt; 0.95 s</code></pre>
+  <h3>Plugging the policy into the state machine</h3>
+  <p>Run <code>16_capstone_closed_loop.py --policy models/grasp_sac_best/best_model.zip</code>. The controller then swaps four phases (PRE_GRASP, APPROACH, GRASP, LIFT) for one, <code>RL_GRASP</code>. <code>GraspPolicyRunner</code> asks the network every 25 ticks, exactly like training, and finishes when both fingers are on the box and it is more than 8 cm up.</p>
+  <table>
+    <thead><tr><th></th><th>Classical grasp</th><th>RL grasp (<code>--policy</code>)</th></tr></thead>
+    <tbody>
+      <tr><td>phases for reach, grasp, lift</td><td>4: 1.50 + 1.20 + 0.60 + 1.20 = 4.50 s</td><td>1: <strong>0.83 s</strong> (17 policy steps), "grasped + lifted 8.0 cm (L=7.7N R=7.7N)"</td></tr>
+      <tr><td>whole job</td><td>76.32 s</td><td>73.35 s</td></tr>
+      <tr><td>box final, distance to target</td><td>(1.221, -0.997, 0.595) m, <strong>0.003 m</strong></td><td>(1.249, -0.994, 0.595) m, <strong>0.030 m</strong></td></tr>
+      <tr><td>SUCCESS</td><td>True</td><td>True</td></tr>
+    </tbody>
+  </table>
+  <p>The policy is faster because it moves diagonally straight into the grasp instead of via waypoints. It is less precise at placing because it grips the box off-centre, and the classical placing phases assume a centred grip. Both runs are in the sandbox: pick "Closed loop + RL grasp".</p>
+
+  <h3>Reward hack 1: pressing the shelf</h3>
+  <div class="predict">
+    <h3>Predict: the first version paid the +0.5 grasp bonus whenever both touch sensors read a force. What could the policy do to collect it without ever touching the box?</h3>
+    <textarea aria-label="Your prediction for the first reward hack"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p>Press the open fingers onto the <strong>shelf top</strong>. A touch sensor adds up the force of <em>any</em> contact inside its site (lesson 13), not just contact with the box. SAC found that pressing the shelf paid the bonus every step and never went near the box, while the reward curve looked like progress.</p>
+      <p>The fix: reward the physical event you want. <code>fingers_on_box()</code> scans <code>data.contact</code> for the pairs finger_L_geom with red_box_geom and finger_R_geom with red_box_geom, and the reward now subtracts 0.2 when an arm link touches the shelf. The classical GRASP phase still uses the touch sensors, which is fine there: it only closes when the IK has already put the fingers around the box.</p>
+    </div>
+  </div>
+  <h3>Reward hack 2: hovering below the finish line</h3>
+  <p>The next version ended the episode with a +10 bonus when the box went above 8 cm. The policy learned to grasp, lift about 5 cm, and hover there until time ran out. It never crossed the line. Was it broken? No: it was doing the arithmetic right.</p>
+  <details class="math"><summary>Step 3: why hovering beats finishing, with gamma = 0.98</summary><div>
+    <p>SAC maximises the <em>discounted</em> sum of rewards: a reward k steps ahead counts gamma^k as much as one now. A stream of r per step, forever, is worth r / (1 - gamma). (Time-limit cut-offs are treated as "the future still counts", lesson 9's truncated.)</p>
+    <p>With today's reward terms, at a real moment from the evaluation (seed 10000, step 16, box 5.90 cm up, grasp point 33.5 mm from the box centre):</p>
+    <div class="eq">reach = 1 - tanh(10 x 0.0335)   = 0.677
+grasp = both fingers on the box = 0.500
+lift  = 2 x clip(0.0590 / 0.10)  = 1.181
+r     = 0.677 + 0.500 + 1.181    = 2.358 per step   (env returned 2.358)</div>
+    <div class="eq">hover forever:       2.358 / (1 - 0.98) = 2.358 / 0.02 = 117.9
+cross 8 cm and end:  about 2.358 + 10                = 12.4</div>
+    <p>Hovering is worth almost 10 times more. A discount of 0.98 means the policy looks about 1 / 0.02 = 50 steps (2.5 s at 20 Hz) ahead, and 50 steps of 2.4 points beats one bonus of 10.</p>
+    <p>The fix: success no longer ends the episode, and the lift reward keeps growing until 10 cm, just past the 8 cm goal. Now the best plan is to lift and hold. At the end of the same evaluation episode the box is 12.37 cm up, earning 3.161 per step, and the return is 279.2.</p>
+  </div></details>
+  <div class="card warn"><span class="callout-title" style="color:var(--orange)">Two prevention rules</span>1. Reward the physical event you want (finger touching box), not a sensor reading that only usually comes with it. 2. Never let success end the episode if staying alive pays more than the success bonus. Do the gamma arithmetic before you train.</div>
+  <p class="newwords">New words: <span class="chip">EvalCallback</span><span class="chip">best model</span><span class="chip">reward hacking</span><span class="chip">discounted return</span></p>
+</section>
+
+<section class="step" id="l16-s-code">
+  <span class="lvl lvl-code">Code</span>
+  <h2>7. The scripts, and the lesson script line by line</h2>
+  <p>The folder's own scripts run the robot. The lesson script <code>16_capstone_lesson.py</code> imports them and prints every number on this page. It does not retrain anything; it takes about a minute.</p>
+  <table>
+    <thead><tr><th>Run this</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>16_capstone_warehouse_robot.py --headless</code></td><td>The timed, open-loop version (section 2).</td></tr>
+      <tr><td><code>16_capstone_closed_loop.py --headless</code></td><td>The state machine (sections 3 and 4). Add <code>--policy PATH</code> for the RL grasp. Without <code>--headless</code> it opens the viewer (<code>mjpython</code>).</td></tr>
+      <tr><td><code>train_grasp_rl.py --eval models/grasp_sac_best/best_model.zip</code></td><td>Success rate of the saved policy on 50 unseen seeds. Without <code>--eval</code> it retrains from scratch (the saved run took 15.9 min).</td></tr>
+      <tr><td><code>16_capstone_lesson.py</code></td><td>All the numbers on this page; <code>--write-fragment</code> re-records the sandbox replays.</td></tr>
+      <tr><td><code>16_check_browser_maths.py</code></td><td>Checks the page's copy of the nav law and IK against Python.</td></tr>
+    </tbody>
+  </table>
+  <p>Each runs with <code>uv run --python .venv/bin/python lessons/16-capstone-warehouse-robot/&lt;script&gt;</code>. For the full dashboard with a side view of the arm, open <a href="16-capstone-warehouse-robot/16-capstone-warehouse-robot.html" target="_blank" rel="noopener">the full dashboard (opens in a new tab)</a>; it replays the RL run.</p>
+  <table>
+    <thead><tr><th style="width:48%">Code in <code>16_capstone_lesson.py</code></th><th>Physical meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>mujoco.mj_resetDataKeyframe(m, d, 0)</code></td><td>Start from keyframe 0, <code>home</code>: robot at (0, -1.5) facing north, arm tucked (lesson 11).</td></tr>
+      <tr><td><code>m.jnt_qposadr[j]</code>, <code>m.jnt_dofadr[j]</code></td><td>Where each joint's numbers start in <code>qpos</code> and <code>qvel</code>: how the tree in section 1 was printed.</td></tr>
+      <tr><td><code>run_open_loop()</code></td><td>The 13 timed phases, same wheels and arm targets as the open-loop script; logs the pose after each.</td></tr>
+      <tr><td><code>ctrl = cl.PickPlaceController(m, d)</code></td><td>The real state machine from <code>16_capstone_closed_loop.py</code>, imported, not copied.</td></tr>
+      <tr><td><code>while not ctrl.done: ctrl.step(); mujoco.mj_step(m, d)</code></td><td>500 decisions per simulated second; at t = 3.000 s <code>nav_probe</code> recomputes one step by hand.</td></tr>
+      <tr><td><code>ik_probe()</code>, <code>grasp_probe()</code></td><td>At the end of APPROACH / GRASP: the IK numbers, the touch forces and the contact pairs.</td></tr>
+      <tr><td><code>run_closed_loop(dx=0.05)</code></td><td>The one-variable experiment: same controller, start 5 cm east.</td></tr>
+      <tr><td><code>env.reset(seed=10_000 + ep)</code>, <code>pol.predict(obs, deterministic=True)</code></td><td>Plays the saved SAC policy on 20 starts it never trained on.</td></tr>
+      <tr><td><code>GraspPolicyRunner(POLICY)</code></td><td>The same policy inside the full task, as <code>--policy</code> does.</td></tr>
+    </tbody>
+  </table>
+<pre><code><span class="c"># == 1. Model tour ==</span>
+nq=32 (position numbers)  nv=29 (velocity numbers)  nu=10 (actuators)
+free joints=3 -&gt; nq = 3*7 + 11*1 = 32,  nv = 3*6 + 11*1 = 29
+  ctrl[0] drive_FL         velocity kv=5      joint=wheel_FL_spin            <span class="c"># ctrl = wheel rad/s</span>
+  ctrl[9] gripper_pos      position kp=600    joint=grip_L  ctrlrange=[0.0, 0.05]   <span class="c"># m</span>
+  imu_gyro         gyro           sensordata[11:14]  rad/s
+
+<span class="c"># == 2. Open loop ==</span>
+  03 - TURN LEFT 90 deg   8.70   [-5, 5, -5, 5]   -0.060   0.806   120.7   30.7   <span class="c"># turned 30.7 deg, not 90</span>
+after phase 04 the chassis is at (-0.721, 1.903); ... miss = 0.423 m
+
+<span class="c"># == 3. Closed loop ==</span>
+physics step 0.002 s -&gt; controller rate 500 Hz (step() before every mj_step)
+  GRASP              grasped (L=7.8N R=8.0N)              0.60   31.16   <span class="c"># duration, start (s)</span>
+distance to target (m, horizontal): 0.003   SUCCESS: True
+
+<span class="c"># == 4. Open vs closed loop when the start changes ==</span>
+  open loop, end of phase 04 ... moved 94.4 cm
+  closed loop, docked at A   ... moved 0.4 cm
+closed loop successes: 5/5
+
+<span class="c"># == 5. RL ==</span>
+frame_skip=25 -&gt; one env step = 0.050 s = 20 Hz;  max_steps=100 -&gt; 5.0 s;  LIFT_GOAL=0.08 m
+  best mean return 279.68 at 175000 steps (EvalCallback saved this as best_model.zip)
+  success at episode end: 18/20   mean return 253.8
+  old design: value of hovering forever ~ r/(1-gamma) = 2.358/0.02 = 117.9
+  RL_GRASP           grasped + lifted 8.0 cm (L=7.7N R=7.7N)      0.83 s</code></pre>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">What is recorded, what is computed</span>The sandbox and the path pictures replay runs recorded from MuJoCo by <code>16_capstone_lesson.py --write-fragment</code> (contacts and wheel slip cannot be re-simulated honestly in a browser). The navigation and IK pictures run the controller's own formulas, which are plain arithmetic; <code>16_check_browser_maths.py</code> shows they match Python to better than 1e-9.</div>
+</section>
+
+<section class="step" id="l16-s-check">
+  <span class="lvl lvl-plain">Check yourself</span>
+  <h2>8. What you used, what to try next, and your questions</h2>
+  <table>
+    <thead><tr><th>Lesson</th><th>What it gave this robot</th></tr></thead>
+    <tbody>
+      <tr><td>1-3</td><td><code>MjModel</code>, <code>MjData</code>, <code>mj_step</code>: the main loop runs 38,160 ticks (76.32 s)</td></tr>
+      <tr><td>2, 4</td><td>The body tree, <code>qpos</code> addresses, names to ids, <code>xpos</code> and <code>xmat</code> for the chassis pose, cameras</td></tr>
+      <tr><td>5</td><td>Velocity (wheels), motor (turret) and position (arm, gripper) actuators</td></tr>
+      <tr><td>6</td><td><code>sensordata</code> slices: gyro, touch, jointpos, framepos, rangefinder; observation vectors</td></tr>
+      <tr><td>7</td><td>contype 0 on the chassis, friction and condim on wheels and fingers, <code>data.contact</code></td></tr>
+      <tr><td>8</td><td>PD loops: heading (gyro as D), turret torque, and why gains need limits</td></tr>
+      <tr><td>9</td><td><code>WarehouseGraspEnv</code>: reset, step, frame_skip 25, 20 Hz</td></tr>
+      <tr><td>10</td><td>Building and checking a full project from earlier pieces</td></tr>
+      <tr><td>11</td><td>Default classes and the <code>home</code> keyframe</td></tr>
+      <tr><td>12</td><td><code>arm_ik</code>: analytic IK, joint limits, straight-line moves</td></tr>
+      <tr><td>13</td><td>Slide fingers, tendon + equality, touch vs contact pairs, the friction rule</td></tr>
+      <tr><td>14</td><td>Free-joint yaw, skid steer, gyro, open vs closed loop</td></tr>
+      <tr><td>15</td><td>SAC, learning curves, reward design and reward hacking</td></tr>
+    </tbody>
+  </table>
+  <h3>What to try next</h3>
+  <ul>
+    <li><strong>Randomise the physics, not just the start.</strong> Scale the box mass and the finger friction in <code>reset()</code>. Will the policy still lift a 0.5 kg box?</li>
+    <li><strong>Learn the placing too.</strong> Train a second policy for PLACE_ABOVE and PLACE_DOWN that sees the box's offset inside the gripper; the RL run's 30 mm placing error should shrink.</li>
+    <li><strong>Learn to drive.</strong> Wrap DRIVE_TO_SHELF_A as an env and compare the sample cost with the 4-line navigation law.</li>
+    <li><strong>Sim-to-real.</strong> Add sensor noise to the observation and a delay on the action (lesson 9's roads), then see which parts break first.</li>
+  </ul>
+  <p>Answer these here, then tell me your answers in the chat so I can update your progress.</p>
+  <div class="predict">
+    <h3>Q1. You add a third free-floating object to the shelf. How do nq and nv change?</h3>
+    <textarea aria-label="Answer to question 1"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>nq goes up by 7 (position + quaternion) to 39, nv by 6 to 35. Code that indexes <code>qpos</code> by name (<code>jnt_qposadr</code>) keeps working; hard-coded indices after the new body would break.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q2. At some moment the heading error is 1.0 rad, the goal is 2 m away and the robot is not turning. What wheel commands does navigate_step send?</h3>
+    <textarea aria-label="Answer to question 2"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>turn = 6.0 x 1.0 - 0 = 6.0 rad/s. Alignment = max(0, 1 - 1.0/0.8) = 0, and no creep (error is above 0.4), so speed = 0. Left = 0 - 6 = <strong>-6</strong>, right = 0 + 6 = <strong>+6</strong> rad/s: it spins on the spot towards the goal before driving. Check it with the sliders in section 4a.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q3. Why does the GRASP phase wait for both touch sensors above 0.5 N, instead of closing for a fixed 1 s like the timed script?</h3>
+    <textarea aria-label="Answer to question 3"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>A timer cannot tell a grasp from a squeeze on air. The timed script "grasped" for 1 s with both sensors at 0.00 N and carried nothing. A measured test proves the fingers are pressing on something on both sides, and the 3.0 s "no contact" fallback makes a miss visible.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q4. You set gamma to 0.9 instead of 0.98, with the old "success ends the episode, +10" reward. Is hovering at 2.358 per step still better than finishing?</h3>
+    <textarea aria-label="Answer to question 4"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>Hover: 2.358 / (1 - 0.9) = 23.6. Finish: about 2.358 + 10 = 12.4. <strong>Hovering still wins</strong>, by less. A shorter-sighted learner does not fix a reward that pays more for not finishing; changing the reward does.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q5. The RL policy is asked 20 times a second, the classical controller 500 times. Which phases does the policy replace, and what does it send?</h3>
+    <textarea aria-label="Answer to question 5"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>It replaces PRE_GRASP, APPROACH, GRASP and LIFT with one phase, RL_GRASP. Every 25 ticks it sends 4 numbers: a move of the grasp-point target of up to 1.5 cm in x, y, z (chassis frame) and a gripper opening. IK turns the target into joint targets; the servos and the classical loops do the rest.</p></div>
+  </div>
+
+  <h3>Glossary: new words from this capstone</h3>
+  <dl class="glossary">
+    <dt>mobile manipulator</dt><dd>A robot with a moving base and an arm.</dd>
+    <dt>standoff point, dock</dt><dd>A safe point in open floor in front of a shelf; the final slow, straight approach to a measured distance.</dd>
+    <dt>open loop, drift</dt><dd>Commands without measurement; the growing gap between plan and reality.</dd>
+    <dt>state machine, phase, done-when test, timeout</dt><dd>A controller that is in one named phase at a time and moves on when a measured test passes, or after 30 s.</dd>
+    <dt>heading error, differential mixing</dt><dd>The angle to turn; left = speed - turn, right = speed + turn.</dd>
+    <dt>Cartesian move</dt><dd>Moving the gripper along a straight line in space, solving IK every step.</dd>
+    <dt>gravity compensation</dt><dd>Adding the torque gravity needs (<code>qfrc_bias</code>) so servos only fix errors.</dd>
+    <dt>joint error</dt><dd>The largest gap between a joint's target and its measured angle.</dd>
+    <dt>domain randomisation</dt><dd>Random starts (or physics) on every reset so a policy generalises.</dd>
+    <dt>task-space action</dt><dd>An action that moves the hand target; IK turns it into joint targets.</dd>
+    <dt>EvalCallback, best model</dt><dd>Regular test episodes during training; the policy with the best test return is kept.</dd>
+    <dt>reward hacking</dt><dd>The learner maximises the reward you wrote, not the behaviour you meant.</dd>
+    <dt>discounted return</dt><dd>Sum of rewards with each step ahead weighted by gamma^k; a forever stream of r is worth r / (1 - gamma).</dd>
+  </dl>
+</section>
+
+<section class="step recap" id="l16-recap">
+  <h2>Recap: the capstone in one minute</h2>
+  <div class="mental-model">
+    <p>The warehouse robot is one <code>MjModel</code>: a free-joint chassis (nq 7, nv 6) on four velocity-driven wheels, a five-joint arm with a torque-driven turret and position servos, and two slide fingers tied by a tendon and an equality. 13 sensors fill 21 numbers of <code>sensordata</code>. Overall nq = 32, nv = 29, nu = 10.</p>
+    <p><strong>Open loop</strong> (fixed wheel speeds for fixed times) drifts: the "90 degree" turn gave 30.7 degrees, and a 5 cm change at the start moved phase 04's end by 94.4 cm. <strong>Closed loop</strong> is a 20-phase state machine whose <code>step()</code> runs before every <code>mj_step</code> (500 Hz). Each phase reads sensors, commands <code>ctrl</code> through a small loop (PD steering with gyro damping and differential mixing; IK plus position servos along straight lines; squeeze until both touch sensors exceed 0.5 N) and ends on a measured test or a 30 s timeout. Result: 76.32 s, box 3 mm from the target, 5/5 on random starts.</p>
+    <p><strong>RL</strong> takes over only the grasp. <code>WarehouseGraspEnv</code>: random parking and box offsets, 19 chassis-frame observations, 4 task-space actions at 20 Hz, reward reach + grasp (contact pairs, not touch sensors) + lift, no ending on success. SAC reached 279.68 at 175,000 steps; unseen seeds 18/20; inside the full task RL_GRASP takes 0.83 s instead of 4.50 s. The two hacks: touch sensors pressed on the shelf, and hovering because 2.358 / 0.02 = 117.9 beat a +10 finish.</p>
+  </div>
+  <div class="checkpoint">
+    <p>In the replay sandbox, play the scripted run and find the phase where it leaves the plan; then play the closed loop and click GRASP on the timeline: both touch readings should jump above 0.5 N, then compare with the RL run.</p>
+    <div class="btn-row">
+      <button class="btn btn-primary btn-sm" type="button" onclick="markComplete(16)">Mark capstone complete</button>
+    </div>
+  </div>
+</section>
+</div>

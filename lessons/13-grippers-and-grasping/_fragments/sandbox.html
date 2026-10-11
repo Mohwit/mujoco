@@ -1,0 +1,55 @@
+<div class="sandbox-container" id="sandbox13">
+  <div class="sandbox-header">
+    <span class="sandbox-dot"></span>
+    <span>Grasp Sandbox</span>
+  </div>
+  <div class="sandbox-viz">
+    <svg viewBox="0 0 400 450" role="img" aria-labelledby="s13Title s13Desc">
+      <title id="s13Title">Two-finger gripper lifting a box</title>
+      <desc id="s13Desc">Front view of the lesson 13 gripper and a 7 cm box on the floor. Close squeezes the box, Lift raises the hand 10 cm in 1 s and holds 0.5 s. The box motion replays numbers recorded from MuJoCo for the chosen squeeze, mass and grip number. Arrows show weight, squeeze and friction.</desc>
+      <line class="axis-line" x1="10" y1="410" x2="390" y2="410"></line>
+      <rect id="s13Box" x="0" y="0" width="105" height="105" rx="2" fill="var(--red)" fill-opacity="0.75" stroke="var(--red)" stroke-width="1"></rect>
+      <rect id="s13Palm" x="0" y="0" width="180" height="36" rx="3" fill="var(--text-dim)" fill-opacity="0.45" stroke="var(--text-dim)" stroke-width="1"></rect>
+      <rect id="s13FL" x="0" y="0" width="15" height="105" fill="var(--orange)" fill-opacity="0.8" stroke="var(--orange)" stroke-width="1"></rect>
+      <rect id="s13FR" x="0" y="0" width="15" height="105" fill="var(--orange)" fill-opacity="0.8" stroke="var(--orange)" stroke-width="1"></rect>
+      <path id="s13W" d="" stroke="var(--orange)" fill="var(--orange)" stroke-width="2.5"></path>
+      <path id="s13NL" d="" stroke="var(--blue)" fill="var(--blue)" stroke-width="2.5"></path>
+      <path id="s13NR" d="" stroke="var(--blue)" fill="var(--blue)" stroke-width="2.5"></path>
+      <path id="s13FfL" d="" stroke="var(--teal)" fill="var(--teal)" stroke-width="2.5"></path>
+      <path id="s13FfR" d="" stroke="var(--teal)" fill="var(--teal)" stroke-width="2.5"></path>
+      <path id="s13Short" d="" stroke="var(--red)" fill="var(--red)" stroke-width="2" stroke-dasharray="4 3"></path>
+      <text x="14" y="20" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">front view from +x: world y right, z up</text>
+      <text id="s13TimeText" x="14" y="36" fill="var(--teal)" font-size="12" font-family="var(--mono)">time: 0.00 s</text>
+      <text id="s13Verdict" x="386" y="36" text-anchor="end" fill="var(--text-dim)" font-size="11" font-family="var(--mono)"></text>
+      <text x="14" y="432" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">orange weight, blue squeeze, teal grip, red shortfall</text>
+    </svg>
+  </div>
+  <div class="sandbox-controls">
+    <div class="control-group">
+      <label for="s13Set">Squeeze setting per finger (N) <span class="control-val" id="s13SetVal">1.0</span></label>
+      <input type="range" id="s13Set" min="0" max="9" step="1" value="3">
+    </div>
+    <div class="control-group">
+      <label for="s13Mass">Box mass (kg) <span class="control-val" id="s13MassVal">0.25</span></label>
+      <input type="range" id="s13Mass" min="0" max="4" step="1" value="1">
+    </div>
+    <div class="control-group">
+      <label for="s13Mu">Finger friction mu (box is 0.6) <span class="control-val" id="s13MuVal">2.0</span></label>
+      <input type="range" id="s13Mu" min="0" max="4" step="1" value="4">
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary btn-sm" type="button" id="s13Close">Close</button>
+      <button class="btn btn-sm" type="button" id="s13Lift">Lift</button>
+      <button class="btn btn-sm" type="button" id="s13Reset">Reset</button>
+    </div>
+    <div class="readout" id="s13Readout">
+      <span class="rk">squeeze N per finger (measured):</span> <span class="rv" id="s13RN">0.8535</span> <span class="rk">N</span><br>
+      <span class="rk">friction needed per finger m g / 2:</span> <span class="rv" id="s13RF">1.2263</span> <span class="rk">N</span><br>
+      <span class="rk">friction available per finger mu N:</span> <span class="rv" id="s13RA">1.7070</span> <span class="rk">N</span><br>
+      <span class="rk">rule 2 mu N &gt;= m g says:</span> <span class="rv-o" id="s13RP">holds</span><br>
+      <span class="rk">MuJoCo recorded:</span> <span class="rv" id="s13RR">held, 0.5 mm</span><br>
+      <span class="rk">slip now (box vs hand):</span> <span class="rv" id="s13RS">0.0</span> <span class="rk">mm</span>
+    </div>
+    <p class="rk" style="font-size:11px;line-height:1.5;margin-top:10px">This picture replays numbers recorded from MuJoCo (record_grip_grid.py: slip every 0.1 s, straight lines between samples). The page does not run the contact solver. The hand is drawn on its target path; "held" means less than 10 mm of slip in 1.5 s. Teal grip arrows show m g / 2 per finger while held, or the limit mu N while slipping. Squeeze setting = kp (0.030 - ctrl) / 2; the measured value is the touch reading while held.</p>
+  </div>
+</div>

@@ -1,0 +1,68 @@
+<div class="sandbox-container" id="sandbox16">
+  <div class="sandbox-header">
+    <span class="sandbox-dot"></span>
+    <span>Warehouse Replay</span>
+  </div>
+  <div class="sandbox-viz">
+    <svg viewBox="0 0 400 450" role="img" aria-labelledby="s16Title s16Desc">
+      <title id="s16Title">Warehouse floor plan replay</title>
+      <desc id="s16Desc">Top-down view of the warehouse, north up. Shelf A is top left, shelf B right, the table in the middle. The blue robot drives along its trail, the red square is the box and the dashed square on shelf B is the target. The bar at the bottom is the phase timeline; click a phase to jump to it. Every frame replays a run recorded from MuJoCo.</desc>
+      <g id="s16Grid"></g>
+      <g id="s16Static"></g>
+      <polyline id="s16Trail" fill="none" stroke="var(--teal)" stroke-width="2" stroke-opacity="0.75" points=""></polyline>
+      <rect id="s16Box" width="7" height="7" fill="var(--red)" stroke="var(--bright)" stroke-width="0"></rect>
+      <g id="s16Robot">
+        <rect x="-22" y="-13" width="44" height="26" rx="3" fill="var(--blue)" fill-opacity="0.85"></rect>
+        <rect x="-17" y="-17" width="10" height="4" fill="var(--text-dim)"></rect>
+        <rect x="7" y="-17" width="10" height="4" fill="var(--text-dim)"></rect>
+        <rect x="-17" y="13" width="10" height="4" fill="var(--text-dim)"></rect>
+        <rect x="7" y="13" width="10" height="4" fill="var(--text-dim)"></rect>
+        <path d="M14,-6 L22,0 L14,6" fill="none" stroke="var(--bright)" stroke-width="1.5"></path>
+        <line id="s16Arm" x1="10" y1="0" x2="10" y2="0" stroke="var(--yellow)" stroke-width="3" stroke-linecap="round"></line>
+        <circle id="s16GripDot" cx="10" cy="0" r="3.5" fill="var(--orange)"></circle>
+      </g>
+      <text id="s16Clock" x="10" y="366" fill="var(--teal)" font-size="11" font-family="var(--mono)">t = 0.0 s</text>
+      <text id="s16PhaseText" x="390" y="366" text-anchor="end" fill="var(--text-dim)" font-size="11" font-family="var(--mono)">phase</text>
+      <g id="s16Timeline"></g>
+      <rect id="s16Cursor" x="10" y="377" width="2" height="30" fill="var(--bright)"></rect>
+      <text x="10" y="424" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">phase timeline: click a block to jump</text>
+      <text x="10" y="440" fill="var(--text-dim)" font-size="10" font-family="var(--mono)">grid 1 m, north (+y) up, east (+x) right</text>
+    </svg>
+  </div>
+  <div class="sandbox-controls">
+    <div class="control-group">
+      <label>Which recorded run</label>
+      <div class="btn-row">
+        <button class="btn btn-sm" type="button" data-s16run="open">Scripted (open loop)</button>
+        <button class="btn btn-sm btn-primary" type="button" data-s16run="closed">Closed loop</button>
+        <button class="btn btn-sm" type="button" data-s16run="rl">Closed loop + RL grasp</button>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary btn-sm" type="button" id="s16Play">Play</button>
+      <button class="btn btn-sm" type="button" id="s16Restart">Restart</button>
+      <button class="btn btn-sm" type="button" id="s16Prev">Previous phase</button>
+      <button class="btn btn-sm" type="button" id="s16Next">Next phase</button>
+    </div>
+    <div class="control-group">
+      <label>Replay speed (x real time) <span class="control-val" id="s16SpeedVal">5x</span></label>
+      <input type="range" id="s16Speed" min="1" max="20" step="1" value="5" aria-label="Replay speed">
+    </div>
+    <div class="control-group">
+      <label>Scrub through the run <span class="control-val" id="s16ScrubVal">0.0 s</span></label>
+      <input type="range" id="s16Scrub" min="0" max="1000" step="1" value="0" aria-label="Replay time">
+    </div>
+    <div class="readout" id="s16Readout">
+      <span class="rk">phase:</span> <span class="rv" id="s16Phase">-</span><br>
+      <span class="rk">outcome:</span> <span class="rv" id="s16Outcome">-</span><br>
+      <span class="rk">chassis (world):</span> <span class="rv" id="s16Pose">-</span><br>
+      <span class="rk">wheel ctrl left / right:</span> <span class="rv-o" id="s16Wheels">-</span> <span class="rk">rad/s</span><br>
+      <span class="rk">arm yaw, shoulder, elbow, wrist:</span> <span class="rv" id="s16Joints">-</span> <span class="rk">rad</span><br>
+      <span class="rk">gripper opening:</span> <span class="rv" id="s16Grip">-</span> <span class="rk">mm</span><br>
+      <span class="rk">touch L / R:</span> <span class="rv-o" id="s16Touch">-</span> <span class="rk">N</span><br>
+      <span class="rk">rangefinder:</span> <span class="rv" id="s16Range">-</span> <span class="rk">m</span><br>
+      <span class="rk">box height z (world):</span> <span class="rv" id="s16BoxZ">-</span> <span class="rk">m</span>
+    </div>
+    <p class="sidebar-hint" style="margin-top:10px;">This sandbox replays runs recorded from MuJoCo by <code>16_capstone_lesson.py</code>; it does not simulate. Samples every 0.1 s while the arm works and every 0.2 s while the base drives, rounded to 1 cm and 0.01 rad; the picture fills the gaps by straight-line interpolation. The yellow line is the arm seen from above; the dot turns teal when both touch sensors read more than 0.5 N.</p>
+  </div>
+</div>

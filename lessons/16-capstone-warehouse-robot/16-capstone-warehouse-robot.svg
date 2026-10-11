@@ -1,0 +1,159 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 780" font-family="ui-monospace, 'SF Mono', Consolas, monospace">
+  <title>Warehouse Robot — Kinematic Chain and Sensors</title>
+  <defs>
+    <style>
+      .box       { fill: #151d19; stroke: #00b89c; stroke-width: 1.5; rx: 6; }
+      .box-wheel { fill: #151d19; stroke: #ff6b35; stroke-width: 1.5; rx: 6; }
+      .box-grip  { fill: #151d19; stroke: #e05030; stroke-width: 1.5; rx: 6; }
+      .box-obj   { fill: #151d19; stroke: #7a8f84; stroke-width: 1.5; rx: 6; ry: 6; stroke-dasharray: 4 2; }
+      .line      { stroke: #2e4a3e; stroke-width: 1.5; }
+      .line-ten  { stroke: #d4a0ff; stroke-width: 1.5; stroke-dasharray: 5 3; }
+      .text      { fill: #d4ddd8; font-size: 11px; text-anchor: middle; }
+      .small     { fill: #7a8f84; font-size: 9px; text-anchor: middle; }
+      .label     { fill: #00b89c; font-size: 10px; text-anchor: middle; font-weight: bold; }
+      .label-o   { fill: #ff6b35; font-size: 10px; text-anchor: middle; font-weight: bold; }
+      .label-r   { fill: #e05030; font-size: 10px; text-anchor: middle; font-weight: bold; }
+      .sensor    { fill: #d4a0ff; font-size: 9px; text-anchor: middle; }
+      .title     { fill: #eaf5f0; font-size: 16px; text-anchor: middle; font-weight: bold; }
+      .subtitle  { fill: #7a8f84; font-size: 11px; text-anchor: middle; }
+      .legend    { fill: #d4ddd8; font-size: 10px; }
+      .leg-dot   { stroke-width: 0; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect width="960" height="780" fill="#0a0f0d" rx="8"/>
+
+  <!-- Title -->
+  <text x="480" y="35" class="title">Warehouse Robot — Kinematic Chain &amp; Sensors</text>
+  <text x="480" y="55" class="subtitle">21 bodies · 14 joints · 10 actuators · 12 sensors · 1 tendon · 1 equality</text>
+
+  <!-- Legend -->
+  <rect x="30" y="720" width="900" height="45" fill="#111916" rx="6"/>
+  <circle cx="60" cy="742" r="6" fill="#00b89c" class="leg-dot"/>
+  <text x="75" y="746" class="legend">Position actuator</text>
+  <circle cx="220" cy="742" r="6" fill="#ff6b35" class="leg-dot"/>
+  <text x="235" y="746" class="legend">Velocity actuator</text>
+  <circle cx="380" cy="742" r="6" fill="#e05030" class="leg-dot"/>
+  <text x="395" y="746" class="legend">Motor actuator / Slide</text>
+  <circle cx="550" cy="742" r="6" fill="#d4a0ff" class="leg-dot"/>
+  <text x="565" y="746" class="legend">Sensor</text>
+  <line x1="700" y1="742" x2="740" y2="742" class="line-ten"/>
+  <text x="755" y="746" class="legend">Tendon</text>
+  <rect x="830" y="736" width="12" height="12" class="box-obj"/>
+  <text x="855" y="746" class="legend">Object</text>
+
+  <!-- ═══════ CHASSIS (root) ═══════ -->
+  <rect x="370" y="80" width="220" height="52" class="box"/>
+  <text x="480" y="100" class="text">chassis</text>
+  <text x="480" y="114" class="small">freejoint · 7q / 6v · 8.0 kg</text>
+  <!-- Sensors on chassis -->
+  <text x="480" y="148" class="sensor">⬟ imu_accel (3D, m/s²) · imu_gyro (3D, rad/s) · rangefinder (1D, m)</text>
+
+  <!-- Lines from chassis to children -->
+  <!-- To wheels -->
+  <line x1="400" y1="132" x2="100" y2="195" class="line"/>
+  <line x1="430" y1="132" x2="290" y2="195" class="line"/>
+  <line x1="530" y1="132" x2="670" y2="195" class="line"/>
+  <line x1="560" y1="132" x2="860" y2="195" class="line"/>
+  <!-- To arm_base -->
+  <line x1="480" y1="132" x2="480" y2="195" class="line"/>
+
+  <!-- ═══════ WHEELS ═══════ -->
+  <!-- FL -->
+  <rect x="30" y="195" width="140" height="45" class="box-wheel"/>
+  <text x="100" y="213" class="text">wheel_FL</text>
+  <text x="100" y="227" class="small">hinge Y · vel act · 0.3 kg</text>
+  <text x="100" y="248" class="label-o">drive_FL (rad/s)</text>
+
+  <!-- FR -->
+  <rect x="220" y="195" width="140" height="45" class="box-wheel"/>
+  <text x="290" y="213" class="text">wheel_FR</text>
+  <text x="290" y="227" class="small">hinge Y · vel act · 0.3 kg</text>
+  <text x="290" y="248" class="label-o">drive_FR (rad/s)</text>
+
+  <!-- RL -->
+  <rect x="600" y="195" width="140" height="45" class="box-wheel"/>
+  <text x="670" y="213" class="text">wheel_RL</text>
+  <text x="670" y="227" class="small">hinge Y · vel act · 0.3 kg</text>
+  <text x="670" y="248" class="label-o">drive_RL (rad/s)</text>
+
+  <!-- RR -->
+  <rect x="790" y="195" width="140" height="45" class="box-wheel"/>
+  <text x="860" y="213" class="text">wheel_RR</text>
+  <text x="860" y="227" class="small">hinge Y · vel act · 0.3 kg</text>
+  <text x="860" y="248" class="label-o">drive_RR (rad/s)</text>
+
+  <!-- ═══════ ARM BASE ═══════ -->
+  <rect x="400" y="195" width="160" height="52" class="box"/>
+  <text x="480" y="213" class="text">arm_base (turret)</text>
+  <text x="480" y="227" class="small">hinge Z · motor act · 0.8 kg</text>
+  <text x="480" y="255" class="label-r">yaw_motor (N·m)</text>
+  <text x="480" y="268" class="sensor">⬟ sens_yaw (rad)</text>
+  <line x1="480" y1="247" x2="480" y2="295" class="line"/>
+
+  <!-- ═══════ UPPER ARM ═══════ -->
+  <rect x="400" y="295" width="160" height="52" class="box"/>
+  <text x="480" y="313" class="text">upper_arm</text>
+  <text x="480" y="327" class="small">hinge Y · pos act · 0.6 kg</text>
+  <text x="480" y="355" class="label">shoulder_pos (rad)</text>
+  <text x="480" y="368" class="sensor">⬟ sens_shoulder (rad)</text>
+  <line x1="480" y1="347" x2="480" y2="395" class="line"/>
+
+  <!-- ═══════ FOREARM ═══════ -->
+  <rect x="400" y="395" width="160" height="52" class="box"/>
+  <text x="480" y="413" class="text">forearm</text>
+  <text x="480" y="427" class="small">hinge Y · pos act · 0.4 kg</text>
+  <text x="480" y="455" class="label">elbow_pos (rad)</text>
+  <text x="480" y="468" class="sensor">⬟ sens_elbow (rad)</text>
+  <line x1="480" y1="447" x2="480" y2="495" class="line"/>
+
+  <!-- ═══════ WRIST ═══════ -->
+  <rect x="400" y="495" width="160" height="45" class="box"/>
+  <text x="480" y="513" class="text">wrist</text>
+  <text x="480" y="527" class="small">hinge Z · pos act · 0.15 kg</text>
+  <text x="480" y="548" class="label">wrist_roll_pos (rad)</text>
+  <text x="480" y="561" class="sensor">⬟ sens_wrist_roll · ee_pos (3D, m)</text>
+  <line x1="480" y1="540" x2="480" y2="585" class="line"/>
+
+  <!-- ═══════ WRIST TILT ═══════ -->
+  <rect x="400" y="585" width="160" height="45" class="box"/>
+  <text x="480" y="603" class="text">wrist_tilt</text>
+  <text x="480" y="617" class="small">hinge Y · pos act · 0.1 kg</text>
+  <text x="480" y="638" class="label">wrist_pitch_pos (rad)</text>
+  <text x="480" y="651" class="sensor">⬟ sens_wrist_pitch (rad)</text>
+
+  <!-- Lines to fingers -->
+  <line x1="450" y1="630" x2="340" y2="665" class="line"/>
+  <line x1="510" y1="630" x2="620" y2="665" class="line"/>
+
+  <!-- ═══════ FINGER L ═══════ -->
+  <rect x="260" y="665" width="160" height="45" class="box-grip"/>
+  <text x="340" y="683" class="text">finger_L</text>
+  <text x="340" y="697" class="small">slide -Y · pos act · 0.05 kg</text>
+  <text x="260" y="650" class="label-r">gripper_pos (m)</text>
+  <text x="340" y="655" class="sensor">⬟ touch_L (N) · sens_gripper (m)</text>
+
+  <!-- ═══════ FINGER R ═══════ -->
+  <rect x="540" y="665" width="160" height="45" class="box-grip"/>
+  <text x="620" y="683" class="text">finger_R</text>
+  <text x="620" y="697" class="small">slide +Y · coupled · 0.05 kg</text>
+  <text x="620" y="655" class="sensor">⬟ touch_R (N)</text>
+
+  <!-- Tendon coupling line -->
+  <line x1="420" y1="688" x2="540" y2="688" class="line-ten"/>
+  <text x="480" y="700" class="sensor" fill="#d4a0ff" font-size="8">tendon: gripper_couple</text>
+  <text x="480" y="712" class="sensor" fill="#d4a0ff" font-size="8">equality: grip_L ≡ grip_R</text>
+
+  <!-- ═══════ FREE OBJECTS (separate trees) ═══════ -->
+  <rect x="30" y="305" width="130" height="45" class="box-obj"/>
+  <text x="95" y="323" class="text" fill="#7a8f84">red_box</text>
+  <text x="95" y="337" class="small">freejoint · 0.25 kg</text>
+
+  <rect x="30" y="370" width="130" height="45" class="box-obj"/>
+  <text x="95" y="388" class="text" fill="#7a8f84">blue_cyl</text>
+  <text x="95" y="402" class="small">freejoint · 0.15 kg</text>
+
+  <text x="95" y="290" class="small">Graspable objects</text>
+  <text x="95" y="430" class="small">(independent trees)</text>
+</svg>

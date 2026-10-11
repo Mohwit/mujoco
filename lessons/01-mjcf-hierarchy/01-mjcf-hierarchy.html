@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MuJoCo MJCF Hierarchy Explorer</title>
+  <style>
+    :root { color-scheme: light; font-family: system-ui, sans-serif; }
+    body { max-width: 1050px; margin: 0 auto; padding: 2rem; color: #172033; background: #f8fafc; }
+    h1 { margin-bottom: .35rem; }
+    .intro { color: #475569; }
+    .grid { display: grid; grid-template-columns: minmax(220px, .78fr) minmax(260px, 1.22fr); gap: 1rem; align-items: stretch; }
+    .card { background: white; border: 1px solid #dbe3ef; border-radius: 14px; padding: 1.25rem; box-shadow: 0 4px 18px #17203312; }
+    label { display: grid; grid-template-columns: 7rem minmax(0, 1fr) 4.5rem; gap: .75rem; align-items: center; margin: 1.15rem 0; color: #334155; }
+    label span { font-size: .9rem; }
+    input { width: 100%; accent-color: #087f72; }
+    output { font-variant-numeric: tabular-nums; text-align: right; color: #087f72; font-weight: 700; }
+    button { border: 1px solid #087f72; border-radius: 8px; background: #087f72; color: white; padding: .65rem .9rem; cursor: pointer; font-weight: 700; }
+    button:hover { background: #065e55; }
+    svg { width: 100%; height: auto; background: #f8fafc; border-radius: 10px; }
+    .node { fill: #eef6ff; stroke: #2563eb; stroke-width: 2; }
+    .rod { stroke: #2563eb; stroke-width: 12; stroke-linecap: round; }
+    .bob { fill: #ef4444; stroke: #991b1b; stroke-width: 2; }
+    .pivot { fill: #111827; }
+    .axis { stroke: #94a3b8; stroke-dasharray: 5 5; }
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+    .stat { background: #f1f5f9; border-radius: 8px; padding: .7rem; }
+    .stat strong { display: block; font-size: 1.25rem; }
+    code { background: #eef2ff; padding: .1rem .3rem; border-radius: 4px; }
+    @media (max-width: 700px) { body { padding: 1rem; } .grid { grid-template-columns: 1fr; } label { grid-template-columns: 6.5rem minmax(0, 1fr) 4.5rem; } }
+  </style>
+</head>
+<body>
+  <h1>MuJoCo MJCF Hierarchy Explorer</h1>
+  <p class="intro">Change the MJCF-like parameters. Observe which physical values change and which model counts stay the same.</p>
+  <div class="grid">
+    <section class="card" aria-labelledby="controls-title">
+      <h2 id="controls-title">Parameters</h2>
+      <label for="height"><span>Body height</span><input id="height" type="range" min="0.5" max="3" step="0.1" value="1"><output id="heightValue">1.0</output></label>
+      <label for="length"><span>Rod length</span><input id="length" type="range" min="0.5" max="2.5" step="0.1" value="1"><output id="lengthValue">1.0</output></label>
+      <label for="angle"><span>Joint angle</span><input id="angle" type="range" min="-1.5" max="1.5" step="0.05" value="0.7"><output id="angleValue">0.70 rad</output></label>
+      <button id="reset" type="button">Reset values</button>
+      <h2>Model facts</h2>
+      <div class="stats">
+        <div class="stat"><small>Bodies</small><strong>3</strong></div>
+        <div class="stat"><small>Joints</small><strong>1</strong></div>
+        <div class="stat"><small>Geoms</small><strong>2</strong></div>
+        <div class="stat"><small>qpos</small><strong>1</strong></div>
+      </div>
+      <p><code>qpos</code> changes with the joint angle. The number of bodies, joints, geoms, and degrees of freedom does not change when only dimensions change.</p>
+    </section>
+    <section class="card" aria-labelledby="diagram-title">
+      <h2 id="diagram-title">Interactive model view</h2>
+      <svg viewBox="0 0 520 560" role="img" aria-labelledby="view-title view-desc">
+        <title id="view-title">Interactive pendulum</title>
+        <desc id="view-desc">A pendulum with a pivot, a blue rod, and a red bob. Sliders change its height, length, and angle.</desc>
+        <line class="axis" x1="260" y1="30" x2="260" y2="530"></line>
+        <g id="pendulum" transform="translate(260 150)">
+          <circle class="pivot" cx="0" cy="0" r="10"></circle>
+          <line id="rod" class="rod" x1="0" y1="0" x2="0" y2="180"></line>
+          <circle id="bob" class="bob" cx="0" cy="200" r="22"></circle>
+        </g>
+        <text x="260" y="545" text-anchor="middle" fill="#475569">world z axis</text>
+      </svg>
+    </section>
+  </div>
+  <script>
+    const defaults = { height: 1, length: 1, angle: .7 };
+    const $ = id => document.getElementById(id);
+    function update() {
+      const height = Number($('height').value);
+      const length = Number($('length').value);
+      const angle = Number($('angle').value);
+      $('heightValue').value = height.toFixed(1);
+      $('lengthValue').value = length.toFixed(1);
+      $('angleValue').value = `${angle.toFixed(2)} rad`;
+      const scale = 180 * length;
+      $('pendulum').setAttribute('transform', `translate(260 ${80 + height * 70}) rotate(${angle * 180 / Math.PI})`);
+      $('rod').setAttribute('x2', 0);
+      $('rod').setAttribute('y2', scale);
+      $('bob').setAttribute('cx', 0);
+      $('bob').setAttribute('cy', scale + 20);
+      $('view-desc').textContent = `Pendulum at height ${height.toFixed(1)}, rod length ${length.toFixed(1)}, and angle ${angle.toFixed(2)} radians.`;
+    }
+    ['height', 'length', 'angle'].forEach(id => $(id).addEventListener('input', update));
+    $('reset').addEventListener('click', () => {
+      Object.entries(defaults).forEach(([id, value]) => $(id).value = value);
+      update();
+    });
+    update();
+  </script>
+</body>
+</html>

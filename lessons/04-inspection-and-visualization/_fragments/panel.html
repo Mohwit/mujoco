@@ -1,0 +1,459 @@
+<div class="lesson-content xp" id="lesson4">
+  <header class="lesson-header-block">
+    <p class="lesson-num-label">Lesson 04</p>
+    <h1 class="lesson-title">Inspection and Visualization</h1>
+    <p class="lesson-subtitle">Goal: find any part of a model by its name, read where it is in the world, and take a picture of it without opening a window. You will use a small two-link arm and a loose box. By the end you can also look at an XML file and say what the model looks like before you run it.</p>
+    <p class="lesson-legend"><dfn class="term" tabindex="0" data-def="Technical words look like this. Hover or focus one to read a plain-English definition.">Dotted words</dfn> show a definition on hover. <span class="lg-math">Maths boxes</span> are optional. <span class="lg-pred">Predict boxes</span> hide the answer until you guess.</p>
+  </header>
+  <nav class="lesson-toc" aria-label="Sections in lesson 4"><a href="#l4-s-idea">Names and ids</a><a href="#l4-s-names">Look it up</a><a href="#l4-s-where">Where is it?</a><a href="#l4-s-quat">Which way?</a><a href="#l4-s-qpos">qpos seats</a><a href="#l4-s-camera">Cameras</a><a href="#l4-s-code">The script</a><a href="#l4-s-check">Check yourself</a><a href="#l4-recap">Recap</a></nav>
+
+<section class="step" id="l4-s-idea">
+  <span class="lvl lvl-plain">Plain words</span> <span class="lvl lvl-pic">Picture</span>
+  <h2>1. Names are for people, numbers are for the computer</h2>
+  <p>Think about the contacts list on your phone. You tap "Mum". You never type her number. The phone looks up the name and dials the number for you.</p>
+  <p>MuJoCo works the same way. In the XML file you give parts friendly names, like <code>forearm</code> or <code>hand</code>. Inside, MuJoCo stores everything in numbered rows. A part's row number is called its <dfn class="term" tabindex="0" data-def="A whole number that says which row of MuJoCo's arrays belongs to this part. Counting starts at 0.">id</dfn>.</p>
+  <div class="card analogy"><strong>Analogy: a phone contacts list.</strong> The name is what you remember. The id is the number the phone actually dials. You look up the name once, then use the number.</div>
+  <p>Each kind of part has its own numbered list. Bodies have a list, joints have a list, and so on. So "id 1" means a different thing in each list.</p>
+  <h3>Try it: look up a name</h3>
+  <p>Pick a kind of part, then pick a name. The picture lights up that part. The box underneath shows the id and the row of the position array that belongs to it.</p>
+  <div class="card">
+    <div class="grid2">
+      <canvas id="l4cvA" role="img" aria-label="Side view of the two-link arm and the box, with the chosen part highlighted"></canvas>
+      <div>
+        <div class="btnrow" id="l4aKinds" role="group" aria-label="Kind of part">
+          <button type="button" class="primary" data-kind="body">Bodies</button>
+          <button type="button" data-kind="joint">Joints</button>
+          <button type="button" data-kind="geom">Geoms</button>
+          <button type="button" data-kind="site">Sites</button>
+          <button type="button" data-kind="camera">Cameras</button>
+        </div>
+        <div class="btnrow" id="l4aNames" role="group" aria-label="Names in this list"></div>
+        <pre id="l4aOut" aria-live="polite" style="font-size:12px;min-height:150px;white-space:pre-wrap"></pre>
+      </div>
+    </div>
+    <p class="caption">Side view of the zero pose: x to the right, z up, in the world frame (m). Every number here was printed by <code>04_inspection_and_visualization.py</code>.</p>
+  </div>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">Rule to remember</span>Body 0 is always <code>world</code>. MuJoCo adds it for you. It never moves, so its row in every position array is always zero.</div>
+  <p class="newwords">New words: <span class="chip">id</span><span class="chip">name</span><span class="chip">world body</span></p>
+</section>
+
+<section class="step" id="l4-s-names">
+  <span class="lvl lvl-words">MuJoCo words</span>
+  <h2>2. Looking up a name in code</h2>
+  <p>Here is the model's XML on the left and the Python that reads it on the right. Every <code>name="..."</code> becomes a row in a list. The order in the file decides the id.</p>
+  <div class="grid2">
+<pre style="font-size:12px"><code><span class="t">&lt;worldbody&gt;</span>                <span class="c">&lt;!-- body 0: world --&gt;</span>
+  <span class="t">&lt;geom</span> <span class="a">name</span>=<span class="s">"floor"</span> .../<span class="t">&gt;</span>   <span class="c">&lt;!-- geom 0 --&gt;</span>
+  <span class="t">&lt;camera</span> <span class="a">name</span>=<span class="s">"side"</span> .../<span class="t">&gt;</span> <span class="c">&lt;!-- camera 0 --&gt;</span>
+  <span class="t">&lt;body</span> <span class="a">name</span>=<span class="s">"upper_arm"</span> <span class="a">pos</span>=<span class="s">"0 0 1"</span><span class="t">&gt;</span> <span class="c">&lt;!-- body 1 --&gt;</span>
+    <span class="t">&lt;joint</span> <span class="a">name</span>=<span class="s">"shoulder"</span> .../<span class="t">&gt;</span>    <span class="c">&lt;!-- joint 0 --&gt;</span>
+    <span class="t">&lt;geom</span> <span class="a">name</span>=<span class="s">"upper_geom"</span> .../<span class="t">&gt;</span>  <span class="c">&lt;!-- geom 1 --&gt;</span>
+    <span class="t">&lt;body</span> <span class="a">name</span>=<span class="s">"forearm"</span> <span class="a">pos</span>=<span class="s">"0.5 0 0"</span><span class="t">&gt;</span> <span class="c">&lt;!-- body 2 --&gt;</span>
+      <span class="t">&lt;joint</span> <span class="a">name</span>=<span class="s">"elbow"</span> .../<span class="t">&gt;</span>     <span class="c">&lt;!-- joint 1 --&gt;</span>
+      <span class="t">&lt;geom</span> <span class="a">name</span>=<span class="s">"forearm_geom"</span> .../<span class="t">&gt;</span> <span class="c">&lt;!-- geom 2 --&gt;</span>
+      <span class="t">&lt;geom</span> <span class="a">name</span>=<span class="s">"weight"</span> .../<span class="t">&gt;</span>    <span class="c">&lt;!-- geom 3 --&gt;</span>
+      <span class="t">&lt;site</span> <span class="a">name</span>=<span class="s">"hand"</span> .../<span class="t">&gt;</span>      <span class="c">&lt;!-- site 0 --&gt;</span>
+      <span class="t">&lt;camera</span> <span class="a">name</span>=<span class="s">"track"</span> .../<span class="t">&gt;</span>   <span class="c">&lt;!-- camera 1 --&gt;</span>
+    <span class="t">&lt;/body&gt;</span>
+  <span class="t">&lt;/body&gt;</span>
+  <span class="t">&lt;body</span> <span class="a">name</span>=<span class="s">"box"</span> <span class="a">pos</span>=<span class="s">"1.2 0 0.1"</span><span class="t">&gt;</span> <span class="c">&lt;!-- body 3 --&gt;</span>
+    <span class="t">&lt;freejoint</span> <span class="a">name</span>=<span class="s">"box_free"</span>/<span class="t">&gt;</span> <span class="c">&lt;!-- joint 2 --&gt;</span>
+    <span class="t">&lt;geom</span> <span class="a">name</span>=<span class="s">"box_geom"</span> .../<span class="t">&gt;</span>    <span class="c">&lt;!-- geom 4 --&gt;</span>
+  <span class="t">&lt;/body&gt;</span>
+<span class="t">&lt;/worldbody&gt;</span></code></pre>
+<pre style="font-size:12px"><code><span class="c"># the long way: ask for the id, then index the array</span>
+fid = mujoco.mj_name2id(model,
+        mujoco.mjtObj.mjOBJ_BODY, <span class="s">"forearm"</span>)
+<span class="c"># fid = 2</span>
+data.xpos[fid]          <span class="c"># row 2 of xpos</span>
+
+<span class="c"># the short way: named access</span>
+model.body(<span class="s">"forearm"</span>).id <span class="c"># 2</span>
+data.body(<span class="s">"forearm"</span>).xpos <span class="c"># same row</span>
+data.site(<span class="s">"hand"</span>).xpos    <span class="c"># site 0</span>
+data.joint(<span class="s">"elbow"</span>).qpos  <span class="c"># elbow angle</span>
+
+<span class="c"># and back again: id to name</span>
+mujoco.mj_id2name(model,
+        mujoco.mjtObj.mjOBJ_BODY, 2)
+<span class="c"># 'forearm'</span></code></pre>
+  </div>
+  <p>The script prints every list. Each line is one kind of part, with <code>id:name</code> pairs:</p>
+<pre><code>body    nbody = 4   0:world  1:upper_arm  2:forearm  3:box
+joint   njnt  = 3   0:shoulder  1:elbow  2:box_free
+geom    ngeom = 5   0:floor  1:upper_geom  2:forearm_geom  3:weight  4:box_geom
+site    nsite = 1   0:hand
+camera  ncam  = 2   0:side  1:track</code></pre>
+  <table>
+    <thead><tr><th>Call</th><th>Plain meaning</th><th>Phone analogy</th></tr></thead>
+    <tbody>
+      <tr><td><dfn class="term" tabindex="0" data-def="mujoco.mj_name2id(model, kind, name): return the id (row number) of the part with this name in the list for this kind. Returns -1 if no such name exists.">mj_name2id</dfn></td><td>Name in, row number out</td><td>Search contacts for "Mum", get her number</td></tr>
+      <tr><td><dfn class="term" tabindex="0" data-def="mujoco.mj_id2name(model, kind, id): the reverse lookup. Row number in, name out.">mj_id2name</dfn></td><td>Row number in, name out</td><td>Caller ID shows a name for a number</td></tr>
+      <tr><td><dfn class="term" tabindex="0" data-def="Python shortcuts like model.body('forearm') or data.site('hand'). They do the lookup for you and give a view onto that one row.">named access</dfn> <code>data.body("forearm")</code></td><td>Look up and read in one go</td><td>Tap the contact and it dials</td></tr>
+      <tr><td><dfn class="term" tabindex="0" data-def="MuJoCo's list of part kinds, used by mj_name2id: mjOBJ_BODY, mjOBJ_JOINT, mjOBJ_GEOM, mjOBJ_SITE, mjOBJ_CAMERA and more.">mjtObj</dfn></td><td>Which list to search</td><td>Contacts vs your email address book</td></tr>
+    </tbody>
+  </table>
+  <div class="card warn"><span class="callout-title" style="color:var(--orange)">Common mistake: a typo that does not crash</span>Spell it <code>"forarm"</code> and <code>mj_name2id</code> returns <code>-1</code>. In Python, <code>data.xpos[-1]</code> is the <em>last</em> row, so you silently read the box: <code>(1.2000, 0.0000, 0.1000)</code> m. The named form <code>model.body("forarm")</code> is safer. It stops with a <code>KeyError</code> that lists the valid names. <strong>Prevention rule: prefer named access, or check that the id is not -1.</strong></div>
+  <p class="newwords">New words: <span class="chip">mj_name2id</span><span class="chip">mj_id2name</span><span class="chip">named access</span><span class="chip">mjtObj</span></p>
+</section>
+
+<section class="step" id="l4-s-where">
+  <span class="lvl lvl-plain">Plain words</span> <span class="lvl lvl-pic">Picture</span> <span class="lvl lvl-math">Maths</span>
+  <h2>3. Where is each part? Three different "where"s</h2>
+  <p>Imagine a small sticker glued to each body. The sticker shows a little x arrow and z arrow. It is the body's own <em>frame</em> from Lesson 2. The question "where is the forearm?" can mean three different things:</p>
+  <div class="grid3">
+    <div class="card"><span class="callout-title" style="color:var(--teal)">The sticker</span>Where the body's frame sits. For the forearm that is the elbow, because the forearm's frame starts there. MuJoCo calls it <dfn class="term" tabindex="0" data-def="data.xpos, shape (nbody, 3): where each body's frame origin is, in world coordinates, in metres. Computed by mj_forward.">xpos</dfn>.</div>
+    <div class="card"><span class="callout-title" style="color:var(--purple)">The balance point</span>Where you could balance the body on one finger. That is its <dfn class="term" tabindex="0" data-def="Centre of mass: the average position of all the body's mass. Gravity acts as if all the weight were at this point.">centre of mass</dfn>. MuJoCo calls it <dfn class="term" tabindex="0" data-def="data.xipos, shape (nbody, 3): each body's centre of mass, in world coordinates, in metres.">xipos</dfn>.</div>
+    <div class="card"><span class="callout-title" style="color:var(--orange)">A pin you placed</span>A <dfn class="term" tabindex="0" data-def="A named point (with a frame) attached to a body. It has no mass and never collides. Used to mark spots like a hand, a tool tip or a sensor.">site</dfn> is a pin you stick on a body to mark a spot, like the hand. MuJoCo calls its position <dfn class="term" tabindex="0" data-def="data.site_xpos, shape (nsite, 3): each site's position in world coordinates, in metres.">site_xpos</dfn>.</div>
+  </div>
+  <p>The forearm has a 1 kg block at its tip. That block pulls the balance point toward the hand. So the balance point is not at the middle of the forearm.</p>
+  <div class="predict">
+    <h3>Predict first: set shoulder = 0.5 rad and elbow = 0.8 rad. Where is the hand, in world x and z (m)?</h3>
+    <textarea aria-label="Your prediction for the hand position"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p>MuJoCo says <code>site_xpos</code> of the hand is <strong>(0.5458, 0.0000, 0.3749) m</strong> in the world frame. The arm tips down, because a positive turn about +y swings x toward -z (right-hand rule, Lesson 2). The forearm's total tilt is 0.5 + 0.8 = 1.3 rad, because both hinges turn about the same y axis. The maths box below builds this number by hand.</p>
+    </div>
+  </div>
+  <div class="card">
+    <div class="grid2">
+      <canvas id="l4cvB" role="img" aria-label="Two-link arm showing each body's frame origin, centre of mass and the hand site"></canvas>
+      <div>
+        <label class="slider"><span>Shoulder angle <code>qpos[0]</code></span> <output id="l4bO1">0.50 rad</output><input type="range" id="l4bQ1" min="-3.14" max="3.14" step="0.01" value="0.5"></label>
+        <label class="slider"><span>Elbow angle <code>qpos[1]</code></span> <output id="l4bO2">0.80 rad</output><input type="range" id="l4bQ2" min="-2.5" max="2.5" step="0.01" value="0.8"></label>
+        <div class="btnrow">
+          <button type="button" class="primary" id="l4bScript">Script pose (0.5, 0.8)</button>
+          <button type="button" id="l4bZero">Zero pose</button>
+        </div>
+        <div class="readouts" style="grid-template-columns:1fr">
+          <div class="ro" id="l4bX"><span class="lab">forearm xpos (world)</span><span class="val">-</span> <span class="unit">m</span></div>
+          <div class="ro" id="l4bI"><span class="lab">forearm xipos (world)</span><span class="val">-</span> <span class="unit">m</span></div>
+          <div class="ro" id="l4bH"><span class="lab">hand site_xpos (world)</span><span class="val">-</span> <span class="unit">m</span></div>
+          <div class="ro frozen"><span class="lab">forearm body_ipos (own frame)</span><span class="val">(0.2891, 0, 0)</span> <span class="unit">m</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="caption">Dots: filled circle = body frame origin (<code>xpos</code>), ringed cross = centre of mass (<code>xipos</code>), orange dot = hand site. All in the world frame, metres; y is always 0 here. This picture runs its own copy of the arm's position maths. It matches MuJoCo to 4 decimals: <code>check_fk.py</code> runs the sandbox's position code (the same formulas as this picture) at 8 poses and finds a worst difference of 2.2e-16 m.</p>
+  </div>
+  <p>Look at the frozen box. <dfn class="term" tabindex="0" data-def="model.body_ipos, shape (nbody, 3): each body's centre of mass in the body's OWN frame, in metres. Fixed: part of the model.">body_ipos</dfn> is the balance point measured from the body's own sticker. It never changes. The forearm is 0.40 m long, so the middle is 0.20 m. The block pulls the balance point out to 0.2891 m.</p>
+
+  <details class="math"><summary>Step 1: where the balance point comes from (a weighted average)</summary><div>
+    <p>MuJoCo gives the forearm a mass from its shapes and a density of 1000 kg/m³ (water). The script prints the total: 2.2441 kg. The 0.1 m cube is 1 kg, so the thin capsule is the other 1.2441 kg.</p>
+    <div class="eq">balance point = (capsule mass x its middle + block mass x its middle) / total mass
+              = (1.2441 x 0.20 + 1.0000 x 0.40) / 2.2441
+              = (0.2488 + 0.4000) / 2.2441
+              = 0.2891 m along the forearm      (script: body_ipos = (0.2891, 0, 0))</div>
+  </div></details>
+  <details class="math"><summary>Step 2: the hand, by hand (forward kinematics)</summary><div>
+    <p>Working out positions from joint angles is called <dfn class="term" tabindex="0" data-def="Forward kinematics: computing where every part is from the joint angles. This is the job mj_forward does for positions.">forward kinematics</dfn>. Walk down the chain, one link at a time. A link of length L, tilted by angle a about +y, moves you by (L cos a, 0, -L sin a).</p>
+    <div class="eq">shoulder (upper_arm xpos)  = (0, 0, 1)                 from pos="0 0 1"
+cos(0.5) = 0.87758   sin(0.5) = 0.47943
+elbow (forearm xpos)       = (0 + 0.5 x 0.87758, 0, 1 - 0.5 x 0.47943)
+                           = (0.4388, 0, 0.7603)       (script: 0.4388, 0.0000, 0.7603)
+forearm tilt = 0.5 + 0.8 = 1.3 rad
+cos(1.3) = 0.26750   sin(1.3) = 0.96356
+hand = elbow + (0.4 x 0.26750, 0, -0.4 x 0.96356)
+     = (0.4388 + 0.1070, 0, 0.7603 - 0.3854)
+     = (0.5458, 0, 0.3749)                             (script: 0.5458, 0.0000, 0.3749)</div>
+    <p>The script compares this hand-made answer with MuJoCo's <code>site_xpos</code>. The biggest difference is 1.1e-16 m: only computer rounding.</p>
+  </div></details>
+  <details class="math"><summary>Step 3: the forearm's balance point at this pose</summary><div>
+    <div class="eq">xipos = elbow + 0.2891 x (cos 1.3, 0, -sin 1.3)
+      = (0.4388 + 0.2891 x 0.26750, 0, 0.7603 - 0.2891 x 0.96356)
+      = (0.5161, 0, 0.4817)                             (script: 0.5161, 0.0000, 0.4817)</div>
+  </div></details>
+
+  <div class="card warn"><span class="callout-title" style="color:var(--orange)">Common mistake: reading old positions</span>Setting <code>qpos</code> moves nothing by itself. <code>xpos</code>, <code>xipos</code> and <code>site_xpos</code> keep their old values until <code>mj_forward</code> runs. Your script shows this:
+<pre><code>site_xpos(hand) before mj_forward = ( 0.9000,  0.0000,  1.0000) m  <span class="c"># stale: still the zero pose</span>
+site_xpos(hand) after  mj_forward = ( 0.5458,  0.0000,  0.3749) m  <span class="c"># correct for (0.5, 0.8)</span></code></pre>
+  <strong>Prevention rule: after you change qpos, call mj_forward before reading any x... array.</strong></div>
+  <p class="newwords">New words: <span class="chip">xpos</span><span class="chip">xipos</span><span class="chip">centre of mass</span><span class="chip">body_ipos</span><span class="chip">site</span><span class="chip">site_xpos</span><span class="chip">forward kinematics</span></p>
+</section>
+
+<section class="step" id="l4-s-quat">
+  <span class="lvl lvl-plain">Plain words</span> <span class="lvl lvl-pic">Picture</span> <span class="lvl lvl-math">Maths</span>
+  <h2>4. Which way is it facing? A quaternion, gently</h2>
+  <p>Knowing <em>where</em> a body is isn't enough. You also need to know which way it faces. Here is a simple way to describe any turn.</p>
+  <div class="card analogy"><strong>Analogy: a skewer through a marshmallow.</strong> Push a skewer through the marshmallow. That is the axis. Now twist the skewer by some amount. Every possible turn can be described this way: <em>which line to spin around</em> plus <em>how far to spin</em>.</div>
+  <p>A <dfn class="term" tabindex="0" data-def="Four numbers [w, x, y, z] that describe a turn. For a turn by angle a around an axis (ax, ay, az) of length 1: w = cos(a/2), (x, y, z) = sin(a/2) times the axis.">quaternion</dfn> packs those two things into four numbers, written <code>[w, x, y, z]</code>:</p>
+  <ul>
+    <li><strong>w</strong> says how far you turned. It is 1 for no turn and gets smaller as the turn grows.</li>
+    <li><strong>x, y, z</strong> point along the skewer. They are 0 when there is no turn.</li>
+  </ul>
+  <p>Both use <em>half</em> the angle. That is just how the rule works. You don't need to know why to use it.</p>
+  <div class="card">
+    <div class="grid2">
+      <canvas id="l4cvQ" role="img" aria-label="A body frame turned about the y axis, with its quaternion shown as four bars"></canvas>
+      <div>
+        <label class="slider"><span>Turn about +y, angle a</span> <output id="l4qO">1.30 rad</output><input type="range" id="l4qA" min="-3.14" max="3.14" step="0.01" value="1.3"></label>
+        <div class="btnrow">
+          <button type="button" id="l4qNone">No turn</button>
+          <button type="button" id="l4qUp">upper_arm (0.5)</button>
+          <button type="button" class="primary" id="l4qFore">forearm (0.5 + 0.8)</button>
+        </div>
+        <div class="readouts" style="grid-template-columns:1fr">
+          <div class="ro" id="l4qQ"><span class="lab">xquat [w, x, y, z]</span><span class="val">-</span></div>
+          <div class="ro" id="l4qM"><span class="lab">body x axis in world (xmat column 1)</span><span class="val">-</span></div>
+        </div>
+        <p class="caption">For a turn about y the quaternion is always <code>[cos(a/2), 0, sin(a/2), 0]</code>. Only w and y change.</p>
+      </div>
+    </div>
+  </div>
+  <p>MuJoCo stores each body's turn in two ways. <dfn class="term" tabindex="0" data-def="data.xquat, shape (nbody, 4): each body's orientation in the world frame as a unit quaternion [w, x, y, z]. No unit.">xquat</dfn> is the quaternion. <dfn class="term" tabindex="0" data-def="data.xmat, shape (nbody, 9): each body's orientation as a 3 x 3 rotation matrix, stored row by row. Its columns are the body's x, y and z axes written in world coordinates.">xmat</dfn> is the same turn as a 3 x 3 grid of numbers. Each column of <code>xmat</code> is one of the body's arrows, written in world coordinates.</p>
+<pre><code><span class="c"># pose (0.5, 0.8), from the script</span>
+upper_arm xquat=[ 0.9689,  0.0000,  0.2474,  0.0000]   <span class="c"># turned 0.5 rad about +y</span>
+forearm   xquat=[ 0.7961,  0.0000,  0.6052,  0.0000]   <span class="c"># turned 1.3 rad about +y</span>
+forearm xmat (3x3, rows; columns are the body's x, y, z axes in world):
+   ( 0.2675,  0.0000,  0.9636)
+   ( 0.0000,  1.0000,  0.0000)
+   (-0.9636,  0.0000,  0.2675)   <span class="c"># column 1 = (0.2675, 0, -0.9636): forearm's x arrow points right and steeply down</span></code></pre>
+  <details class="math"><summary>Step 1: the forearm's quaternion by hand</summary><div>
+    <div class="eq">turn a = 0.5 + 0.8 = 1.3 rad about the y axis (0, 1, 0)
+half angle = 0.65 rad
+w = cos(0.65) = 0.7961
+(x, y, z) = sin(0.65) x (0, 1, 0) = (0, 0.6052, 0)
+xquat = [0.7961, 0, 0.6052, 0]                (script: [ 0.7961, 0.0000, 0.6052, 0.0000])</div>
+  </div></details>
+  <details class="math"><summary>Step 2: the box, turned 30 degrees about the vertical</summary><div>
+    <p>The XML says <code>euler="0 0 30"</code>: turn 30 degrees about z. MuJoCo converts that to a quaternion when it builds the model.</p>
+    <div class="eq">axis (0, 0, 1), angle 30 degrees, half angle 15 degrees
+w = cos(15 degrees) = 0.9659
+(x, y, z) = sin(15 degrees) x (0, 0, 1) = (0, 0, 0.2588)
+box xquat = [0.9659, 0, 0, 0.2588]              (script: [ 0.9659, 0.0000, 0.0000, 0.2588])</div>
+    <p>Check: w² + x² + y² + z² = 0.9330 + 0.0670 = 1. A quaternion that describes a turn always has length 1. MuJoCo calls this a <dfn class="term" tabindex="0" data-def="A quaternion whose four numbers squared add up to 1. Only unit quaternions describe pure turns.">unit quaternion</dfn>.</p>
+  </div></details>
+  <div class="card warn"><span class="callout-title" style="color:var(--orange)">Common mistake: the order of the four numbers</span>MuJoCo puts <strong>w first</strong>: <code>[w, x, y, z]</code>. Some other libraries put w last. "No turn" in MuJoCo is <code>[1, 0, 0, 0]</code>.</div>
+  <p class="newwords">New words: <span class="chip">quaternion</span><span class="chip">xquat</span><span class="chip">xmat</span><span class="chip">unit quaternion</span></p>
+</section>
+
+<section class="step" id="l4-s-qpos">
+  <span class="lvl lvl-plain">Plain words</span> <span class="lvl lvl-words">MuJoCo words</span>
+  <h2>5. Which seats in qpos belong to which joint?</h2>
+  <p>Picture <code>qpos</code> as a row of seats on a train. Each joint books a block of seats next to each other. A hinge needs one seat: its angle.</p>
+  <p>The box has a <dfn class="term" tabindex="0" data-def="A joint that lets a body move and turn freely in 3D, with no hinge or track. Written &lt;freejoint/&gt;. Uses 7 numbers in qpos and 6 in qvel.">free joint</dfn>. It can fly anywhere and turn any way. So it books 7 seats in <code>qpos</code>: 3 for where it is (x, y, z in metres), then 4 for its quaternion.</p>
+  <p>Speeds need fewer seats. The box needs 3 numbers for how fast it moves and 3 for how fast it spins. Spinning speed needs only 3 numbers, one per axis, not 4. So the box books 6 seats in <code>qvel</code>.</p>
+  <div class="card">
+    <canvas id="l4cvR" role="img" aria-label="The qpos and qvel arrays as rows of seats, coloured by which joint owns them"></canvas>
+    <div class="btnrow" id="l4rJ" role="group" aria-label="Pick a joint">
+      <button type="button" data-j="0">shoulder (joint 0)</button>
+      <button type="button" data-j="1">elbow (joint 1)</button>
+      <button type="button" class="primary" data-j="2">box_free (joint 2)</button>
+    </div>
+    <pre id="l4rOut" aria-live="polite" style="font-size:12px;white-space:pre-wrap"></pre>
+    <p class="caption">The values are the script's <code>qpos</code> at pose (0.5, 0.8) with the box at rest; every <code>qvel</code> is 0 rad/s or m/s.</p>
+  </div>
+  <table>
+    <thead><tr><th>Name</th><th>Shape</th><th>Plain meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>model.nq</code> / <code>model.nv</code></td><td>numbers: 9 / 8</td><td>How many seats in <code>qpos</code> / in <code>qvel</code>. Here <strong>nq is not equal to nv</strong>, because of the free joint's quaternion.</td></tr>
+      <tr><td><dfn class="term" tabindex="0" data-def="model.jnt_qposadr, shape (njnt,): for each joint, the first index in qpos that belongs to it.">jnt_qposadr</dfn></td><td>(njnt,) = (3,)</td><td>The first <code>qpos</code> seat each joint owns: [0, 1, 2]</td></tr>
+      <tr><td><dfn class="term" tabindex="0" data-def="model.jnt_dofadr, shape (njnt,): for each joint, the first index in qvel that belongs to it. 'dof' means degree of freedom: one way the body can move.">jnt_dofadr</dfn></td><td>(njnt,) = (3,)</td><td>The first <code>qvel</code> seat each joint owns: [0, 1, 2]</td></tr>
+    </tbody>
+  </table>
+  <div class="card warn"><span class="callout-title" style="color:var(--orange)">Common mistake: joint id is not the qpos index</span>Here they happen to match, because the free joint comes last. Now add a hinged lid to the box, after the free joint. Its joint id is 3, but its <code>jnt_qposadr</code> is 9 and its <code>jnt_dofadr</code> is 8 (checked in MuJoCo). <strong>Prevention rule: use <code>data.joint("name").qpos</code> or <code>jnt_qposadr</code>, never the joint id, to find a joint's seats.</strong></div>
+  <p class="newwords">New words: <span class="chip">free joint</span><span class="chip">nq / nv</span><span class="chip">jnt_qposadr</span><span class="chip">jnt_dofadr</span><span class="chip">dof</span></p>
+</section>
+
+<section class="step" id="l4-s-camera">
+  <span class="lvl lvl-plain">Plain words</span> <span class="lvl lvl-pic">Picture</span>
+  <h2>6. Cameras: taking a picture without a window</h2>
+  <p>A <dfn class="term" tabindex="0" data-def="A named viewpoint in the model, written &lt;camera&gt;. It has a position, a direction and a field of view. You can render images from it.">camera</dfn> in MuJoCo is a named eye that you place in the XML. You can then ask MuJoCo to draw what that eye sees and save it as a picture. No window has to open.</p>
+  <div class="grid2">
+    <div class="card"><span class="callout-title" style="color:var(--blue)">Fixed camera = a tripod</span>Bolted to the floor. It never moves, whatever the arm does. Ours is <code>side</code>, placed in <code>&lt;worldbody&gt;</code> 3 m in front of the arm (y = -3), looking along +y.</div>
+    <div class="card"><span class="callout-title" style="color:var(--orange)">Tracking camera = a drone</span>Follows the forearm's centre of mass at the same distance, but keeps facing the same way. Ours is <code>track</code>, with <code>mode="trackcom"</code>, placed inside the forearm body.</div>
+  </div>
+  <div class="predict">
+    <h3>Predict: the arm bends from the zero pose to (0.5, 0.8). Which camera changes its world position? Where will the forearm appear in each picture?</h3>
+    <textarea aria-label="Your prediction for the cameras"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Just show me</button></div>
+    <div class="answer">
+      <p>Only <code>track</code> moves. <code>side</code> stays at (0.6000, -3.0000, 0.7000) m. <code>track</code> moves from (0.7900, -1.2000, 1.2000) m to (0.5170, -1.2000, 0.6817) m. That is the forearm's centre of mass (0.5161, 0, 0.4817) plus the same fixed offset it started with. So in the tracking pictures the forearm's balance point stays at the same spot in the frame, while the room seems to move.</p>
+      <div class="grid2">
+        <figure style="margin:0"><img src="04-inspection-and-visualization/cam_side_zero.png" width="320" height="240" style="width:100%;height:auto;border-radius:8px;border:1px solid var(--border)" alt="Side camera, zero pose: the arm sticks straight out to the right at 1 m height; the blue box sits on the floor at the right."><figcaption class="caption">side, zero pose</figcaption></figure>
+        <figure style="margin:0"><img src="04-inspection-and-visualization/cam_side_bent.png" width="320" height="240" style="width:100%;height:auto;border-radius:8px;border:1px solid var(--border)" alt="Side camera, bent pose: the arm tilts down and the forearm hangs steeply toward the floor; the camera view is unchanged."><figcaption class="caption">side, pose (0.5, 0.8)</figcaption></figure>
+        <figure style="margin:0"><img src="04-inspection-and-visualization/cam_track_zero.png" width="320" height="240" style="width:100%;height:auto;border-radius:8px;border:1px solid var(--border)" alt="Tracking camera, zero pose: a close-up of the straight forearm and the purple block at its tip."><figcaption class="caption">track, zero pose</figcaption></figure>
+        <figure style="margin:0"><img src="04-inspection-and-visualization/cam_track_bent.png" width="320" height="240" style="width:100%;height:auto;border-radius:8px;border:1px solid var(--border)" alt="Tracking camera, bent pose: a close-up that has followed the forearm down; the upper arm now slopes in from the top left."><figcaption class="caption">track, pose (0.5, 0.8)</figcaption></figure>
+      </div>
+      <p class="caption">These four 320 x 240 pictures were rendered by your script with <code>mujoco.Renderer</code>, with no window open.</p>
+    </div>
+  </div>
+  <div class="grid2">
+<pre style="font-size:12px"><code><span class="t">&lt;camera</span> <span class="a">name</span>=<span class="s">"side"</span>
+        <span class="a">pos</span>=<span class="s">"0.6 -3.0 0.7"</span>
+        <span class="a">xyaxes</span>=<span class="s">"1 0 0  0 0 1"</span><span class="t">/&gt;</span>
+<span class="c">&lt;!-- inside body "forearm" --&gt;</span>
+<span class="t">&lt;camera</span> <span class="a">name</span>=<span class="s">"track"</span> <span class="a">mode</span>=<span class="s">"trackcom"</span>
+        <span class="a">pos</span>=<span class="s">"0.29 -1.2 0.2"</span>
+        <span class="a">xyaxes</span>=<span class="s">"1 0 0  0 0 1"</span><span class="t">/&gt;</span></code></pre>
+<pre style="font-size:12px"><code>renderer = mujoco.Renderer(model, 240, 320)
+<span class="c"># height 240 px, width 320 px</span>
+mujoco.mj_forward(model, data)
+renderer.update_scene(data, camera=<span class="s">"side"</span>)
+pixels = renderer.render()
+<span class="c"># numpy array, shape (240, 320, 3), uint8 RGB</span>
+data.cam(<span class="s">"track"</span>).xpos
+<span class="c"># data.cam_xpos row 1, world, m</span></code></pre>
+  </div>
+  <p><code>xyaxes="1 0 0  0 0 1"</code> says which way the picture's right and up point. Picture-right is world +x, picture-up is world +z. A camera looks along its own -z axis, which here is world +y: into the scene.</p>
+  <table>
+    <thead><tr><th>Camera mode</th><th>Plain meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>fixed</code> (default)</td><td>Stays put relative to the body it is in. In <code>worldbody</code> that means it never moves.</td></tr>
+      <tr><td><code>trackcom</code></td><td>Keeps its starting offset from the centre of mass of its body (and the bodies below it), but does not turn.</td></tr>
+      <tr><td><code>targetbody</code></td><td>Stays in place but turns to keep looking at a chosen body. Not used here.</td></tr>
+    </tbody>
+  </table>
+  <div class="card rule"><span class="callout-title" style="color:var(--teal)">Good to know</span>Rendering needs a graphics context. On a Mac it usually works with no window. On a remote server it may not. The script catches that error, prints a clear message and carries on, so the numbers above are always available.</div>
+  <p class="newwords">New words: <span class="chip">camera</span><span class="chip">trackcom</span><span class="chip">mujoco.Renderer</span><span class="chip">cam_xpos</span></p>
+</section>
+
+<section class="step" id="l4-s-code">
+  <span class="lvl lvl-code">Code</span>
+  <h2>7. Your script, line by line</h2>
+  <table>
+    <thead><tr><th style="width:46%">Code in <code>04_inspection_and_visualization.py</code></th><th>Physical meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>mujoco.mj_id2name(model, obj, i)</code></td><td>Read the contacts list row by row: which name sits at id i.</td></tr>
+      <tr><td><code>mujoco.mj_name2id(model, mjOBJ_BODY, "forearm")</code></td><td>Find the forearm's row number (2). A wrong name gives -1.</td></tr>
+      <tr><td><code>mujoco.mj_forward(model, data)</code></td><td>Work out where every body, site and camera is for the current <code>qpos</code>. No time passes.</td></tr>
+      <tr><td><code>data.xpos[b]</code>, <code>data.xquat[b]</code>, <code>data.xipos[b]</code></td><td>Body b's frame origin (m), its turn as a quaternion, and its balance point (m). All in the world frame.</td></tr>
+      <tr><td><code>data.joint("shoulder").qpos[0] = 0.5</code></td><td>Turn the shoulder to 0.5 rad. Positions stay stale until the next <code>mj_forward</code>.</td></tr>
+      <tr><td><code>data.site("hand").xpos</code></td><td>Where the hand marker is in the world (m).</td></tr>
+      <tr><td><code>data.body("forearm").xmat.reshape(3, 3)</code></td><td>The forearm's turn as a grid. The columns are its x, y, z arrows in world coordinates.</td></tr>
+      <tr><td><code>model.jnt_qposadr[j]</code>, <code>model.jnt_dofadr[j]</code></td><td>The first <code>qpos</code> seat and first <code>qvel</code> seat that joint j owns.</td></tr>
+      <tr><td><code>mujoco.Renderer(model, 240, 320)</code> + <code>update_scene(data, camera="side")</code></td><td>An off-screen camera film 240 px high and 320 px wide. Point it through a named camera, then take the picture.</td></tr>
+    </tbody>
+  </table>
+  <p>Run it from the project folder:</p>
+<pre><code>uv run --python .venv/bin/python \
+  lessons/04-inspection-and-visualization/04_inspection_and_visualization.py</code></pre>
+  <p>The script's real output, shortened:</p>
+<pre><code>== 2. Zero pose (all joint angles 0), after mj_forward ==
+body 0 world     xpos=( 0.0000,  0.0000,  0.0000) m  xquat=[ 1.0000,  0.0000,  0.0000,  0.0000]  xipos=( 0.0000,  0.0000,  0.0000) m  <span class="c"># world never moves</span>
+body 1 upper_arm xpos=( 0.0000,  0.0000,  1.0000) m  xquat=[ 1.0000,  0.0000,  0.0000,  0.0000]  xipos=( 0.2500,  0.0000,  1.0000) m  <span class="c"># shoulder; balance point mid-link</span>
+body 2 forearm   xpos=( 0.5000,  0.0000,  1.0000) m  xquat=[ 1.0000,  0.0000,  0.0000,  0.0000]  xipos=( 0.7891,  0.0000,  1.0000) m  <span class="c"># elbow; balance point pulled to the block</span>
+body 3 box       xpos=( 1.2000,  0.0000,  0.1000) m  xquat=[ 0.9659,  0.0000,  0.0000,  0.2588]  xipos=( 1.2000,  0.0000,  0.1000) m  <span class="c"># 30 degrees about z</span>
+site hand site_xpos=( 0.9000,  0.0000,  1.0000) m (world)  <span class="c"># 0.5 + 0.4 m along x</span>
+forearm mass: capsule 0.03 m radius + 1 kg cube -> body_mass = 2.2441 kg
+forearm body_ipos (centre of mass in its own frame) = ( 0.2891,  0.0000,  0.0000) m
+
+== 4. Pose shoulder = 0.5 rad, elbow = 0.8 rad ==
+upper_arm xpos=( 0.0000,  0.0000,  1.0000) m  xquat=[ 0.9689,  0.0000,  0.2474,  0.0000]  xipos=( 0.2194,  0.0000,  0.8801) m
+forearm   xpos=( 0.4388,  0.0000,  0.7603) m  xquat=[ 0.7961,  0.0000,  0.6052,  0.0000]  xipos=( 0.5161,  0.0000,  0.4817) m
+by hand: elbow = ( 0.4388,  0.0000,  0.7603) m   hand = ( 0.5458,  0.0000,  0.3749) m
+max |by hand - MuJoCo| for hand = 1.1e-16 m  <span class="c"># hand maths = MuJoCo</span>
+
+== 5. Where each joint lives in qpos and qvel ==
+nq = 9 (numbers in qpos)   nv = 8 (numbers in qvel)
+joint 0 shoulder type=hinge qposadr=0 (1 number: qpos[0:1])  dofadr=0 (1 number: qvel[0:1])
+joint 1 elbow    type=hinge qposadr=1 (1 number: qpos[1:2])  dofadr=1 (1 number: qvel[1:2])
+joint 2 box_free type=free  qposadr=2 (7 numbers: qpos[2:9])  dofadr=2 (6 numbers: qvel[2:8])
+full qpos (shape (9,)) = [0.5    0.8    1.2    0.     0.1    0.9659 0.     0.     0.2588]  <span class="c"># 2 angles (rad), box x y z (m), box quaternion</span>
+
+== 6. Cameras ==
+camera 0 side   mode=fixed     cam_xpos at pose (0.5, 0.8) = ( 0.6000, -3.0000,  0.7000) m
+camera 1 track  mode=trackcom  cam_xpos at pose (0.5, 0.8) = ( 0.5170, -1.2000,  0.6817) m
+saved cam_side_zero.png  (320 x 240 px, camera 'side', pose zero: ...)  <span class="c"># 4 PNGs in the lesson folder</span></code></pre>
+  <div class="card analogy"><strong>Why the numbers in the XML?</strong> The base sits at 1 m, about shoulder height on a stand, so the arm can swing down without hitting the floor. The links are 0.5 m and 0.4 m, roughly a human upper arm and forearm. The 1 kg block at the tip is like a tool in the hand. The box is out of the arm's 0.9 m reach, resting on the floor (half size 0.1 m, centre at z = 0.1 m).</div>
+</section>
+
+<section class="step" id="l4-s-check">
+  <span class="lvl lvl-plain">Check yourself</span>
+  <h2>8. Your lesson's questions</h2>
+  <p>Answer these here, then tell me your answers in the chat so I can update your progress.</p>
+  <div class="predict">
+    <h3>Q1. What does mj_name2id(model, mjOBJ_JOINT, "elbow") return? And for mjOBJ_BODY with "elbow"?</h3>
+    <textarea aria-label="Answer to question 1"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>1</strong> for the joint list (shoulder is 0, elbow is 1). <strong>-1</strong> for the body list, because no body is called "elbow". Each kind of part has its own list.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q2. The forearm's xpos and xipos are different numbers. Which one is the elbow, and why is the other one 0.2891 m further along?</h3>
+    <textarea aria-label="Answer to question 2"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><code>xpos</code> is the elbow: the forearm's frame starts at <code>pos="0.5 0 0"</code> in the upper arm. <code>xipos</code> is the balance point. The 1 kg block at the tip pulls it from the middle (0.20 m) out to 0.2891 m along the forearm.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q3. Shoulder = 0 rad, elbow = pi/2 rad (1.5708). Where is the hand (world, m)? What is the forearm's xquat?</h3>
+    <textarea aria-label="Answer to question 3"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p>The upper arm points straight right, so the elbow is at (0.5, 0, 1). The forearm hangs straight down, 0.4 m. Hand = <strong>(0.5000, 0.0000, 0.6000) m</strong>. Turn = pi/2 about y, half angle pi/4: xquat = <strong>[0.7071, 0, 0.7071, 0]</strong>. Both checked in MuJoCo (<code>check_lesson4.py</code>). Try it in the sandbox.</p></div>
+  </div>
+  <div class="predict">
+    <h3>Q4. You set data.qpos[0] = 1.0 and immediately print data.site("hand").xpos. Is it right?</h3>
+    <textarea aria-label="Answer to question 4"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer"><p><strong>No, it is stale.</strong> It still shows the pose from the last <code>mj_forward</code> or <code>mj_step</code>. Call <code>mujoco.mj_forward(model, data)</code> first.</p></div>
+  </div>
+  <h3>Read a model from its XML alone</h3>
+  <p>Don't run anything. Read this XML and picture it. A <dfn class="term" tabindex="0" data-def="A joint that lets a body slide along one line, like a drawer. Its qpos is a distance in metres.">slide joint</dfn> lets a body move along a line, like a drawer.</p>
+<pre style="font-size:12px"><code><span class="t">&lt;worldbody&gt;</span>
+  <span class="t">&lt;body</span> <span class="a">name</span>=<span class="s">"cart"</span> <span class="a">pos</span>=<span class="s">"0 0 0.5"</span><span class="t">&gt;</span>
+    <span class="t">&lt;joint</span> <span class="a">name</span>=<span class="s">"slider"</span> <span class="a">type</span>=<span class="s">"slide"</span> <span class="a">axis</span>=<span class="s">"1 0 0"</span><span class="t">/&gt;</span>
+    <span class="t">&lt;geom</span> <span class="a">type</span>=<span class="s">"box"</span> <span class="a">size</span>=<span class="s">"0.2 0.1 0.05"</span><span class="t">/&gt;</span>
+    <span class="t">&lt;body</span> <span class="a">name</span>=<span class="s">"pole"</span> <span class="a">pos</span>=<span class="s">"0 0 0.05"</span><span class="t">&gt;</span>
+      <span class="t">&lt;joint</span> <span class="a">name</span>=<span class="s">"pivot"</span> <span class="a">type</span>=<span class="s">"hinge"</span> <span class="a">axis</span>=<span class="s">"0 1 0"</span><span class="t">/&gt;</span>
+      <span class="t">&lt;geom</span> <span class="a">type</span>=<span class="s">"capsule"</span> <span class="a">fromto</span>=<span class="s">"0 0 0 0 0 0.6"</span> <span class="a">size</span>=<span class="s">"0.02"</span><span class="t">/&gt;</span>
+      <span class="t">&lt;site</span> <span class="a">name</span>=<span class="s">"tip"</span> <span class="a">pos</span>=<span class="s">"0 0 0.6"</span><span class="t">/&gt;</span>
+    <span class="t">&lt;/body&gt;</span>
+  <span class="t">&lt;/body&gt;</span>
+  <span class="t">&lt;body</span> <span class="a">name</span>=<span class="s">"ball"</span> <span class="a">pos</span>=<span class="s">"1 0 1"</span><span class="t">&gt;</span>
+    <span class="t">&lt;freejoint/&gt;</span>
+    <span class="t">&lt;geom</span> <span class="a">type</span>=<span class="s">"sphere"</span> <span class="a">size</span>=<span class="s">"0.1"</span><span class="t">/&gt;</span>
+  <span class="t">&lt;/body&gt;</span>
+<span class="t">&lt;/worldbody&gt;</span></code></pre>
+  <div class="predict">
+    <h3>Q5. What does it look like? Give nbody, njnt, nq, nv, and the world position of the tip site at the start.</h3>
+    <textarea aria-label="Answer to question 5"></textarea>
+    <div class="btnrow"><button class="lock primary" type="button">Lock in my guess</button><button class="skip" type="button">Show answer</button></div>
+    <div class="answer">
+      <p>A cart (a flat box) that slides along x, with a 0.6 m pole standing straight up on a hinge. A ball floats 1 m to the side, free to fall. It is a cart-pole plus a loose ball.</p>
+      <p>Checked in MuJoCo (<code>check_lesson4.py</code>):</p>
+<pre><code>nbody=4 njnt=3 ngeom=3 nsite=1 nq=9 nv=8   <span class="c"># world, cart, pole, ball; slide 1 + hinge 1 + free 7 / 6</span>
+jnt_qposadr=[0, 1, 2] jnt_dofadr=[0, 1, 2]
+pole xpos=( 0.0000,  0.0000,  0.5500) m  tip site_xpos=( 0.0000,  0.0000,  1.1500) m  ball xpos=( 1.0000,  0.0000,  1.0000) m
+after qpos[0] = 0.3 (slide): tip site_xpos=( 0.3000,  0.0000,  1.1500) m  <span class="c"># the whole pole rides along</span></code></pre>
+      <p>Tip z = 0.5 (cart) + 0.05 (pole) + 0.6 (site) = 1.15 m. Success check: your nq and nv match, and you said the pole points up.</p>
+    </div>
+  </div>
+
+  <h3>Glossary: new words from this lesson</h3>
+  <dl class="glossary">
+    <dt>id</dt><dd>A part's row number in its list (bodies, joints, geoms, sites, cameras each have their own). Counting starts at 0; body 0 is the world.</dd>
+    <dt>mj_name2id / mj_id2name</dt><dd>Name to id, and id to name. A missing name gives -1.</dd>
+    <dt>named access</dt><dd><code>model.body("forearm")</code>, <code>data.site("hand")</code>: look up and read one row in one go.</dd>
+    <dt>mjtObj</dt><dd>The list to search: mjOBJ_BODY, mjOBJ_JOINT, mjOBJ_GEOM, mjOBJ_SITE, mjOBJ_CAMERA.</dd>
+    <dt>xpos</dt><dd>(nbody, 3) world position of each body's frame origin, m.</dd>
+    <dt>xipos / centre of mass</dt><dd>(nbody, 3) world position of each body's balance point, m.</dd>
+    <dt>body_ipos</dt><dd>(nbody, 3) the balance point in the body's own frame, m. Part of the model.</dd>
+    <dt>site / site_xpos</dt><dd>A massless marker on a body / (nsite, 3) its world position, m.</dd>
+    <dt>forward kinematics</dt><dd>Working out positions from joint angles, link by link.</dd>
+    <dt>quaternion, unit quaternion</dt><dd>[w, x, y, z]: w = cos(half angle), (x, y, z) = sin(half angle) times the axis. Length 1.</dd>
+    <dt>xquat / xmat</dt><dd>(nbody, 4) orientation as a quaternion / (nbody, 9) the same as a 3 x 3 matrix whose columns are the body's axes in world.</dd>
+    <dt>free joint</dt><dd>Move and turn freely: 7 numbers in qpos (x, y, z, then quaternion), 6 in qvel.</dd>
+    <dt>slide joint</dt><dd>Move along one line; qpos is a distance in m.</dd>
+    <dt>nq / nv, dof</dt><dd>Sizes of qpos and qvel. A dof is one independent way to move.</dd>
+    <dt>jnt_qposadr / jnt_dofadr</dt><dd>(njnt,) the first qpos / qvel index each joint owns.</dd>
+    <dt>camera, trackcom</dt><dd>A named viewpoint; trackcom keeps a fixed offset from a body's centre of mass without turning.</dd>
+    <dt>cam_xpos</dt><dd>(ncam, 3) each camera's world position, m.</dd>
+    <dt>mujoco.Renderer</dt><dd>Draws pictures off-screen from a camera into a numpy array (height, width, 3).</dd>
+  </dl>
+</section>
+
+<section class="step recap" id="l4-recap">
+  <h2>Recap: the lesson in one minute</h2>
+  <div class="mental-model">
+    <p><strong>Names are for you, ids are for arrays.</strong> <code>mj_name2id(model, mjtObj, name)</code> or <code>model.body(name).id</code> turns a name into a row index. Every kind (body, joint, geom, site, camera) has its own list. Body 0 is always <code>world</code>. A missing name gives -1, which Python reads as the last row.</p>
+    <p><strong>After <code>mj_forward</code></strong>, <code>data.xpos</code> (nbody, 3) holds each body's frame origin in world metres, <code>data.xquat</code> (nbody, 4) its orientation as <code>[w, x, y, z]</code>, <code>data.xmat</code> (nbody, 9) the same as a rotation matrix, <code>data.xipos</code> its centre of mass, and <code>data.site_xpos</code> each site. Before <code>mj_forward</code> these are stale.</p>
+    <p><strong>qpos is addressed by joint.</strong> <code>model.jnt_qposadr</code> and <code>model.jnt_dofadr</code> give each joint's first index. A free joint uses 7 qpos (position + quaternion) but 6 qvel, so <code>nq</code> can differ from <code>nv</code>.</p>
+    <p><strong>Cameras</strong> are named in MJCF: fixed in <code>worldbody</code>, or following a body with <code>mode="trackcom"</code>. <code>mujoco.Renderer(model, h, w)</code> plus <code>update_scene(data, camera=name)</code> and <code>render()</code> gives an image array with no window.</p>
+  </div>
+  <div class="checkpoint">
+    <p>Open the inspector sandbox: move the shoulder and elbow sliders, click each body, and press "Q3 pose (0, 1.57)". The slider stops at 1.57 rad, a little short of pi/2, so the hand reads (0.5003, 0.0000, 0.6000) m, not exactly 0.5000. MuJoCo gives the same.</p>
+    <div class="btn-row">
+      <button class="btn btn-primary btn-sm" type="button" onclick="markComplete(4)">Mark lesson complete</button>
+      <button class="btn btn-sm" type="button" onclick="switchLesson(5)">Next: Actuators and Control</button>
+    </div>
+  </div>
+</section>
+</div>

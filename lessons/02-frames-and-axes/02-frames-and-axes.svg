@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 470" role="img" aria-labelledby="title desc">
+  <title id="title">Local and world frames in a nested MuJoCo model</title>
+  <desc id="desc">The world frame contains a base body. The base contains a link body. Each body's local position combines to produce a world position.</desc>
+  <style>text{font-family:system-ui,sans-serif;fill:#172033} .frame{fill:#eef6ff;stroke:#2563eb;stroke-width:3} .child{fill:#ecfdf5;stroke:#087f72;stroke-width:3} .axis{stroke:#94a3b8;stroke-width:2;stroke-dasharray:7 6} .arrow{stroke:#087f72;stroke-width:4;marker-end:url(#arrow)} .dashed{stroke:#ef4444;stroke-width:3;stroke-dasharray:8 6}</style>
+  <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#087f72"/></marker></defs>
+  <line class="axis" x1="110" y1="40" x2="110" y2="430"/><text x="110" y="455" text-anchor="middle">world z axis</text>
+  <rect class="frame" x="260" y="285" width="210" height="90" rx="12"/><text x="365" y="320" text-anchor="middle" font-weight="700">base body</text><text x="365" y="347" text-anchor="middle">pos = (0, 0, 1)</text>
+  <rect class="child" x="590" y="120" width="230" height="150" rx="12"/><text x="705" y="160" text-anchor="middle" font-weight="700">link body</text><text x="705" y="188" text-anchor="middle">local pos = (0, 0, 0.6)</text><line class="arrow" x1="705" y1="215" x2="705" y2="95"/><text x="720" y="90">local z</text>
+  <line class="dashed" x1="365" y1="285" x2="365" y2="185"/><text x="382" y="240">parent frame</text>
+  <path d="M470 330 C520 330 535 210 590 190" fill="none" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/><text x="500" y="305">child frame</text>
+  <text x="450" y="40" text-anchor="middle" font-size="22" font-weight="700">Local positions combine through the hierarchy</text>
+</svg>
